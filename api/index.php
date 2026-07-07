@@ -18,6 +18,7 @@ require __DIR__ . '/lib/Session.php';
 require __DIR__ . '/lib/Validate.php';
 require __DIR__ . '/lib/RateLimit.php';
 require __DIR__ . '/lib/Security.php';
+require __DIR__ . '/lib/QrCode.php';
 require __DIR__ . '/lib/Router.php';
 
 use LMT\Config;
@@ -83,6 +84,7 @@ require __DIR__ . '/routes/votos.php';
 require __DIR__ . '/routes/pasaportes.php';
 require __DIR__ . '/routes/dashboard.php';
 require __DIR__ . '/routes/exports.php';
+require __DIR__ . '/routes/qr.php';
 
 \register_routes_health($router);
 \register_routes_auth($router);
@@ -91,5 +93,6 @@ require __DIR__ . '/routes/exports.php';
 \register_routes_pasaportes($router);
 \register_routes_dashboard($router);
 \register_routes_exports($router);
+\register_routes_qr($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);

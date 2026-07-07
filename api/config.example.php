@@ -41,6 +41,11 @@ return [
         'http://127.0.0.1:8000',
     ],
 
+    // URL pública base del sitio (sin barra final). La usa el endpoint
+    // api/qr/{id}.png para construir el enlace de votación {base}/s/{id}.
+    // Si se deja vacío, se usa el primer allowed_origins, o el host actual.
+    'public_base_url' => 'https://lamejortaza.co',
+
     // Rate limits por IP (segundos / max hits).
     'rate_limits' => [
         'login'      => ['window' => 600, 'max' => 5],   // 5 intentos / 10 min
