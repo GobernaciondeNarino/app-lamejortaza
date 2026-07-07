@@ -37,7 +37,6 @@ return [
     // Lista blanca; usa el dominio real en producción.
     'allowed_origins' => [
         'https://lamejortaza.co',
-        'https://la-mejor-taza.web.app',
         'http://localhost:8000',
         'http://127.0.0.1:8000',
     ],
