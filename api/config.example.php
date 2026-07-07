@@ -47,8 +47,15 @@ return [
         'login'      => ['window' => 600, 'max' => 5],   // 5 intentos / 10 min
         'vote'       => ['window' => 60,  'max' => 1],   // 1 voto / min / IP / stand
         'vote_email' => ['window' => 600, 'max' => 12],  // 12 votos / 10 min / correo
+        'pasaporte'  => ['window' => 60,  'max' => 20],  // 20 consultas / min / IP (anti-enumeración)
         'global'     => ['window' => 60,  'max' => 120], // anti-flood
     ],
+
+    // Token para el endpoint de diagnóstico api/diag.php. Déjalo vacío para
+    // MANTENER DIAG CERRADO en producción (recomendado). Para diagnosticar,
+    // pon aquí un valor secreto y llama a: api/diag.php?token=EL_TOKEN
+    // Genera con: php -r "echo bin2hex(random_bytes(16));"
+    'diag_token' => '',
 
     // Forzar HTTPS (envía 301 a https://). Apaga si haces dev local sin TLS.
     'force_https' => false,

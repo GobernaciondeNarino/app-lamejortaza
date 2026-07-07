@@ -6,13 +6,13 @@
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate');
+// Nota de seguridad: este endpoint es público y sin autenticación, así que
+// SÓLO debe confirmar "PHP corre" sin revelar detalles del servidor. No se
+// exponen rutas absolutas (DOCUMENT_ROOT), software del servidor ni la URI:
+// esos datos ayudan a un atacante a hacer reconocimiento dirigido.
 echo json_encode([
-    'ok'             => true,
-    'php_version'    => PHP_VERSION,
-    'sapi'           => PHP_SAPI,
-    'request_uri'    => $_SERVER['REQUEST_URI']    ?? null,
-    'script_name'    => $_SERVER['SCRIPT_NAME']    ?? null,
-    'document_root'  => $_SERVER['DOCUMENT_ROOT']  ?? null,
-    'server_software'=> $_SERVER['SERVER_SOFTWARE']?? null,
-    'message'        => 'PHP corre correctamente en api/.',
+    'ok'          => true,
+    'php_version' => PHP_VERSION,
+    'sapi'        => PHP_SAPI,
+    'message'     => 'PHP corre correctamente en api/.',
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
