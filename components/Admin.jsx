@@ -44,7 +44,7 @@ const AdminShell = ({ active, user, children }) => {
   );
 };
 
-const LoginAdmin = ({ onLogin }) => {
+const LoginAdmin = ({ onLogin, onVisitor }) => {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
@@ -94,7 +94,15 @@ const LoginAdmin = ({ onLogin }) => {
             Registra los stands del festival, genera códigos QR para cada uno y sigue en tiempo real la votación de los visitantes.
           </p>
         </div>
-        <a href="/" data-route className="mono" style={{ color: "var(--paper-3)" }}>← Volver al sitio público</a>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
+          <button type="button"
+            onClick={onVisitor || (() => window.LMTRouter.go("/festival"))}
+            className="btn"
+            style={{ background: "var(--paper)", color: "var(--ink)", padding: "12px 20px" }}>
+            Entrar como visitante →
+          </button>
+          <span className="mono" style={{ color: "var(--paper-3)" }}>Ver stands, ranking y votación del festival</span>
+        </div>
       </div>
       <form onSubmit={handleLogin} style={{ padding: "70px 60px", display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 520 }}>
         <div className="mono">Acceso · Organizadores</div>

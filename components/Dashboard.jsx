@@ -5,7 +5,7 @@ const PublicHeader = () => (
     padding: "20px 32px", borderBottom: "1px solid var(--line)",
     display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--paper)", flexWrap: "wrap", gap: 12,
   }}>
-    <a href="/" data-route style={{ textDecoration: "none", color: "inherit" }}><Wordmark size={16}/></a>
+    <a href="/festival" data-route style={{ textDecoration: "none", color: "inherit" }}><Wordmark size={16}/></a>
     <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--good)", animation: "pulse 2s infinite" }}/>
@@ -259,7 +259,7 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
       <PublicHeader/>
       <section style={{ padding: "32px", display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)", gap: 32 }}>
         <div>
-          <a href="/" data-route style={{ color: "var(--ink-2)", fontSize: 13 }}>← Volver al ranking</a>
+          <a href="/festival" data-route style={{ color: "var(--ink-2)", fontSize: 13 }}>← Volver al ranking</a>
           <div className="mono" style={{ marginTop: 14 }}>Posición #{rank || "—"} · {stand.municipio}</div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: "min(72px, 9vw)", fontWeight: 400, margin: "8px 0 0", lineHeight: 0.9, letterSpacing: "-0.02em" }}>
             {stand.nombre}

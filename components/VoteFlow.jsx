@@ -83,9 +83,36 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
     submitVote(data.emoji, data.correo);
   };
 
+  // "Cerrar sesión" del votante en este dispositivo: olvida el correo recordado
+  // para que otra persona pueda registrarse/votar desde el mismo teléfono.
+  const switchAccount = () => {
+    try { localStorage.removeItem("lmt.email"); } catch (_) {}
+    setData(d => ({ ...d, correo: "", emoji: null }));
+    setNeedEmail(false);
+    setSubmitError("");
+  };
+  const maskedEmail = sec ? sec.maskEmail(data.correo) : data.correo;
+
   return (
     <div style={{ animation: "fade-up 0.4s" }}>
       <MobileHeader stand={stand}/>
+
+      {/* Indicador de sesión: el votante ya está "registrado" en este dispositivo */}
+      {correoOk && !needEmail && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          padding: "8px 12px", marginBottom: 16, borderRadius: "var(--r-md)",
+          background: "color-mix(in oklch, var(--good) 8%, var(--paper))",
+          border: "1px solid var(--line)",
+        }}>
+          <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
+            ✓ Sesión iniciada · <strong style={{ fontWeight: 500 }}>{maskedEmail}</strong>
+          </span>
+          <button onClick={switchAccount} className="mono" style={{
+            background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", textDecoration: "underline",
+          }}>cambiar</button>
+        </div>
+      )}
 
       <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, fontWeight: 400, margin: "4px 0 6px", lineHeight: 1.1, letterSpacing: "-0.01em" }}>
         ¿Cómo estuvo<br/>el café?
@@ -118,22 +145,24 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
         </p>
       )}
 
-      {/* Primera vez: revelar correo tras tocar el emoji */}
+      {/* Primera vez: registro por correo (una sola vez) tras tocar el emoji */}
       {needEmail && !submitting && (
         <div style={{ animation: "fade-up 0.3s", marginTop: 20 }}>
+          <div className="mono" style={{ marginBottom: 6 }}>Regístrate para votar · una sola vez</div>
           <div className="field">
-            <label>Tu correo (solo la primera vez)</label>
+            <label>Tu correo</label>
             <input ref={emailRef} type="email" autoComplete="email" inputMode="email" maxLength={254}
               placeholder="nombre@correo.co" value={data.correo}
               onChange={e => update("correo", e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") confirmFirstTime(); }}/>
           </div>
           <p style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 6, lineHeight: 1.5 }}>
-            Nos sirve para crear tu pasaporte del café y evitar votos repetidos.
+            Con tu correo creamos tu pasaporte del café. Queda guardado en este
+            dispositivo: la próxima vez votas con un solo toque, sin registrarte de nuevo.
           </p>
           <button className="btn btn-primary" onClick={confirmFirstTime} disabled={!correoOk}
             style={{ width: "100%", justifyContent: "center", padding: 14, marginTop: 14, opacity: correoOk ? 1 : 0.4 }}>
-            Confirmar voto →
+            Registrarme y votar →
           </button>
         </div>
       )}
@@ -249,7 +278,7 @@ const MobileVotePage = ({ stand }) => {
         {done && (
           <VoteConfirm stand={stand}
             onGoPassport={() => window.LMTRouter.go("/pasaporte")}
-            onGoDashboard={() => window.LMTRouter.go("/")}/>
+            onGoDashboard={() => window.LMTRouter.go("/festival")}/>
         )}
       </div>
     </div>
