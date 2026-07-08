@@ -19,27 +19,39 @@ const MobileHeader = ({ stand }) => (
   </div>
 );
 
+// Votación "un toque": una sola pantalla. Tocar un emoji registra el voto al
+// instante si ya hay correo guardado; la primera vez revela un campo de correo
+// (una sola vez). Comentario y compra quedan plegados como opcionales.
 const VoteForm = ({ stand, onComplete, savedEmail }) => {
-  const [step, setStep] = React.useState(0);
+  const sec = window.LMTSecurity;
   const [data, setData] = React.useState({ correo: savedEmail || "", emoji: null, compra: null, texto: "" });
+  const [needEmail, setNeedEmail] = React.useState(false);   // reveló el campo de correo
+  const [showOpt, setShowOpt] = React.useState(false);       // desplegó comentario/compra
   const [submitError, setSubmitError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
-  const sec = window.LMTSecurity;
-  const update = (k, v) => setData(d => ({ ...d, [k]: v }));
-  const correoOk = sec ? sec.isEmail((data.correo || "").trim()) : (data.correo || "").includes("@");
+  const emailRef = React.useRef(null);
 
-  const submit = async () => {
+  const update = (k, v) => setData(d => ({ ...d, [k]: v }));
+  const isEmail = (v) => sec ? sec.isEmail((v || "").trim()) : (v || "").includes("@");
+  const correoOk = isEmail(data.correo);
+
+  React.useEffect(() => {
+    if (needEmail && emailRef.current) emailRef.current.focus();
+  }, [needEmail]);
+
+  // Envía el voto. Recibe emoji y correo explícitos para no depender del
+  // estado asíncrono de React tras un toque.
+  const submitVote = async (emojiId, correo) => {
     setSubmitError("");
     setSubmitting(true);
     try {
+      const payload = { stand: stand.id, emoji: emojiId, correo, compra: data.compra, texto: data.texto };
       if (window.LMTApi && window.LMTApi.enabled) {
-        await window.LMTApi.submitVote({
-          stand: stand.id, emoji: data.emoji, correo: data.correo, compra: data.compra, texto: data.texto,
-        });
-      } else {
-        sec && sec.buildVotePayload({ stand: stand.id, emoji: data.emoji, correo: data.correo, compra: data.compra, texto: data.texto });
+        await window.LMTApi.submitVote(payload);
+      } else if (sec) {
+        sec.buildVotePayload(payload);
       }
-      try { localStorage.setItem("lmt.email", sec ? sec.normalizeEmail(data.correo) : data.correo.toLowerCase()); } catch (_) {}
+      try { localStorage.setItem("lmt.email", sec ? sec.normalizeEmail(correo) : correo.toLowerCase()); } catch (_) {}
       onComplete(data);
     } catch (e) {
       const code = String((e && (e.code || e.message)) || e);
@@ -50,108 +62,127 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
       else if (code.includes("stand_no_existe")) setSubmitError("Este stand ya no está disponible.");
       else if (code.includes("csrf")) setSubmitError("Sesión expirada. Recarga la página y vuelve a intentar.");
       else setSubmitError("No fue posible registrar tu voto. Intenta de nuevo.");
-    } finally {
       setSubmitting(false);
     }
   };
 
+  // Toque en un emoji: es la acción principal.
+  const onEmoji = (emojiId) => {
+    if (submitting) return;
+    setSubmitError("");
+    update("emoji", emojiId);
+    if (correoOk) {
+      submitVote(emojiId, data.correo);          // un toque = listo
+    } else {
+      setNeedEmail(true);                         // primera vez: pedir correo
+    }
+  };
+
+  const confirmFirstTime = () => {
+    if (!data.emoji || !correoOk || submitting) return;
+    submitVote(data.emoji, data.correo);
+  };
+
   return (
-    <div>
+    <div style={{ animation: "fade-up 0.4s" }}>
       <MobileHeader stand={stand}/>
-      <div style={{ display: "flex", gap: 4, marginBottom: 24 }}>
-        {[0,1,2].map(i => (
-          <div key={i} style={{ flex: 1, height: 2, background: step >= i ? "var(--ink)" : "var(--line)", transition: "background 0.3s" }}/>
-        ))}
+
+      <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, fontWeight: 400, margin: "4px 0 6px", lineHeight: 1.1, letterSpacing: "-0.01em" }}>
+        ¿Cómo estuvo<br/>el café?
+      </h2>
+      <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 20 }}>Toca para calificar.</p>
+
+      {/* Emojis grandes en fila — acción principal de un toque */}
+      <div style={{ display: "flex", gap: 10 }}>
+        {EMOJIS.map(e => {
+          const selected = data.emoji === e.id;
+          return (
+            <button key={e.id} onClick={() => onEmoji(e.id)} disabled={submitting} aria-label={e.label} style={{
+              flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+              padding: "22px 8px",
+              border: selected ? `2px solid ${e.color}` : "1px solid var(--line-2)",
+              borderRadius: "var(--r-lg)",
+              background: selected ? `color-mix(in oklch, ${e.color} 10%, var(--paper))` : "var(--paper)",
+              transition: "all 0.15s", cursor: submitting ? "default" : "pointer",
+            }}>
+              <span style={{ fontSize: 40, lineHeight: 1 }}>{e.emoji}</span>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{e.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {step === 0 && (
-        <div style={{ animation: "fade-up 0.4s" }}>
-          <div className="mono">Paso 1 / 3</div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 32, fontWeight: 400, margin: "6px 0", lineHeight: 1.1, letterSpacing: "-0.01em" }}>
-            Califica<br/>{stand.nombre}
-          </h2>
-          <p style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 8, lineHeight: 1.5 }}>
-            Tu correo nos sirve para crear tu pasaporte del café y evitar votos repetidos.
-          </p>
-          <div className="field" style={{ marginTop: 28 }}>
-            <label>Tu correo</label>
-            <input type="email" autoComplete="email" inputMode="email" maxLength={254} placeholder="nombre@correo.co" value={data.correo} onChange={e => update("correo", e.target.value)}/>
+      {submitting && (
+        <p className="mono" style={{ textAlign: "center", marginTop: 18, color: "var(--ink-2)" }}>
+          Registrando tu voto…
+        </p>
+      )}
+
+      {/* Primera vez: revelar correo tras tocar el emoji */}
+      {needEmail && !submitting && (
+        <div style={{ animation: "fade-up 0.3s", marginTop: 20 }}>
+          <div className="field">
+            <label>Tu correo (solo la primera vez)</label>
+            <input ref={emailRef} type="email" autoComplete="email" inputMode="email" maxLength={254}
+              placeholder="nombre@correo.co" value={data.correo}
+              onChange={e => update("correo", e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") confirmFirstTime(); }}/>
           </div>
-          <button className="btn btn-primary" onClick={() => setStep(1)} disabled={!correoOk} style={{ width: "100%", justifyContent: "center", padding: 14, marginTop: 24, opacity: correoOk ? 1 : 0.4 }}>
-            Continuar →
+          <p style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 6, lineHeight: 1.5 }}>
+            Nos sirve para crear tu pasaporte del café y evitar votos repetidos.
+          </p>
+          <button className="btn btn-primary" onClick={confirmFirstTime} disabled={!correoOk}
+            style={{ width: "100%", justifyContent: "center", padding: 14, marginTop: 14, opacity: correoOk ? 1 : 0.4 }}>
+            Confirmar voto →
           </button>
-          <p className="mono" style={{ textAlign: "center", marginTop: 12, lineHeight: 1.6 }}>
-            Al continuar aceptas el tratamiento<br/>de datos del festival.
-          </p>
         </div>
       )}
 
-      {step === 1 && (
-        <div style={{ animation: "fade-up 0.4s" }}>
-          <div className="mono">Paso 2 / 3</div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 32, fontWeight: 400, margin: "6px 0", lineHeight: 1.1 }}>
-            ¿Cómo estuvo<br/>tu experiencia?
-          </h2>
-          <p style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 8 }}>Elige uno.</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
-            {EMOJIS.map(e => (
-              <button key={e.id} onClick={() => update("emoji", e.id)} style={{
-                padding: "18px 20px",
-                border: data.emoji === e.id ? `2px solid ${e.color}` : "1px solid var(--line-2)",
-                borderRadius: "var(--r-lg)", display: "flex", alignItems: "center", gap: 16,
-                background: data.emoji === e.id ? `color-mix(in oklch, ${e.color} 8%, var(--paper))` : "var(--paper)",
-                textAlign: "left", transition: "all 0.2s",
-              }}>
-                <span style={{ fontSize: 32 }}>{e.emoji}</span>
-                <span style={{ fontSize: 16, fontWeight: 500 }}>{e.label}</span>
-                {data.emoji === e.id && <span style={{ marginLeft: "auto", color: e.color }}>✓</span>}
-              </button>
-            ))}
-          </div>
-          <div style={{ marginTop: 24, display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => setStep(0)}>←</button>
-            <button className="btn btn-primary" onClick={() => setStep(2)} disabled={!data.emoji} style={{ flex: 1, justifyContent: "center", padding: 14, opacity: data.emoji ? 1 : 0.4 }}>
-              Continuar →
+      {/* Opcional plegado: comentario + compra */}
+      {!submitting && (
+        <div style={{ marginTop: 18 }}>
+          {!showOpt ? (
+            <button onClick={() => setShowOpt(true)} className="mono"
+              style={{ background: "none", border: "none", color: "var(--ink-2)", cursor: "pointer", padding: "6px 0", textDecoration: "underline" }}>
+              + Agregar comentario (opcional)
             </button>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div style={{ animation: "fade-up 0.4s" }}>
-          <div className="mono">Paso 3 / 3 · Último</div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 32, fontWeight: 400, margin: "6px 0", lineHeight: 1.1 }}>
-            Cuéntanos un<br/>poco más.
-          </h2>
-          <div className="mono" style={{ marginTop: 20, marginBottom: 10 }}>¿Compraste algo?</div>
-          <div style={{ display: "flex", gap: 10 }}>
-            {[{v:true,l:"Sí, compré"},{v:false,l:"No esta vez"}].map(o => (
-              <button key={String(o.v)} onClick={() => update("compra", o.v)} style={{
-                flex: 1, padding: 14,
-                border: data.compra === o.v ? "2px solid var(--ink)" : "1px solid var(--line-2)",
-                borderRadius: "var(--r-md)", fontSize: 14, fontWeight: 500,
-                background: data.compra === o.v ? "var(--paper-2)" : "var(--paper)",
-              }}>{o.l}</button>
-            ))}
-          </div>
-          <div className="field" style={{ marginTop: 24 }}>
-            <label>Comentario (opcional, máx. 500)</label>
-            <textarea rows={4} value={data.texto} maxLength={500} onChange={e => update("texto", e.target.value)} placeholder="¿Qué destacarías del stand?" style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
-            <div className="mono" style={{ alignSelf: "flex-end", color: "var(--ink-3)" }}>{data.texto.length}/500</div>
-          </div>
-          {submitError && (
-            <div role="alert" style={{ marginTop: 12, padding: "10px 12px", border: "1px solid var(--bad)", color: "var(--bad)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
-              {submitError}
+          ) : (
+            <div style={{ animation: "fade-up 0.3s" }}>
+              <div className="mono" style={{ marginBottom: 10 }}>¿Compraste algo?</div>
+              <div style={{ display: "flex", gap: 10 }}>
+                {[{v:true,l:"Sí, compré"},{v:false,l:"No esta vez"}].map(o => (
+                  <button key={String(o.v)} onClick={() => update("compra", o.v)} style={{
+                    flex: 1, padding: 12,
+                    border: data.compra === o.v ? "2px solid var(--ink)" : "1px solid var(--line-2)",
+                    borderRadius: "var(--r-md)", fontSize: 14, fontWeight: 500,
+                    background: data.compra === o.v ? "var(--paper-2)" : "var(--paper)",
+                  }}>{o.l}</button>
+                ))}
+              </div>
+              <div className="field" style={{ marginTop: 16 }}>
+                <label>Comentario (opcional, máx. 500)</label>
+                <textarea rows={3} value={data.texto} maxLength={500} onChange={e => update("texto", e.target.value)}
+                  placeholder="¿Qué destacarías del stand?"
+                  style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
+                <div className="mono" style={{ alignSelf: "flex-end", color: "var(--ink-3)" }}>{data.texto.length}/500</div>
+              </div>
+              <p className="mono" style={{ color: "var(--ink-3)", marginTop: 6 }}>
+                Toca un emoji arriba para enviar tu voto con esto.
+              </p>
             </div>
           )}
-          <div style={{ marginTop: 24, display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => setStep(1)} disabled={submitting}>←</button>
-            <button className="btn btn-primary" onClick={submit} disabled={submitting} style={{ flex: 1, justifyContent: "center", padding: 14, opacity: submitting ? 0.6 : 1 }}>
-              {submitting ? "Enviando…" : "Sellar pasaporte →"}
-            </button>
-          </div>
         </div>
       )}
+
+      {submitError && (
+        <div role="alert" style={{ marginTop: 16, padding: "10px 12px", border: "1px solid var(--bad)", color: "var(--bad)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
+          {submitError}
+        </div>
+      )}
+
+      <p className="mono" style={{ textAlign: "center", marginTop: 20, lineHeight: 1.6, color: "var(--ink-3)" }}>
+        Al votar aceptas el tratamiento<br/>de datos del festival.
+      </p>
     </div>
   );
 };
