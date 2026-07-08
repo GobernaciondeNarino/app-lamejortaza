@@ -37,18 +37,29 @@ return [
     // Lista blanca; usa el dominio real en producción.
     'allowed_origins' => [
         'https://lamejortaza.co',
-        'https://la-mejor-taza.web.app',
         'http://localhost:8000',
         'http://127.0.0.1:8000',
     ],
+
+    // URL pública base del sitio (sin barra final). La usa el endpoint
+    // api/qr/{id}.png para construir el enlace de votación {base}/s/{id}.
+    // Si se deja vacío, se usa el primer allowed_origins, o el host actual.
+    'public_base_url' => 'https://lamejortaza.co',
 
     // Rate limits por IP (segundos / max hits).
     'rate_limits' => [
         'login'      => ['window' => 600, 'max' => 5],   // 5 intentos / 10 min
         'vote'       => ['window' => 60,  'max' => 1],   // 1 voto / min / IP / stand
         'vote_email' => ['window' => 600, 'max' => 12],  // 12 votos / 10 min / correo
+        'pasaporte'  => ['window' => 60,  'max' => 20],  // 20 consultas / min / IP (anti-enumeración)
         'global'     => ['window' => 60,  'max' => 120], // anti-flood
     ],
+
+    // Token para el endpoint de diagnóstico api/diag.php. Déjalo vacío para
+    // MANTENER DIAG CERRADO en producción (recomendado). Para diagnosticar,
+    // pon aquí un valor secreto y llama a: api/diag.php?token=EL_TOKEN
+    // Genera con: php -r "echo bin2hex(random_bytes(16));"
+    'diag_token' => '',
 
     // Forzar HTTPS (envía 301 a https://). Apaga si haces dev local sin TLS.
     'force_https' => false,

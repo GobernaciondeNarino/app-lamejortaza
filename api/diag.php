@@ -16,6 +16,32 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
 
+// ---------------------------------------------------------------------------
+// Control de acceso. Este endpoint filtra información sensible (versión de PHP,
+// DSN de la BD, conteos de tablas incluyendo admins), así que NO puede quedar
+// abierto al público. Se exige un token secreto (`diag_token` en config.php)
+// que se pasa por ?token=... — comparado en tiempo constante.
+//
+//   * Si el sistema está instalado y NO hay `diag_token` configurado, se niega
+//     el acceso por defecto (fail-closed). Define `diag_token` para usar diag.
+//   * Antes de instalar (sin config.php) sólo se exponen datos triviales de
+//     PHP, así que se permite para poder diagnosticar el arranque.
+// ---------------------------------------------------------------------------
+(function () {
+    $cfgFile = __DIR__ . '/config.php';
+    if (!is_file($cfgFile)) return; // pre-instalación: nada sensible que proteger
+    if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
+    $cfg = @include $cfgFile;
+    if (!is_array($cfg)) return; // config rota: diag debe poder reportarlo
+    $expected = (string) ($cfg['diag_token'] ?? '');
+    $sent = isset($_GET['token']) && is_string($_GET['token']) ? $_GET['token'] : '';
+    if ($expected === '' || !hash_equals($expected, $sent)) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'forbidden'], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+})();
+
 $out = [
     'php_version'     => PHP_VERSION,
     'php_sapi'        => PHP_SAPI,

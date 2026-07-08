@@ -35,7 +35,7 @@ function export_csv_stream(string $filename, array $columns, string $sql): void
     $out = fopen('php://output', 'w');
     // BOM para que Excel reconozca UTF-8
     fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, $columns, ',', '"', '\\');
+    fputcsv($out, array_map('csv_safe_cell', $columns), ',', '"', '\\');
     $stmt = Db::pdo()->query($sql);
     while ($row = $stmt->fetch()) {
         $line = [];
@@ -43,10 +43,26 @@ function export_csv_stream(string $filename, array $columns, string $sql): void
             $v = $row[$col] ?? '';
             if (is_array($v)) $v = json_encode($v, JSON_UNESCAPED_UNICODE);
             if (is_bool($v))  $v = $v ? '1' : '0';
-            $line[] = (string) $v;
+            $line[] = csv_safe_cell((string) $v);
         }
         fputcsv($out, $line, ',', '"', '\\');
     }
     fclose($out);
     exit;
+}
+
+/**
+ * Neutraliza la inyección de fórmulas (CSV/Formula Injection). Datos de texto
+ * libre (comentarios, nombres) controlados por el usuario podrían empezar con
+ * `=`, `+`, `-`, `@` o tabuladores y ser interpretados como fórmula cuando un
+ * funcionario abre el CSV en Excel/LibreOffice/Sheets, permitiendo exfiltración
+ * o ejecución. Anteponer un apóstrofo fuerza que la celda se trate como texto.
+ * Ref: OWASP "CSV Injection".
+ */
+function csv_safe_cell(string $value): string
+{
+    if ($value !== '' && strpbrk($value[0], "=+-@\t\r") !== false) {
+        return "'" . $value;
+    }
+    return $value;
 }
