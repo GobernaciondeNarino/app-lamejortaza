@@ -114,9 +114,6 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 <script src="js/vendor/three.min.js"></script>
 <script src="js/three-background.js"></script>
 
-<!-- Generador de QR (Kazuhiko Arase, sin dependencias) — auto-hospedado. -->
-<script src="js/vendor/qrcode.min.js"></script>
-
 <!-- Cliente del backend PHP + router del SPA -->
 <script src="js/router.js"></script>
 <script src="js/api.js"></script>
