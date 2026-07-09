@@ -110,6 +110,10 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 <!-- Utilidades de seguridad -->
 <script src="js/security.js"></script>
 
+<!-- Geometría de los 64 municipios de Nariño (TopoJSON pre-proyectado a paths
+     SVG; sin dependencias en runtime). Expone window.NARINO_MAPA. -->
+<script src="js/narino-municipios.js"></script>
+
 <!-- Three.js (animaciones) — auto-hospedado para no depender de CDNs externas. -->
 <script src="js/vendor/three.min.js"></script>
 <script src="js/three-background.js"></script>
