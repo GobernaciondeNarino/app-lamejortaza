@@ -114,9 +114,6 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 <script src="js/vendor/three.min.js"></script>
 <script src="js/three-background.js"></script>
 
-<!-- Generador de QR (Kazuhiko Arase, sin dependencias) — auto-hospedado. -->
-<script src="js/vendor/qrcode.min.js"></script>
-
 <!-- Cliente del backend PHP + router del SPA -->
 <script src="js/router.js"></script>
 <script src="js/api.js"></script>
@@ -136,14 +133,16 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 
 <script type="text/babel">
 const PALETTES = {
-  "nariño": { grano: "oklch(0.42 0.09 50)", galeras: "oklch(0.55 0.13 30)", cafeto: "oklch(0.5 0.08 145)", paper: "oklch(0.97 0.015 75)", ink: "oklch(0.22 0.02 60)" },
+  "nariño":  { grano: "oklch(0.42 0.09 50)", galeras: "oklch(0.55 0.13 30)", cafeto: "oklch(0.5 0.08 145)",  paper: "oklch(0.97 0.015 75)", ink: "oklch(0.22 0.02 60)" },
+  "mercado": { grano: "oklch(0.4 0.12 30)",  galeras: "oklch(0.6 0.17 45)",  cafeto: "oklch(0.55 0.11 130)", paper: "oklch(0.96 0.025 80)", ink: "oklch(0.22 0.03 50)" },
 };
 const applyPalette = (name) => {
-  const p = PALETTES[name] || PALETTES["nariño"];
+  const p = PALETTES[name] || PALETTES["mercado"];
   const r = document.documentElement.style;
   Object.entries(p).forEach(([k, v]) => r.setProperty("--" + k, v));
 };
-applyPalette("nariño");
+// Paleta del diseño aprobado (handoff Claude Design): "mercado".
+applyPalette("mercado");
 
 const App = () => {
   const [route, setRoute] = React.useState(() => window.LMTRouter.current());
@@ -186,8 +185,16 @@ const App = () => {
     }
   }
 
-  // 1. Dashboard público
+  // 1. Pantalla de inicio (landing) — login de organizadores + entrada de visitante.
+  //    El QR de los stands lleva directo a /s/{id}, sin pasar por aquí.
   if (route.path === "/" || route.path === "") {
+    return <LoginAdmin
+      onLogin={() => window.LMTRouter.go("/admin")}
+      onVisitor={() => window.LMTRouter.go("/festival")}/>;
+  }
+
+  // 1b. Dashboard público del festival
+  if (route.path === "/festival" || route.path === "/festival/") {
     return <PublicDashboard
       stands={stands}
       comentarios={comentarios}
@@ -198,9 +205,9 @@ const App = () => {
   const festivalMatch = route.path.match(/^\/festival\/([a-z0-9\-]+)$/);
   if (festivalMatch) {
     const stand = stands.find((s) => s.id === festivalMatch[1]);
-    if (!stand) return <NotFound back="/"/>;
+    if (!stand) return <NotFound back="/festival"/>;
     return <PublicDetail stand={stand} comentarios={comentarios} allStands={stands}
-      onBack={() => window.LMTRouter.go("/")}
+      onBack={() => window.LMTRouter.go("/festival")}
       onVote={() => window.LMTRouter.go("/s/" + stand.id)}/>;
   }
 

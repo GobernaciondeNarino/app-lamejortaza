@@ -32,7 +32,7 @@ $spaRoute = (
     $path === '/app.php' ||
     preg_match('#^/s/[a-z0-9\-]{2,32}/?$#', $path) ||
     preg_match('#^/admin(/.*)?$#', $path) ||
-    preg_match('#^/festival/[a-z0-9\-]+/?$#', $path) ||
+    preg_match('#^/festival(/[a-z0-9\-]+)?/?$#', $path) ||
     $path === '/pasaporte' || $path === '/pasaporte/'
 );
 if ($spaRoute) {

@@ -12,7 +12,7 @@ const PassportEmpty = () => (
       <p style={{ color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 360, margin: "0 auto 24px" }}>
         Escanea el QR de cualquier stand del festival y emite tu primer voto. Cada visita estampa una página en tu pasaporte.
       </p>
-      <a href="/" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>← Ver el ranking</a>
+      <a href="/festival" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>← Ver el ranking</a>
     </div>
   </div>
 );
@@ -53,7 +53,7 @@ const PassportPage = ({ stands }) => {
     return (
       <div className="mobile-page">
         <div className="mobile-inner">
-          <a href="/" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Volver al ranking</a>
+          <a href="/festival" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Volver al ranking</a>
           <div className="mono" style={{ marginTop: 24 }}>Mi pasaporte</div>
           <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 36, fontWeight: 400, margin: "6px 0 12px", lineHeight: 1.05 }}>
             Identifícate con el<br/>correo que usaste<br/>al votar.
@@ -94,7 +94,7 @@ const PassportPage = ({ stands }) => {
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
             <button className="btn btn-ghost" onClick={() => { setAskingEmail(true); setError(""); }}>Cambiar correo</button>
-            <a href="/" data-route className="btn btn-primary" style={{ justifyContent: "center" }}>Volver al ranking</a>
+            <a href="/festival" data-route className="btn btn-primary" style={{ justifyContent: "center" }}>Volver al ranking</a>
           </div>
         </div>
       </div>
@@ -130,7 +130,7 @@ const PassportPage = ({ stands }) => {
     <div style={{ minHeight: "100dvh", background: "var(--ink)", color: "var(--paper)", padding: "16px 16px 28px" }}>
       <div className="mobile-inner" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", color: "var(--paper-3)" }}>
-          <a href="/" data-route style={{ color: "var(--paper-3)", fontSize: 13 }}>← Salir</a>
+          <a href="/festival" data-route style={{ color: "var(--paper-3)", fontSize: 13 }}>← Salir</a>
           <div className="mono" style={{ color: "var(--paper-3)" }}>Pasaporte · {passport.nombre}</div>
           <button onClick={() => {
             try { localStorage.removeItem("lmt.email"); } catch (_) {}

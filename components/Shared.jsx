@@ -82,43 +82,31 @@ const standUrl = (standId) => {
   return window.location.origin + base + "/s/" + standId;
 };
 
-// QR real generado en cliente con qrcode-generator (Kazuhiko Arase).
-// `data` puede ser el id del stand (genera la URL) o ya una URL completa.
-const QRCode = ({ data = "st-01", size = 140, fg = "#1a1a1a", bg = "#ffffff", margin = 2 }) => {
-  const url = /^https?:/i.test(data) ? data : standUrl(data);
-  const svgRef = React.useRef(null);
+// QR generado en el SERVIDOR vía el endpoint /api/qr/{id}.png (PHP puro, sin
+// dependencias). Antes se generaba en cliente con qrcode-generator, pero esa
+// librería (js/vendor/qrcode.min.js) no está en el repo, así que los QR salían
+// en blanco. Usar el endpoint elimina esa dependencia y funciona siempre.
+// `data` puede ser el id del stand o una URL /s/{id}.
+const QRCode = ({ data = "st-01", size = 140, bg = "#ffffff" }) => {
+  const raw = String(data == null ? "" : data);
+  const m = raw.match(/\/s\/([a-z0-9\-]{2,32})/i);
+  const standId = m ? m[1] : raw;
 
-  React.useEffect(() => {
-    if (!window.qrcode || !svgRef.current) return;
-    const qr = window.qrcode(0, "M");
-    qr.addData(url);
-    qr.make();
-    const count = qr.getModuleCount();
-    const total = count + margin * 2;
-    const cell = size / total;
-    let path = "";
-    for (let y = 0; y < count; y++) {
-      for (let x = 0; x < count; x++) {
-        if (qr.isDark(y, x)) {
-          path += `M${(x + margin) * cell},${(y + margin) * cell}h${cell}v${cell}h-${cell}z`;
-        }
-      }
-    }
-    svgRef.current.innerHTML = `
-      <rect width="${size}" height="${size}" fill="${bg}"/>
-      <path d="${path}" fill="${fg}" shape-rendering="crispEdges"/>
-    `;
-  }, [url, size, fg, bg, margin]);
+  const path = "/qr/" + encodeURIComponent(standId) + ".png";
+  const base = (window.LMTApi && window.LMTApi.urlFor)
+    ? window.LMTApi.urlFor(path)
+    : ("/api/index.php?path=qr/" + encodeURIComponent(standId) + ".png");
+  const src = base + (base.indexOf("?") >= 0 ? "&" : "?") + "scale=10";
 
   return (
-    <svg
-      ref={svgRef}
+    <img
+      src={src}
       width={size}
       height={size}
-      viewBox={`0 0 ${size} ${size}`}
       role="img"
-      aria-label={`QR para ${url}`}
-      style={{ display: "block" }}
+      alt={`Código QR — ${standId}`}
+      style={{ display: "block", width: size, height: size, background: bg, imageRendering: "pixelated", borderRadius: 4 }}
+      loading="lazy"
     />
   );
 };
