@@ -197,25 +197,61 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
   );
 };
 
+// Normaliza un nombre de municipio para emparejar (sin acentos, mayúsculas).
+const normMuni = (s) => (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase().trim();
+
 const MapaNarino = ({ stands, onDetail }) => {
   const [hover, setHover] = React.useState(null);
+  const mapa = window.NARINO_MAPA;
+  const [vw, vh] = mapa ? mapa.viewBox.split(" ").slice(2).map(Number) : [1000, 1068];
+
+  // Índice de municipios por nombre normalizado (para ubicar cada stand).
+  const byName = React.useMemo(() => {
+    const idx = {};
+    if (mapa) mapa.municipios.forEach((m) => { idx[normMuni(m.nombre)] = m; });
+    return idx;
+  }, [mapa]);
+
+  const findMuni = (municipio) => {
+    if (!mapa) return null;
+    const n = normMuni(municipio);
+    if (byName[n]) return byName[n];
+    // "Pasto" ⊂ "San Juan de Pasto", etc.
+    return mapa.municipios.find((m) => { const mn = normMuni(m.nombre); return mn.includes(n) || n.includes(mn); }) || null;
+  };
+
+  const activos = new Set();
+  const placed = stands.map((s) => {
+    const muni = findMuni(s.municipio);
+    if (muni) activos.add(muni.id);
+    return { s, muni };
+  });
+
+  const ranked = [...stands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos));
+  const rankOf = (id) => ranked.findIndex((x) => x.id === id) + 1;
+
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 22, position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
         <div className="mono">Mapa · Nariño</div>
         <div className="mono" style={{ color: "var(--ink-3)" }}>{stands.length} stands ubicados</div>
       </div>
-      <div style={{ aspectRatio: "1.3", position: "relative", background: "var(--paper-2)", borderRadius: "var(--r-sm)", overflow: "hidden" }} className="paper-texture">
-        <svg width="100%" height="100%" viewBox="0 0 100 76" preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0 }}>
-          <path d="M 15 10 L 25 5 L 45 8 L 58 4 L 70 12 L 82 18 L 88 28 L 90 40 L 85 50 L 78 58 L 68 64 L 55 68 L 42 70 L 28 68 L 18 62 L 10 52 L 8 40 L 10 28 L 15 18 Z" fill="var(--paper)" stroke="var(--line-2)" strokeWidth="0.3" strokeDasharray="0.5 0.5"/>
-          <g transform="translate(52, 50)">
-            <path d="M -3 0 L 0 -5 L 3 0 Z" fill="var(--ink-3)" opacity="0.4"/>
-            <text x="0" y="6" textAnchor="middle" fontSize="2.2" fill="var(--ink-3)" fontFamily="var(--font-mono)">GALERAS</text>
-          </g>
+      <div style={{ aspectRatio: `${vw} / ${vh}`, position: "relative", background: "var(--paper-2)", borderRadius: "var(--r-sm)", overflow: "hidden", maxHeight: 440, margin: "0 auto" }} className="paper-texture">
+        <svg width="100%" height="100%" viewBox={mapa ? mapa.viewBox : "0 0 1000 1068"} preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0 }}>
+          {mapa && mapa.municipios.map((m) => (
+            <path key={m.id} d={m.d}
+              fill={activos.has(m.id) ? "color-mix(in oklch, var(--galeras) 18%, var(--paper))" : "var(--paper)"}
+              stroke="var(--line-2)" strokeWidth="1" strokeLinejoin="round">
+              <title>{m.nombre}</title>
+            </path>
+          ))}
         </svg>
-        {stands.map((s) => {
-          const rank = [...stands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos)).findIndex((x) => x.id === s.id) + 1;
+        {placed.map(({ s, muni }) => {
+          if (!muni) return null;
+          const rank = rankOf(s.id);
           const size = rank === 1 ? 26 : rank <= 3 ? 20 : 14;
+          const leftPct = (muni.cx / vw) * 100;
+          const topPct = (muni.cy / vh) * 100;
           return (
             <button
               key={s.id}
@@ -224,8 +260,8 @@ const MapaNarino = ({ stands, onDetail }) => {
               onMouseLeave={() => setHover(null)}
               style={{
                 position: "absolute",
-                left: ((s.coords?.x ?? 0.5) * 100) + "%",
-                top: ((s.coords?.y ?? 0.5) * 100) + "%",
+                left: leftPct + "%",
+                top: topPct + "%",
                 transform: "translate(-50%, -50%)",
                 width: size, height: size, borderRadius: "50%",
                 background: s.color, border: "2px solid var(--paper)",
@@ -233,11 +269,12 @@ const MapaNarino = ({ stands, onDetail }) => {
                 transition: "box-shadow 0.2s",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: "var(--paper)", fontSize: 10, fontWeight: 600, cursor: "pointer",
+                zIndex: hover === s.id ? 5 : 1,
               }}
             >
               {rank <= 3 ? rank : ""}
               {hover === s.id && (
-                <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: "var(--ink)", color: "var(--paper)", padding: "8px 12px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 500, pointerEvents: "none" }}>
+                <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: "var(--ink)", color: "var(--paper)", padding: "8px 12px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 500, pointerEvents: "none", zIndex: 10 }}>
                   {s.nombre}
                   <div style={{ fontSize: 10, opacity: 0.7, fontWeight: 400 }}>{s.municipio} · {calcScore(s.votos).toFixed(0)}/100</div>
                 </div>
