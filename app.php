@@ -114,6 +114,10 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
      SVG; sin dependencias en runtime). Expone window.NARINO_MAPA. -->
 <script src="js/narino-municipios.js"></script>
 
+<!-- Municipios + 13 subregiones oficiales de Nariño y su mapeo (para los
+     selectores del registro de stands). Expone window.NARINO_SUBREGIONES. -->
+<script src="js/narino-subregiones.js"></script>
+
 <!-- Three.js (animaciones) — auto-hospedado para no depender de CDNs externas. -->
 <script src="js/vendor/three.min.js"></script>
 <script src="js/three-background.js"></script>

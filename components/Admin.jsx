@@ -286,11 +286,32 @@ const StandEditor = ({ stand }) => {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
             <div className="field">
               <label>Municipio</label>
-              <input value={form.municipio} onChange={e => update("municipio", e.target.value)} placeholder="La Unión" maxLength={80} required/>
+              <select value={form.municipio} required
+                onChange={e => {
+                  const val = e.target.value;
+                  const muni = (window.NARINO_MAPA?.municipios || []).find(m => m.nombre === val);
+                  const sub = muni && window.NARINO_SUBREGIONES?.porId?.[muni.id];
+                  // Al elegir municipio, autocompleta la subregión oficial.
+                  setForm(f => ({ ...f, municipio: val, region: sub || f.region }));
+                }}>
+                <option value="">— Selecciona municipio —</option>
+                {form.municipio && !(window.NARINO_MAPA?.municipios || []).some(m => m.nombre === form.municipio) && (
+                  <option value={form.municipio}>{form.municipio} (actual)</option>
+                )}
+                {(window.NARINO_MAPA?.municipios || []).slice()
+                  .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+                  .map(m => (<option key={m.id} value={m.nombre}>{m.nombre}</option>))}
+              </select>
             </div>
             <div className="field">
-              <label>Región</label>
-              <input value={form.region} onChange={e => update("region", e.target.value)} placeholder="Norte de Nariño" maxLength={80}/>
+              <label>Región (subregión)</label>
+              <select value={form.region} onChange={e => update("region", e.target.value)}>
+                <option value="">— Selecciona subregión —</option>
+                {form.region && !(window.NARINO_SUBREGIONES?.subregiones || []).includes(form.region) && (
+                  <option value={form.region}>{form.region} (actual)</option>
+                )}
+                {(window.NARINO_SUBREGIONES?.subregiones || []).map(s => (<option key={s} value={s}>{s}</option>))}
+              </select>
             </div>
           </div>
           <div className="field">
