@@ -29,11 +29,25 @@ function register_routes_pasaportes(\LMT\Router $r): void
             ? (json_decode($row['visitados'], true) ?: [])
             : ($row['visitados'] ?: []);
 
+        // Calificación propia por stand (para mostrar en el pasaporte qué
+        // calificó y comentó el portador). Son datos del propio usuario.
+        $vs = Db::pdo()->prepare('SELECT stand_id, emoji, compra, texto FROM votos WHERE correo = :c');
+        $vs->execute([':c' => $correo]);
+        $calificaciones = [];
+        foreach ($vs->fetchAll() as $v) {
+            $calificaciones[$v['stand_id']] = [
+                'emoji'  => $v['emoji'],
+                'compra' => $v['compra'] !== null ? (bool) $v['compra'] : null,
+                'texto'  => $v['texto'] ?? '',
+            ];
+        }
+
         Response::ok([
-            'correo'    => Validate::maskEmail($row['correo']),
-            'nombre'    => $row['nombre'] ?? '',
-            'inicio'    => $row['inicio'] ?? null,
-            'visitados' => array_values(array_filter($visitados, [Validate::class, 'standId'])),
+            'correo'         => Validate::maskEmail($row['correo']),
+            'nombre'         => $row['nombre'] ?? '',
+            'inicio'         => $row['inicio'] ?? null,
+            'visitados'      => array_values(array_filter($visitados, [Validate::class, 'standId'])),
+            'calificaciones' => $calificaciones,
         ]);
     });
 }

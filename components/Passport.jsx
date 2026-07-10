@@ -110,6 +110,7 @@ const PassportPage = ({ stands }) => {
     correo: data.correo || email,
     inicio: data.inicio || "",
     visitados: visitadosIds,
+    calificaciones: data.calificaciones || {},
   };
   const pages = [
     { type: "cover" },
@@ -172,6 +173,12 @@ const PassportPage = ({ stands }) => {
       </div>
     </div>
   );
+};
+
+const RATING = {
+  bueno:   { e: "😍", l: "Excelente", c: "var(--good)" },
+  regular: { e: "😐", l: "Regular",   c: "var(--meh)" },
+  malo:    { e: "😞", l: "Malo",      c: "var(--bad)" },
 };
 
 const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
@@ -238,6 +245,8 @@ const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
   if (pageData.type === "stamp") {
     const s = pageData.stand;
     const rot = ((s.id.charCodeAt(s.id.length - 1) || 0) % 20) - 10;
+    const cal = (passport.calificaciones && passport.calificaciones[s.id]) || null;
+    const r = cal && RATING[cal.emoji];
     return (
       <div style={{ height: "100%", padding: 22, ...lineBg, position: "relative", overflow: "hidden" }}>
         <div className="mono" style={{ marginBottom: 6 }}>Sello · {s.municipio}</div>
@@ -245,16 +254,30 @@ const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
           {s.nombre}
         </h2>
         <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.region}</div>
+
+        {/* Calificación que dio el portador */}
+        {r && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+            <span style={{ fontSize: 22 }}>{r.e}</span>
+            <span className="mono" style={{ color: r.c, textTransform: "none", letterSpacing: 0 }}>
+              Tu calificación: {r.l}
+            </span>
+            {cal.compra === true && (
+              <span className="mono" style={{ marginLeft: "auto", color: "var(--ink-3)" }}>compró ✓</span>
+            )}
+          </div>
+        )}
+
         <div style={{
-          position: "absolute", top: "48%", left: "52%", transform: "translate(-50%, -50%)",
+          position: "absolute", top: "50%", left: "52%", transform: "translate(-50%, -50%)",
           "--stamp-rot": rot + "deg",
           animation: "stamp-land 0.6s cubic-bezier(.2,.8,.2,1.2) forwards",
         }}>
-          <SelloCircular stand={s} size={150} rotation={rot}/>
+          <SelloCircular stand={s} size={140} rotation={rot}/>
         </div>
         <div style={{ position: "absolute", bottom: 22, left: 22, right: 22 }}>
           <div style={{ fontSize: 11, color: "var(--ink-2)", lineHeight: 1.5, fontStyle: "italic", fontFamily: "var(--font-display)" }}>
-            "{s.descripcion}"
+            "{cal && cal.texto ? cal.texto : s.descripcion}"
           </div>
         </div>
       </div>
