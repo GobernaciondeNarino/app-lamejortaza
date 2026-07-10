@@ -33,7 +33,9 @@ $spaRoute = (
     preg_match('#^/s/[a-z0-9\-]{2,32}/?$#', $path) ||
     preg_match('#^/admin(/.*)?$#', $path) ||
     preg_match('#^/festival(/[a-z0-9\-]+)?/?$#', $path) ||
-    $path === '/pasaporte' || $path === '/pasaporte/'
+    $path === '/pasaporte' || $path === '/pasaporte/' ||
+    $path === '/registro-expositor' || $path === '/registro-expositor/' ||
+    $path === '/expositor' || $path === '/expositor/'
 );
 if ($spaRoute) {
     require __DIR__ . '/app.php';

@@ -138,6 +138,7 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 <script type="text/babel" src="components/VoteFlow.jsx"></script>
 <script type="text/babel" src="components/Passport.jsx"></script>
 <script type="text/babel" src="components/Dashboard.jsx"></script>
+<script type="text/babel" src="components/Expositor.jsx"></script>
 
 <script type="text/babel">
 const PALETTES = {
@@ -236,6 +237,16 @@ const App = () => {
     return <PassportPage stands={stands}/>;
   }
 
+  // 4b. Expositores: acceso público (registro/login) y panel (rol expositor).
+  if (route.path === "/registro-expositor") {
+    return <ExpositorAcceso/>;
+  }
+  if (route.path === "/expositor") {
+    if (!ready) return <Splash/>;
+    if (!user || user.role !== "expositor") { window.LMTRouter.go("/registro-expositor"); return null; }
+    return <ExpositorPanel/>;
+  }
+
   // 5. Admin login
   if (route.path === "/admin/login") {
     return <LoginAdmin onLogin={() => window.LMTRouter.go("/admin")}/>;
@@ -258,6 +269,9 @@ const App = () => {
   if (route.path === "/admin/live") {
     return <AdminPage section="live" user={user} stands={stands} comentarios={comentarios}/>;
   }
+  if (route.path === "/admin/aprobaciones") {
+    return <AdminPage section="aprobaciones" user={user} stands={stands}/>;
+  }
 
   return <NotFound back="/"/>;
 };
@@ -278,7 +292,7 @@ window.NotFound = NotFound;
 window.Splash = Splash;
 
 const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail"];
+  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "ExpositorAcceso", "ExpositorPanel", "AdminAprobaciones"];
   if (needed.every((k) => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
   } else {

@@ -3,9 +3,10 @@
 
 const AdminShell = ({ active, user, children }) => {
   const items = [
-    { id: "stands", label: "Stands",       sub: "Registro",   path: "/admin/stands" },
-    { id: "qr",     label: "Códigos QR",   sub: "Impresión",  path: "/admin/qr" },
-    { id: "live",   label: "Actividad",    sub: "En vivo",    path: "/admin/live" },
+    { id: "stands",       label: "Stands",       sub: "Registro",   path: "/admin/stands" },
+    { id: "aprobaciones", label: "Aprobaciones", sub: "Expositores",path: "/admin/aprobaciones" },
+    { id: "qr",           label: "Códigos QR",   sub: "Impresión",  path: "/admin/qr" },
+    { id: "live",         label: "Actividad",    sub: "En vivo",    path: "/admin/live" },
   ];
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
@@ -51,10 +52,10 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
-    // Si ya hay sesión activa, salta directo al panel.
-    if (window.LMTApi && window.LMTApi.user && window.LMTApi.user() && window.LMTApi.user().admin) {
-      onLogin();
-    }
+    // Si ya hay sesión activa, salta directo al panel según el rol.
+    const u = window.LMTApi && window.LMTApi.user && window.LMTApi.user();
+    if (u && u.admin) onLogin();
+    else if (u && u.role === "expositor") window.LMTRouter.go("/expositor");
   }, [onLogin]);
 
   const handleLogin = async (e) => {
@@ -66,8 +67,10 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
     try {
       if (!window.LMTApi || !window.LMTApi.enabled) throw new Error("api_unavailable");
       const u = await window.LMTApi.signInAdmin(email, password);
-      if (!u || !u.admin) throw new Error("forbidden");
-      onLogin();
+      if (!u) throw new Error("invalid_credentials");
+      if (u.admin) onLogin();
+      else if (u.role === "expositor") window.LMTRouter.go("/expositor");
+      else throw new Error("forbidden");
     } catch (e) {
       const code = e && (e.code || e.message);
       if (code === "rate_limited") setError("Demasiados intentos. Espera unos minutos.");
@@ -125,6 +128,9 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
           <div className="mono" style={{ textAlign: "center", color: "var(--ink-3)" }}>
             {window.LMTApi && window.LMTApi.enabled ? "API conectada" : "API no disponible"}
           </div>
+          <a href="/registro-expositor" data-route className="mono" style={{ textAlign: "center", color: "var(--galeras)", textDecoration: "underline" }}>
+            ¿Eres expositor? Registra o gestiona tu stand →
+          </a>
         </div>
       </form>
     </div>
@@ -134,9 +140,10 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
 // Punto único del panel admin: switch interno por sección
 const AdminPage = ({ section, user, stands, comentarios, editingId }) => {
   if (section === "stands")  return <AdminShell active="stands" user={user}><StandsList stands={stands}/></AdminShell>;
-  if (section === "editor")  return <AdminShell active="stands" user={user}><StandEditor stand={editingId ? stands.find((s) => s.id === editingId) : null}/></AdminShell>;
+  if (section === "editor")  return <AdminShell active="stands" user={user}><StandEditor stand={editingId ? stands.find((s) => s.id === editingId) : null} standId={editingId}/></AdminShell>;
   if (section === "qr")      return <AdminShell active="qr" user={user}><QRPrintView stands={stands}/></AdminShell>;
   if (section === "live")    return <AdminShell active="live" user={user}><ActivityLive stands={stands} comentarios={comentarios || (window.COMENTARIOS_DEMO || [])}/></AdminShell>;
+  if (section === "aprobaciones") return <AdminShell active="aprobaciones" user={user}><AdminAprobaciones/></AdminShell>;
   return <AdminShell active="stands" user={user}><div style={{ padding: 32 }}>—</div></AdminShell>;
 };
 
@@ -209,19 +216,27 @@ const StandsList = ({ stands }) => {
   );
 };
 
-const StandEditor = ({ stand }) => {
-  const isNew = !stand;
+const StandEditor = ({ stand, standId }) => {
+  const isNew = !stand && !standId;
   const [form, setForm] = React.useState(stand || {
-    id: "st-" + Math.random().toString(36).slice(2, 6),
+    id: standId || ("st-" + Math.random().toString(36).slice(2, 6)),
     nombre: "", municipio: "", region: "", direccion: "", correo: "",
     descripcion: "", votos: { bueno: 0, regular: 0, malo: 0 },
     coords: { x: 0.5, y: 0.5 },
     color: "oklch(0.45 0.1 40)",
   });
+  // Cargar por id un stand que no venga en la lista (p. ej. pendiente).
+  const [loading, setLoading] = React.useState(!stand && !!standId);
+  React.useEffect(() => {
+    if (!stand && standId && window.LMTApi && window.LMTApi.getStand) {
+      window.LMTApi.getStand(standId).then((s) => { if (s) setForm(s); }).catch(() => {}).finally(() => setLoading(false));
+    }
+  }, [stand, standId]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  if (loading) return <div style={{ padding: 40 }} className="mono">Cargando stand…</div>;
 
   const save = async () => {
     setError(""); setBusy(true);

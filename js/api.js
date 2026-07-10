@@ -76,6 +76,8 @@
       coords: s.coords || { x: 0.5, y: 0.5 },
       color: s.color || "oklch(0.45 0.1 40)",
       votos: s.votos || { bueno: 0, regular: 0, malo: 0 },
+      estado: s.estado || "activo",
+      owner: s.owner || null,
     };
   }
 
@@ -160,6 +162,14 @@
   async function updateStand(id, body)  { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id), { method: "PUT", body }); }
   async function deleteStand(id)        { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id), { method: "DELETE" }); }
 
+  // --- Expositores (3 roles) ---
+  async function registroExpositor(payload) { await ensureCsrf(); return request("/auth/registro-expositor", { method: "POST", body: payload }); }
+  async function getMiStand()               { return request("/mi-stand"); }
+  async function adminListStands()          { return (await request("/admin/stands")).map(mapStand); }
+  async function getAprobaciones()          { return request("/admin/aprobaciones"); }
+  async function aprobarStand(id)           { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id) + "/aprobar", { method: "POST" }); }
+  async function rechazarStand(id)          { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id) + "/rechazar", { method: "POST" }); }
+
   window.LMTApi = {
     enabled: false,
     base: BASE,
@@ -176,6 +186,12 @@
     createStand,
     updateStand,
     deleteStand,
+    registroExpositor,
+    getMiStand,
+    adminListStands,
+    getAprobaciones,
+    aprobarStand,
+    rechazarStand,
     pollDashboard,
   };
 
