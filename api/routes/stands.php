@@ -7,11 +7,13 @@ use LMT\Security;
 
 function register_routes_stands(\LMT\Router $r): void
 {
+    // Público: sólo stands aprobados (activo). Los pendientes/rechazados no
+    // aparecen en el sitio ni en la votación.
     $r->get('/stands', function () {
         $rows = Db::pdo()->query(
-            'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
+            "SELECT id, nombre, municipio, region, direccion, correo, descripcion,
                     coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
-             FROM stands ORDER BY id'
+             FROM stands WHERE estado = 'activo' ORDER BY id"
         )->fetchAll();
         $list = array_map(fn($s) => stand_row_to_api($s), $rows);
         Response::ok($list);
@@ -22,12 +24,17 @@ function register_routes_stands(\LMT\Router $r): void
         if (!$id) Response::error(400, 'bad_id');
         $stmt = Db::pdo()->prepare(
             'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
-                    coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
+                    coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo, estado, owner
              FROM stands WHERE id = :id'
         );
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
         if (!$row) Response::error(404, 'not_found');
+        // Un stand no-activo sólo lo ve un admin o su dueño (expositor).
+        if (($row['estado'] ?? 'activo') !== 'activo') {
+            $isOwner = \LMT\Session::isExpositor() && \LMT\Session::email() !== '' && \LMT\Session::email() === ($row['owner'] ?? '');
+            if (!\LMT\Session::isAdmin() && !$isOwner) Response::error(404, 'not_found');
+        }
         Response::ok(stand_row_to_api($row));
     });
 
@@ -57,29 +64,48 @@ function register_routes_stands(\LMT\Router $r): void
     });
 
     $r->put('/stands/:id', function (array $p) {
-        Security::requireAdmin();
         $id = Validate::standId($p['id'] ?? null);
         if (!$id) Response::error(400, 'bad_id');
+
+        $pdo = Db::pdo();
+        $cur = $pdo->prepare('SELECT owner, estado FROM stands WHERE id = :id');
+        $cur->execute([':id' => $id]);
+        $existing = $cur->fetch();
+        if (!$existing) Response::error(404, 'not_found');
+
+        $isAdmin = \LMT\Session::isAdmin();
+        $isOwner = \LMT\Session::isExpositor()
+            && \LMT\Session::email() !== ''
+            && \LMT\Session::email() === ($existing['owner'] ?? '');
+        if (!$isAdmin && !$isOwner) Response::error(401, 'unauthorized');
+
         $b = Security::jsonBody();
-        $stand = stand_payload($b, false);
-        $stmt = Db::pdo()->prepare(
-            'UPDATE stands SET nombre=:nombre, municipio=:municipio, region=:region,
-                                direccion=:direccion, correo=:correo, descripcion=:descripcion,
-                                coords_x=:cx, coords_y=:cy, color=:color
-             WHERE id=:id'
-        );
-        $stmt->execute([
-            ':nombre'      => $stand['nombre'],
-            ':municipio'   => $stand['municipio'],
-            ':region'      => $stand['region'],
-            ':direccion'   => $stand['direccion'],
-            ':correo'      => $stand['correo'],
-            ':descripcion' => $stand['descripcion'],
-            ':cx'          => $stand['coords_x'],
-            ':cy'          => $stand['coords_y'],
-            ':color'       => $stand['color'],
-            ':id'          => $id,
-        ]);
+        $stand = stand_payload($b, false); // valida todos los campos
+
+        if ($isAdmin) {
+            // El admin edita todo, incluida la ubicación.
+            $pdo->prepare(
+                'UPDATE stands SET nombre=:nombre, municipio=:municipio, region=:region,
+                                    direccion=:direccion, correo=:correo, descripcion=:descripcion,
+                                    coords_x=:cx, coords_y=:cy, color=:color
+                 WHERE id=:id'
+            )->execute([
+                ':nombre' => $stand['nombre'], ':municipio' => $stand['municipio'], ':region' => $stand['region'],
+                ':direccion' => $stand['direccion'], ':correo' => $stand['correo'], ':descripcion' => $stand['descripcion'],
+                ':cx' => $stand['coords_x'], ':cy' => $stand['coords_y'], ':color' => $stand['color'], ':id' => $id,
+            ]);
+        } else {
+            // El expositor sólo cambia datos descriptivos; municipio/región/
+            // ubicación/estado quedan bajo control del admin.
+            $pdo->prepare(
+                'UPDATE stands SET nombre=:nombre, direccion=:direccion, correo=:correo,
+                                    descripcion=:descripcion, color=:color
+                 WHERE id=:id'
+            )->execute([
+                ':nombre' => $stand['nombre'], ':direccion' => $stand['direccion'], ':correo' => $stand['correo'],
+                ':descripcion' => $stand['descripcion'], ':color' => $stand['color'], ':id' => $id,
+            ]);
+        }
         Response::ok(null);
     });
 
@@ -108,6 +134,7 @@ function stand_row_to_api(array $r): array
             'y' => isset($r['coords_y']) ? (float)$r['coords_y'] : 0.5,
         ],
         'color'       => $r['color'] ?? 'oklch(0.45 0.1 40)',
+        'estado'      => $r['estado'] ?? 'activo',
         'votos'       => [
             'bueno'   => (int)($r['votos_bueno']   ?? 0),
             'regular' => (int)($r['votos_regular'] ?? 0),

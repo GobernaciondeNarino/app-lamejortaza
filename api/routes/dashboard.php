@@ -8,9 +8,9 @@ function register_routes_dashboard(\LMT\Router $r): void
     // Endpoint único que devuelve stands + últimos votos para minimizar round-trips.
     $r->get('/dashboard', function () {
         $stands = Db::pdo()->query(
-            'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
+            "SELECT id, nombre, municipio, region, direccion, correo, descripcion,
                     coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
-             FROM stands ORDER BY id'
+             FROM stands WHERE estado = 'activo' ORDER BY id"
         )->fetchAll();
         $standsApi = array_map('stand_row_to_api', $stands);
 

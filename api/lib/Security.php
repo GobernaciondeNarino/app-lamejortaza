@@ -91,6 +91,12 @@ final class Security
         if (!Session::isAdmin()) Response::error(401, 'unauthorized');
     }
 
+    /** Requiere expositor con cuenta aprobada. */
+    public static function requireExpositor(): void
+    {
+        if (!Session::isExpositor()) Response::error(401, 'unauthorized');
+    }
+
     public static function hashPassword(string $plain): string
     {
         $pepper = (string) Config::get('pepper', '');

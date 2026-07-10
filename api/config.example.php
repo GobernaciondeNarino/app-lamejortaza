@@ -55,6 +55,7 @@ return [
         'vote'       => ['window' => 60,  'max' => 1],   // 1 voto / min / IP / stand
         'vote_email' => ['window' => 600, 'max' => 12],  // 12 votos / 10 min / correo
         'pasaporte'  => ['window' => 60,  'max' => 20],  // 20 consultas / min / IP (anti-enumeración)
+        'registro'   => ['window' => 3600,'max' => 5],   // 5 registros de expositor / hora / IP
         'global'     => ['window' => 60,  'max' => 120], // anti-flood
     ],
 

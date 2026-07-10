@@ -21,8 +21,12 @@ CREATE TABLE IF NOT EXISTS admins (
   email         VARCHAR(254) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   is_admin      TINYINT(1) NOT NULL DEFAULT 1,
+  role          VARCHAR(16) NOT NULL DEFAULT 'admin',    -- 'admin' | 'expositor'
+  estado        VARCHAR(16) NOT NULL DEFAULT 'activo',   -- 'activo' | 'pendiente' | 'rechazado'
+  nombre        VARCHAR(120) DEFAULT NULL,
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_admin_email (email)
+  UNIQUE KEY uniq_admin_email (email),
+  KEY idx_admins_estado (estado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Stands --------------------------------------------------------------------
@@ -40,8 +44,11 @@ CREATE TABLE IF NOT EXISTS stands (
   votos_bueno   INT UNSIGNED NOT NULL DEFAULT 0,
   votos_regular INT UNSIGNED NOT NULL DEFAULT 0,
   votos_malo    INT UNSIGNED NOT NULL DEFAULT 0,
+  estado        VARCHAR(16) NOT NULL DEFAULT 'activo',  -- 'activo' | 'pendiente' | 'rechazado'
+  owner         VARCHAR(254) DEFAULT NULL,              -- correo del expositor dueño
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_stands_estado (estado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Votos ---------------------------------------------------------------------

@@ -50,12 +50,15 @@ final class Session
         }
     }
 
-    public static function login(int $userId, string $email, bool $admin): void
+    public static function login(int $userId, string $email, string $role = 'admin', string $estado = 'activo', ?string $nombre = null): void
     {
         session_regenerate_id(true);
         $_SESSION['_uid']     = $userId;
         $_SESSION['_email']   = $email;
-        $_SESSION['_admin']   = $admin;
+        $_SESSION['_role']    = $role;
+        $_SESSION['_estado']  = $estado;
+        $_SESSION['_nombre']  = $nombre;
+        $_SESSION['_admin']   = ($role === 'admin' && $estado === 'activo'); // compat
         $_SESSION['_login_at']= time();
         $_SESSION['_csrf']    = bin2hex(random_bytes(32));
     }
@@ -77,15 +80,39 @@ final class Session
     {
         if (empty($_SESSION['_uid'])) return null;
         return [
-            'id'    => (int)$_SESSION['_uid'],
-            'email' => (string)$_SESSION['_email'],
-            'admin' => !empty($_SESSION['_admin']),
+            'id'     => (int)$_SESSION['_uid'],
+            'email'  => (string)$_SESSION['_email'],
+            'role'   => (string)($_SESSION['_role'] ?? 'admin'),
+            'estado' => (string)($_SESSION['_estado'] ?? 'activo'),
+            'nombre' => $_SESSION['_nombre'] ?? null,
+            'admin'  => !empty($_SESSION['_admin']),
         ];
     }
 
     public static function isAdmin(): bool
     {
         return !empty($_SESSION['_admin']);
+    }
+
+    public static function role(): string
+    {
+        return (string)($_SESSION['_role'] ?? '');
+    }
+
+    public static function estado(): string
+    {
+        return (string)($_SESSION['_estado'] ?? '');
+    }
+
+    /** Expositor con cuenta aprobada (activa). */
+    public static function isExpositor(): bool
+    {
+        return ($_SESSION['_role'] ?? '') === 'expositor' && ($_SESSION['_estado'] ?? '') === 'activo';
+    }
+
+    public static function email(): string
+    {
+        return (string)($_SESSION['_email'] ?? '');
     }
 
     public static function csrfToken(): string

@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS admins (
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   is_admin      INTEGER NOT NULL DEFAULT 1,
+  role          TEXT NOT NULL DEFAULT 'admin',      -- 'admin' | 'expositor'
+  estado        TEXT NOT NULL DEFAULT 'activo',     -- 'activo' | 'pendiente' | 'rechazado'
+  nombre        TEXT,
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -26,9 +29,12 @@ CREATE TABLE IF NOT EXISTS stands (
   votos_bueno   INTEGER NOT NULL DEFAULT 0,
   votos_regular INTEGER NOT NULL DEFAULT 0,
   votos_malo    INTEGER NOT NULL DEFAULT 0,
+  estado        TEXT NOT NULL DEFAULT 'activo',  -- 'activo' | 'pendiente' | 'rechazado'
+  owner         TEXT,                            -- correo del expositor dueño (si aplica)
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_stands_estado ON stands(estado);
 
 CREATE TABLE IF NOT EXISTS votos (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,

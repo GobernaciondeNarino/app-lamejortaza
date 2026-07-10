@@ -52,9 +52,9 @@ function register_routes_votos(\LMT\Router $r): void
         if (!$emoji)  Response::error(422, 'emoji_invalido');
         if (!$correo) Response::error(422, 'correo_invalido');
 
-        // Verificar que el stand exista
+        // Verificar que el stand exista y esté activo (no se vota en pendientes).
         $pdo = Db::pdo();
-        $check = $pdo->prepare('SELECT 1 FROM stands WHERE id = :id');
+        $check = $pdo->prepare("SELECT 1 FROM stands WHERE id = :id AND estado = 'activo'");
         $check->execute([':id' => $stand]);
         if (!$check->fetchColumn()) Response::error(404, 'stand_no_existe');
 
