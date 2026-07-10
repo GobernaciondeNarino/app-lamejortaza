@@ -43,17 +43,33 @@ function register_routes_qr(\LMT\Router $r): void
     });
 }
 
-/** Construye la URL pública de votación de un stand, respetando la config. */
+/**
+ * Construye la URL pública de votación de un stand: {base}/s/{id}.
+ *
+ * Por defecto se deriva del request — igual que el frontend (standUrl) — para
+ * que el enlace incluya SIEMPRE el subdirectorio donde corre la app
+ * (p. ej. https://host/lamejortaza/s/{id}), sin depender de configuración.
+ * Sólo `public_base_url` la sobreescribe, y en ese caso DEBE incluir el
+ * subdirectorio si la app vive en uno.
+ */
 function qr_stand_url(string $id): string
 {
-    $base = rtrim((string) Config::get('public_base_url', ''), '/');
-    if ($base === '') {
-        $origins = (array) Config::get('allowed_origins', []);
-        $base = rtrim((string) ($origins[0] ?? ''), '/');
+    // 1) Override explícito (debe incluir el subdirectorio si aplica).
+    $override = rtrim((string) Config::get('public_base_url', ''), '/');
+    if ($override !== '') {
+        return $override . '/s/' . $id;
     }
-    if ($base === '') {
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $base = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-    }
-    return $base . '/s/' . $id;
+
+    // 2) Derivar del request (esquema + host + ruta base de la app).
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $scheme = $https ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+    // Ruta base = directorio que contiene /api/. SCRIPT_NAME suele ser
+    // "/<subdir>/api/index.php"; quitamos el sufijo "/api/<archivo>.php".
+    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/api/index.php'));
+    $appBase = rtrim((string) preg_replace('#/api/[^/]*$#', '', $scriptName), '/');
+
+    return $scheme . '://' . $host . $appBase . '/s/' . $id;
 }
