@@ -3,21 +3,23 @@
 
 const AdminShell = ({ active, user, children }) => {
   const items = [
-    { id: "stands", label: "Stands",       sub: "Registro",   path: "/admin/stands" },
-    { id: "qr",     label: "Códigos QR",   sub: "Impresión",  path: "/admin/qr" },
-    { id: "live",   label: "Actividad",    sub: "En vivo",    path: "/admin/live" },
+    { id: "stands",     label: "Stands",       sub: "Registro",     path: "/admin/stands" },
+    { id: "promotores", label: "Promotores",   sub: "Inscripciones", path: "/admin/promotores" },
+    { id: "qr",         label: "Códigos QR",   sub: "Impresión",    path: "/admin/qr" },
+    { id: "live",       label: "Actividad",    sub: "En vivo",      path: "/admin/live" },
+    { id: "correos",    label: "Correos",      sub: "Bitácora",     path: "/admin/correos" },
   ];
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
     window.LMTRouter.go("/");
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", minHeight: "100dvh", background: "var(--paper)" }}>
-      <aside style={{ borderRight: "1px solid var(--line)", padding: "26px 18px", display: "flex", flexDirection: "column", gap: 28, background: "var(--paper)" }}>
+    <div className="admin-shell">
+      <aside className="admin-aside">
         <a href="/" data-route style={{ textDecoration: "none", color: "inherit" }}>
           <Wordmark size={16}/>
         </a>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <nav className="admin-nav">
           <div className="mono" style={{ marginBottom: 8 }}>Admin · Festival 2026</div>
           {items.map((it) => (
             <a key={it.id} href={it.path} data-route style={{
@@ -31,7 +33,7 @@ const AdminShell = ({ active, user, children }) => {
             </a>
           ))}
         </nav>
-        <div style={{ marginTop: "auto", padding: 12, border: "1px solid var(--line)", borderRadius: "var(--r-md)" }}>
+        <div className="admin-sesion">
           <div className="mono" style={{ marginBottom: 4 }}>Sesión</div>
           <div style={{ fontSize: 12, color: "var(--ink-2)", wordBreak: "break-all" }}>{user ? user.email : "—"}</div>
           <button onClick={logout} className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", marginTop: 10, padding: "8px" }}>
@@ -39,7 +41,7 @@ const AdminShell = ({ active, user, children }) => {
           </button>
         </div>
       </aside>
-      <main style={{ overflow: "auto" }}>{children}</main>
+      <main className="admin-main">{children}</main>
     </div>
   );
 };
@@ -80,14 +82,14 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
   };
 
   return (
-    <div style={{ minHeight: "100dvh", display: "grid", gridTemplateColumns: "1fr 1fr", background: "var(--paper)" }}>
-      <div style={{ background: "var(--ink)", color: "var(--paper)", padding: "60px 60px", display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative", overflow: "hidden" }}>
+    <div className="split">
+      <div className="split-hero">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ filter: "invert(1)" }}><LogoTaza size={36}/></div>
           <div className="mono" style={{ color: "var(--paper-3)" }}>La Mejor Taza · Admin</div>
         </div>
         <div>
-          <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 64, lineHeight: 0.95, margin: 0, fontWeight: 400, letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 64, lineHeight: 0.95, margin: 0, fontWeight: 400, letterSpacing: "-0.02em", maxWidth: "16ch" }}>
             El pasaporte<br/>del café<br/><span style={{ color: "var(--galeras)" }}>nariñense</span>.
           </h1>
           <p style={{ fontSize: 15, color: "var(--paper-3)", maxWidth: 420, marginTop: 24, lineHeight: 1.6 }}>
@@ -102,9 +104,19 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
             Entrar como visitante →
           </button>
           <span className="mono" style={{ color: "var(--paper-3)" }}>Ver stands, ranking y votación del festival</span>
+          <div style={{ height: 1, background: "var(--paper-3)", opacity: 0.25, width: "100%", margin: "12px 0 4px" }}/>
+          <span className="mono" style={{ color: "var(--paper-3)" }}>¿Tienes un stand en el festival?</span>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <a href="/inscripcion" data-route style={{ color: "var(--paper)", fontSize: 14, textDecoration: "underline" }}>
+              Inscribirme como promotor
+            </a>
+            <a href="/promotor" data-route style={{ color: "var(--paper-3)", fontSize: 14 }}>
+              Ya tengo acceso →
+            </a>
+          </div>
         </div>
       </div>
-      <form onSubmit={handleLogin} style={{ padding: "70px 60px", display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 520 }}>
+      <form onSubmit={handleLogin} className="split-form">
         <div className="mono">Acceso · Organizadores</div>
         <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "8px 0 28px" }}>
           Iniciar sesión
@@ -137,24 +149,24 @@ const AdminPage = ({ section, user, stands, comentarios, editingId }) => {
   if (section === "editor")  return <AdminShell active="stands" user={user}><StandEditor stand={editingId ? stands.find((s) => s.id === editingId) : null}/></AdminShell>;
   if (section === "qr")      return <AdminShell active="qr" user={user}><QRPrintView stands={stands}/></AdminShell>;
   if (section === "live")    return <AdminShell active="live" user={user}><ActivityLive stands={stands} comentarios={comentarios || (window.COMENTARIOS_DEMO || [])}/></AdminShell>;
+  if (section === "promotores") return <AdminShell active="promotores" user={user}><AdminPromotores stands={stands}/></AdminShell>;
+  if (section === "correos")    return <AdminShell active="correos" user={user}><AdminCorreos/></AdminShell>;
   return <AdminShell active="stands" user={user}><div style={{ padding: 32 }}>—</div></AdminShell>;
 };
 
 const StandsList = ({ stands }) => {
   const sorted = [...stands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos));
   return (
-    <div style={{ padding: "40px 48px" }}>
+    <div className="admin-page">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 32, gap: 12, flexWrap: "wrap" }}>
         <div>
           <div className="mono">Registro · {stands.length} stands</div>
-          <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 44, fontWeight: 400, margin: "4px 0 0", letterSpacing: "-0.01em" }}>
-            Stands del festival
-          </h1>
+          <h1 className="titulo-xl">Stands del festival</h1>
         </div>
         <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar stand</a>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
+      <div className="grid-4" style={{ marginBottom: 32 }}>
         {[
           { k: "Stands", v: stands.length, sub: "registrados" },
           { k: "Votos", v: stands.reduce((a, s) => a + totalVotos(s.votos), 0), sub: "totales" },
@@ -176,7 +188,8 @@ const StandsList = ({ stands }) => {
           <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar stand</a>
         </div>
       ) : (
-        <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--paper)" }}>
+        <div className="tabla-scroll" style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", background: "var(--paper)" }}>
+        <div>
           <div style={{ display: "grid", gridTemplateColumns: "60px 2fr 1fr 1fr 1.2fr 80px", padding: "12px 20px", borderBottom: "1px solid var(--line)", background: "var(--paper-2)" }}>
             {["#", "Stand", "Municipio", "Región", "Calificación", ""].map((h, i) => (<div key={i} className="mono">{h}</div>))}
           </div>
@@ -203,6 +216,7 @@ const StandsList = ({ stands }) => {
               <div style={{ textAlign: "right", fontSize: 18, color: "var(--ink-3)" }}>→</div>
             </a>
           ))}
+        </div>
         </div>
       )}
     </div>
@@ -264,14 +278,14 @@ const StandEditor = ({ stand }) => {
   };
 
   return (
-    <div style={{ padding: "40px 48px", maxWidth: 960 }}>
+    <div className="admin-page" style={{ maxWidth: 960 }}>
       <a href="/admin/stands" data-route style={{ color: "var(--ink-2)", fontSize: 13, marginBottom: 20, display: "inline-block" }}>← Volver a stands</a>
       <div className="mono">{isNew ? "Nuevo registro" : "Editar stand"} · {form.id}</div>
       <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "4px 0 28px" }}>
         {isNew ? "Registrar stand" : (form.nombre || "Sin nombre")}
       </h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 40 }}>
+      <div className="editor-2col">
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {isNew && (
             <div className="field">
@@ -283,7 +297,7 @@ const StandEditor = ({ stand }) => {
             <label>Nombre del stand</label>
             <input value={form.nombre} onChange={e => update("nombre", e.target.value)} placeholder="Ej: Finca El Tambo" maxLength={80} required/>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div className="grid-2" style={{ gap: 20 }}>
             <div className="field">
               <label>Municipio</label>
               <input value={form.municipio} onChange={e => update("municipio", e.target.value)} placeholder="La Unión" maxLength={80} required/>
@@ -323,7 +337,7 @@ const StandEditor = ({ stand }) => {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div className="grid-2" style={{ gap: 20 }}>
             <div className="field">
               <label>Coords X (0..1)</label>
               <input type="number" min="0" max="1" step="0.01" value={form.coords?.x ?? 0.5} onChange={e => update("coords", { ...form.coords, x: parseFloat(e.target.value) })}/>
@@ -336,7 +350,7 @@ const StandEditor = ({ stand }) => {
 
           {error && <div role="alert" style={{ padding: "10px 12px", border: "1px solid var(--bad)", color: "var(--bad)", borderRadius: "var(--r-sm)", fontSize: 13 }}>{error}</div>}
 
-          <div style={{ display: "flex", gap: 12, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div className="acciones" style={{ marginTop: 8 }}>
             <button className="btn btn-primary" onClick={save} disabled={busy} style={{ opacity: busy ? 0.6 : 1 }}>
               {busy ? "Guardando…" : (isNew ? "Registrar y generar QR →" : "Guardar cambios")}
             </button>

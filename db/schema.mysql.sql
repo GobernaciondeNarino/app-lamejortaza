@@ -76,3 +76,90 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   window_start INT UNSIGNED NOT NULL,
   KEY idx_rate_window (window_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Promotores de stands ------------------------------------------------------
+-- Ciclo de vida: pendiente -> verificado -> activo, o rechazado / suspendido.
+-- `password_hash` es NULL mientras el administrador no verifique la solicitud:
+-- la clave temporal se genera y se envía por correo en ese momento.
+CREATE TABLE IF NOT EXISTS promotores (
+  id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email                VARCHAR(254) NOT NULL,
+  nombre               VARCHAR(120) NOT NULL,
+  documento            VARCHAR(32)  DEFAULT NULL,
+  telefono             VARCHAR(32)  DEFAULT NULL,
+  municipio            VARCHAR(80)  DEFAULT NULL,
+  empresa_tentativa    VARCHAR(120) DEFAULT NULL,
+  mensaje              VARCHAR(500) DEFAULT NULL,
+  estado               ENUM('pendiente','verificado','activo','rechazado','suspendido')
+                       NOT NULL DEFAULT 'pendiente',
+  password_hash        VARCHAR(255) DEFAULT NULL,
+  must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+  password_expira_at   DATETIME DEFAULT NULL,
+  intentos_fallidos    INT UNSIGNED NOT NULL DEFAULT 0,
+  bloqueado_hasta      DATETIME DEFAULT NULL,
+  ultimo_acceso        DATETIME DEFAULT NULL,
+  stand_id             VARCHAR(32) DEFAULT NULL,
+  verificado_por       INT UNSIGNED DEFAULT NULL,
+  verificado_at        DATETIME DEFAULT NULL,
+  motivo               VARCHAR(255) DEFAULT NULL,
+  acepta_datos         TINYINT(1) NOT NULL DEFAULT 0,
+  ip_hash              CHAR(64) DEFAULT NULL,
+  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_promotor_email (email),
+  KEY idx_promotor_estado (estado),
+  CONSTRAINT fk_promotor_stand FOREIGN KEY (stand_id) REFERENCES stands(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Empresa del promotor (una por promotor) -----------------------------------
+CREATE TABLE IF NOT EXISTS empresas (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  promotor_id  INT UNSIGNED NOT NULL,
+  nombre       VARCHAR(120) NOT NULL,
+  nit          VARCHAR(32)  DEFAULT NULL,
+  descripcion  VARCHAR(1500) DEFAULT NULL,
+  municipio    VARCHAR(80)  DEFAULT NULL,
+  direccion    VARCHAR(255) DEFAULT NULL,
+  telefono     VARCHAR(32)  DEFAULT NULL,
+  sitio_web    VARCHAR(255) DEFAULT NULL,
+  logo_path    VARCHAR(255) DEFAULT NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_empresa_promotor (promotor_id),
+  CONSTRAINT fk_empresa_promotor FOREIGN KEY (promotor_id) REFERENCES promotores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Productos del promotor ----------------------------------------------------
+CREATE TABLE IF NOT EXISTS productos (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  promotor_id  INT UNSIGNED NOT NULL,
+  nombre       VARCHAR(120) NOT NULL,
+  variedad     VARCHAR(80)  DEFAULT NULL,
+  proceso      VARCHAR(80)  DEFAULT NULL,
+  altura_msnm  INT UNSIGNED DEFAULT NULL,
+  notas_cata   VARCHAR(500) DEFAULT NULL,
+  presentacion VARCHAR(80)  DEFAULT NULL,
+  precio       DECIMAL(12,2) DEFAULT NULL,
+  descripcion  VARCHAR(1500) DEFAULT NULL,
+  foto_path    VARCHAR(255) DEFAULT NULL,
+  publicado    TINYINT(1) NOT NULL DEFAULT 1,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_producto_promotor (promotor_id),
+  CONSTRAINT fk_producto_promotor FOREIGN KEY (promotor_id) REFERENCES promotores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Bitácora de correos salientes ---------------------------------------------
+-- Sirve para que el administrador sepa si la clave llegó a salir del servidor
+-- (el envío de correo es el punto más frágil de un hosting compartido).
+CREATE TABLE IF NOT EXISTS emails_log (
+  id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  destinatario  VARCHAR(254) NOT NULL,
+  asunto        VARCHAR(255) NOT NULL,
+  tipo          VARCHAR(40)  NOT NULL,
+  transporte    VARCHAR(20)  NOT NULL,
+  estado        ENUM('enviado','fallido') NOT NULL,
+  error         VARCHAR(500) DEFAULT NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_email_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

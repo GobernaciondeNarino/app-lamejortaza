@@ -16,14 +16,21 @@
 
   let csrf = "";
   let user = null;
+  let promotor = null;
   let pollTimer = null;
   let bootstrapDone = false;
 
   const dispatchData = () => window.dispatchEvent(new CustomEvent("lmt:data"));
-  const dispatchAuth = () => window.dispatchEvent(new CustomEvent("lmt:auth", { detail: user }));
+  const dispatchAuth = () => window.dispatchEvent(new CustomEvent("lmt:auth", { detail: { user, promotor } }));
 
   // Convierte una ruta interna ("/auth/me", "/votos?limit=20") en una URL
   // absoluta a /api/index.php?path=auth/me[&...].
+  //
+  // OJO: urlFor ya aplica encodeURIComponent a la ruta. Los llamadores deben
+  // pasar los valores EN CRUDO. Codificarlos también daba una doble
+  // codificación ("%40" -> "%2540") que el servidor compensaba haciendo un
+  // urldecode() extra — un parche que a su vez permitía colar "/" dentro de un
+  // parámetro de ruta. Se arregla en el lado que estaba mal: aquí.
   function urlFor(path) {
     let routePath = path, qs = "";
     const qIdx = path.indexOf("?");
@@ -37,7 +44,11 @@
     return url;
   }
 
-  async function request(path, opts = {}) {
+  // Un token CSRF caducado (sesión rotada, servidor reiniciado) devolvía
+  // csrf_invalid y el cliente no lo reintentaba nunca: el usuario se quedaba
+  // sin poder votar hasta recargar la página. Ahora se refresca y se reintenta
+  // UNA vez, que cubre el caso real sin arriesgar bucles.
+  async function request(path, opts = {}, reintento = false) {
     const method = (opts.method || "GET").toUpperCase();
     const headers = Object.assign({ "Accept": "application/json" }, opts.headers || {});
     if (opts.body && !(opts.body instanceof FormData)) {
@@ -46,16 +57,28 @@
     if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrf) {
       headers["X-CSRF-Token"] = csrf;
     }
+    // FormData (subida de imágenes) debe viajar tal cual: el navegador le pone
+    // el Content-Type con su boundary. Serializarla a JSON la destruiría.
+    let body;
+    if (opts.body instanceof FormData) body = opts.body;
+    else if (typeof opts.body === "string") body = opts.body;
+    else if (opts.body) body = JSON.stringify(opts.body);
+
     const res = await fetch(urlFor(path), {
       method,
       credentials: "same-origin",
       headers,
-      body: opts.body ? (typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body)) : undefined,
+      body,
     });
     let data = null;
     try { data = await res.json(); } catch (_) {}
     if (!res.ok || (data && data.ok === false)) {
       const code = (data && (data.error || data.message)) || ("http_" + res.status);
+      if (code === "csrf_invalid" && !reintento) {
+        csrf = "";
+        await ensureCsrf();
+        if (csrf) return request(path, opts, true);
+      }
       const err = new Error(code);
       err.status = res.status;
       err.code = code;
@@ -83,6 +106,7 @@
     try {
       const me = await request("/auth/me");
       user = me.user || null;
+      promotor = me.promotor || null;
       csrf = me.csrf || "";
       window.LMTApi.enabled = true;
     } catch (e) {
@@ -134,6 +158,85 @@
     dispatchAuth();
   }
 
+  // -----------------------------------------------------------------------
+  // Promotores de stands
+  // -----------------------------------------------------------------------
+
+  async function promotorRegistro(body) {
+    await ensureCsrf();
+    return request("/promotores/registro", { method: "POST", body });
+  }
+
+  async function promotorLogin(email, password) {
+    await ensureCsrf();
+    const data = await request("/promotores/login", { method: "POST", body: { email, password } });
+    promotor = data.promotor || null;
+    user = null;                      // el backend cierra la sesión de admin
+    csrf = data.csrf || "";
+    dispatchAuth();
+    return promotor;
+  }
+
+  async function promotorLogout() {
+    try { await request("/promotores/logout", { method: "POST" }); } catch (_) {}
+    promotor = null;
+    try { const me = await request("/auth/me"); csrf = me.csrf || ""; } catch (_) {}
+    dispatchAuth();
+  }
+
+  async function promotorCambiarClave(actual, nueva) {
+    await ensureCsrf();
+    const data = await request("/promotores/password", {
+      method: "POST",
+      body: { password_actual: actual, password_nueva: nueva },
+    });
+    if (promotor) promotor = Object.assign({}, promotor, { must_change: false, estado: data.estado || promotor.estado });
+    dispatchAuth();
+    return data;
+  }
+
+  async function getPerfilPromotor()        { return request("/promotores/perfil"); }
+  async function guardarPerfilPromotor(b)   { await ensureCsrf(); return request("/promotores/perfil", { method: "PUT", body: b }); }
+  async function guardarEmpresa(b)          { await ensureCsrf(); return request("/promotores/empresa", { method: "PUT", body: b }); }
+  async function listarProductos()          { return request("/promotores/productos"); }
+  async function crearProducto(b)           { await ensureCsrf(); return request("/promotores/productos", { method: "POST", body: b }); }
+  async function actualizarProducto(id, b)  { await ensureCsrf(); return request("/promotores/productos/" + id, { method: "PUT", body: b }); }
+  async function borrarProducto(id)         { await ensureCsrf(); return request("/promotores/productos/" + id, { method: "DELETE" }); }
+
+  function archivoFormData(file) {
+    const fd = new FormData();
+    fd.append("archivo", file);
+    return fd;
+  }
+  async function subirLogo(file) {
+    await ensureCsrf();
+    return request("/promotores/logo", { method: "POST", body: archivoFormData(file) });
+  }
+  async function subirFotoProducto(id, file) {
+    await ensureCsrf();
+    return request("/promotores/productos/" + id + "/foto", { method: "POST", body: archivoFormData(file) });
+  }
+
+  // Administración de promotores
+  async function listarPromotores(estado)   { return request("/admin/promotores" + (estado ? "?estado=" + encodeURIComponent(estado) : "")); }
+  async function verPromotor(id)            { return request("/admin/promotores/" + id); }
+  async function verificarPromotor(id)      { await ensureCsrf(); return request("/admin/promotores/" + id + "/verificar", { method: "POST" }); }
+  async function reenviarClave(id)          { await ensureCsrf(); return request("/admin/promotores/" + id + "/reenviar-clave", { method: "POST" }); }
+  async function rechazarPromotor(id, motivo, avisar) {
+    await ensureCsrf();
+    return request("/admin/promotores/" + id + "/rechazar", { method: "POST", body: { motivo, avisar: avisar !== false } });
+  }
+  async function cambiarEstadoPromotor(id, estado) {
+    await ensureCsrf();
+    return request("/admin/promotores/" + id + "/estado", { method: "POST", body: { estado } });
+  }
+  async function vincularStand(id, standId) {
+    await ensureCsrf();
+    return request("/admin/promotores/" + id + "/stand", { method: "PUT", body: { stand_id: standId || null } });
+  }
+  async function listarEmails(limit)        { return request("/admin/emails" + (limit ? "?limit=" + encodeURIComponent(limit) : "")); }
+  async function getVitrina()               { return request("/vitrina"); }
+
   async function ensureCsrf() {
     if (csrf) return;
     try { const me = await request("/auth/me"); csrf = me.csrf || ""; } catch (_) {}
@@ -151,24 +254,47 @@
   }
 
   async function getPasaporte(correo) {
-    return request("/pasaportes/" + encodeURIComponent(correo));
+    return request("/pasaportes/" + correo);   // urlFor codifica; no duplicar
   }
 
   async function listStands()           { return (await request("/stands")).map(mapStand); }
-  async function getStand(id)           { return mapStand(await request("/stands/" + encodeURIComponent(id))); }
+  async function getStand(id)           { return mapStand(await request("/stands/" + id)); }
   async function createStand(body)      { await ensureCsrf(); return request("/stands", { method: "POST", body }); }
-  async function updateStand(id, body)  { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id), { method: "PUT", body }); }
-  async function deleteStand(id)        { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id), { method: "DELETE" }); }
+  async function updateStand(id, body)  { await ensureCsrf(); return request("/stands/" + id, { method: "PUT", body }); }
+  async function deleteStand(id)        { await ensureCsrf(); return request("/stands/" + id, { method: "DELETE" }); }
 
   window.LMTApi = {
     enabled: false,
     base: BASE,
     urlFor,                // útil para descargas (CSV) que necesitan URL completa
     user: () => user,
+    promotor: () => promotor,
     csrf: () => csrf,
     bootstrapDone: () => bootstrapDone,
     signInAdmin,
     signOutAdmin,
+    promotorRegistro,
+    promotorLogin,
+    promotorLogout,
+    promotorCambiarClave,
+    getPerfilPromotor,
+    guardarPerfilPromotor,
+    guardarEmpresa,
+    listarProductos,
+    crearProducto,
+    actualizarProducto,
+    borrarProducto,
+    subirLogo,
+    subirFotoProducto,
+    listarPromotores,
+    verPromotor,
+    verificarPromotor,
+    reenviarClave,
+    rechazarPromotor,
+    cambiarEstadoPromotor,
+    vincularStand,
+    listarEmails,
+    getVitrina,
     submitVote,
     getPasaporte,
     listStands,
