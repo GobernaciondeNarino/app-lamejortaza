@@ -305,7 +305,36 @@ const SelectorSubregion = ({ id, valor, municipio, onCambio, etiqueta = "Región
   );
 };
 
+const DEPARTAMENTOS = () => (MAPA_NARINO() || {}).departamentos || [];
+
+/** ¿Es Nariño? Entonces el municipio se elige de los 64; si no, se escribe. */
+const esNarino = (departamento) => normMuniSimple(departamento || "") === normMuniSimple("Nariño");
+
+/**
+ * Desplegable de departamento (los 32 de Colombia y Bogotá D.C.).
+ *
+ * Es lo que decide de qué va el campo siguiente: elegir Nariño convierte el
+ * municipio en la lista de los 64; cualquier otro lo deja como texto libre,
+ * porque no tenemos el callejero del resto del país y obligar a elegir sería
+ * pedirle a la gente que mienta.
+ */
+const SelectorDepartamento = ({ id, valor, onCambio, etiqueta = "Departamento", requerido = false }) => {
+  const lista = DEPARTAMENTOS();
+  const enLista = !!valor && lista.some((d) => normMuniSimple(d) === normMuniSimple(valor));
+  return (
+    <div className="field">
+      <label htmlFor={id}>{etiqueta}{requerido ? " *" : ""}</label>
+      <select id={id} required={requerido} value={enLista ? valor : ""}
+        onChange={(e) => onCambio(e.target.value)}>
+        <option value="">Selecciona un departamento</option>
+        {lista.map((d) => <option key={d} value={d}>{d}</option>)}
+      </select>
+    </div>
+  );
+};
+
 Object.assign(window, {
   SelectorUbicacion, geoAPunto, puntoAGeo, normMuniSimple,
   SelectorMunicipio, SelectorSubregion, subregionDe, MUNICIPIOS, SUBREGIONES,
+  SelectorDepartamento, DEPARTAMENTOS, esNarino,
 });

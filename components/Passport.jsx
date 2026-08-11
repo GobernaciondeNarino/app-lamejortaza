@@ -415,11 +415,14 @@ const datosPagina = (passport, totalStands) => {
   };
 };
 
-const CampoDato = ({ etiqueta, valor, ancho }) => (
+// Un dato de la ficha. `tam` sube el tamaño del valor: la hoja se mira en un
+// teléfono y a 12 px no se leía nada, así que lo importante va grande y la
+// etiqueta pequeña, que es además como se ven los documentos de verdad.
+const CampoDato = ({ etiqueta, valor, ancho, tam = 16 }) => (
   <div style={{ flex: ancho || 1, minWidth: 0 }}>
-    <div className="mono" style={{ fontSize: 8, color: "var(--ink-3)", lineHeight: 1.4 }}>{etiqueta}</div>
+    <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", lineHeight: 1.4 }}>{etiqueta}</div>
     <div style={{
-      fontSize: 12, lineHeight: 1.25, marginTop: 1,
+      fontSize: tam, lineHeight: 1.2, marginTop: 2,
       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
     }}>{valor}</div>
   </div>
@@ -436,63 +439,70 @@ const PaginaDatos = ({ passport, totalStands }) => {
   return (
     <div style={{ height: "100%", padding: "18px 18px 0", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <div className="mono" style={{ fontSize: 9 }}>REPÚBLICA DE COLOMBIA · NARIÑO</div>
-        <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)" }}>P·CAFÉ</div>
+        <div className="mono" style={{ fontSize: 10 }}>REPÚBLICA DE COLOMBIA · NARIÑO</div>
+        <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)" }}>P·CAFÉ</div>
       </div>
-      <div style={{ height: 1, background: "var(--line-2)", margin: "8px 0 12px" }}/>
+      <div style={{ height: 1, background: "var(--line-2)", margin: "9px 0 14px" }}/>
 
-      <div style={{ display: "flex", gap: 14 }}>
-        {/* Donde va la foto: aquí, las iniciales y los sellos conseguidos. */}
+      <div style={{ display: "flex", gap: 15 }}>
+        {/* Donde va la foto: aquí, la inicial y los sellos conseguidos. */}
         <div style={{
-          width: 74, height: 92, flexShrink: 0, border: "1px solid var(--line-2)",
+          width: 86, height: 108, flexShrink: 0, border: "1px solid var(--line-2)",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           background: "var(--paper-2, transparent)",
         }}>
-          <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, lineHeight: 1 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, lineHeight: 1 }}>
             {(passport.nombre || "V").trim().charAt(0).toUpperCase()}
           </div>
-          <div className="mono" style={{ fontSize: 8, color: "var(--ink-3)", marginTop: 8 }}>SELLOS</div>
-          <div className="mono" style={{ fontSize: 14 }}>{String(sellos).padStart(2, "0")}</div>
+          <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 10 }}>SELLOS</div>
+          <div className="mono" style={{ fontSize: 18 }}>{String(sellos).padStart(2, "0")}</div>
         </div>
 
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
-          <CampoDato etiqueta="PORTADOR / BEARER" valor={passport.nombre}/>
-          <div style={{ display: "flex", gap: 10 }}>
-            <CampoDato etiqueta="SEXO" valor={etiquetaPerfil("genero", p.genero)}/>
-            <CampoDato etiqueta="EDAD" valor={etiquetaPerfil("rango_edad", p.rango_edad)} ancho={1.4}/>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* El nombre es lo que se mira primero en un pasaporte: va grande y
+              en la tipografía de display, no como un campo más de la retícula. */}
+          <div style={{ minWidth: 0 }}>
+            <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", lineHeight: 1.4 }}>PORTADOR / BEARER</div>
+            <div style={{
+              fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 22,
+              lineHeight: 1.15, marginTop: 2,
+              overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+            }}>{passport.nombre}</div>
           </div>
-          <CampoDato etiqueta="PROCEDENCIA" valor={procedencia}/>
-          <CampoDato etiqueta="Nº DE PASAPORTE" valor={passport.numero || DATO_VACIO}/>
+          <div style={{ display: "flex", gap: 12 }}>
+            <CampoDato etiqueta="SEXO" valor={etiquetaPerfil("genero", p.genero)}/>
+            <CampoDato etiqueta="EDAD" valor={etiquetaPerfil("rango_edad", p.rango_edad)} ancho={1.3}/>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-        <CampoDato etiqueta="EXPEDIDO" valor={fechaCorta(passport.inicio)}/>
-        <CampoDato etiqueta="VISITANTE" valor={entidad} ancho={1.6}/>
+      <div style={{ marginTop: 14 }}>
+        <CampoDato etiqueta="PROCEDENCIA" valor={procedencia} tam={17}/>
       </div>
-      <div style={{ display: "flex", gap: 10, marginTop: 7 }}>
-        <CampoDato etiqueta="CONTACTO" valor={passport.correo} ancho={2}/>
-        <CampoDato etiqueta="AVANCE" valor={sellos + " / " + totalStands}/>
+      <div style={{ marginTop: 12 }}>
+        <CampoDato etiqueta="Nº DE PASAPORTE" valor={passport.numero || DATO_VACIO} tam={18}/>
+      </div>
+      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+        <CampoDato etiqueta="EXPEDIDO" valor={fechaCorta(passport.inicio)}/>
+        <CampoDato etiqueta="SELLOS" valor={sellos + " de " + totalStands}/>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <CampoDato etiqueta="VISITANTE" valor={entidad} tam={15}/>
       </div>
 
       {!passport.perfil && (
-        <p style={{ fontSize: 10, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 12 }}>
+        <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 14 }}>
           Completa tu perfil de visitante y esta hoja se llena con tus datos.
         </p>
       )}
 
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginTop: 16 }}>
-        <CampoDato etiqueta="AUTORIDAD EXPEDIDORA" valor="Gobernación de Nariño" ancho={1.5}/>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="mono" style={{ fontSize: 8, color: "var(--ink-3)", lineHeight: 1.4 }}>FIRMA</div>
-          <div style={{ borderBottom: "1px dotted var(--line-2)", height: 16 }}/>
-        </div>
-      </div>
-
       <div style={{ marginTop: "auto" }}>
+        <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", marginBottom: 8 }}>
+          EXPIDE · GOBERNACIÓN DE NARIÑO
+        </div>
         <div style={{ height: 1, background: "var(--line-2)" }}/>
         <div className="mono" style={{
-          fontSize: 9, letterSpacing: "0.08em", lineHeight: 1.7,
+          fontSize: 10, letterSpacing: "0.06em", lineHeight: 1.7,
           padding: "8px 0 14px", color: "var(--ink-2)",
           whiteSpace: "nowrap", overflow: "hidden",
         }}>

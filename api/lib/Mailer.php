@@ -307,6 +307,97 @@ final class Mailer
     }
 
     /**
+     * Abre el socket probando TODAS las direcciones del servidor, IPv4 primero.
+     *
+     * Por qué no basta con `stream_socket_client('tcp://smtp.gmail.com:587')`:
+     * smtp.gmail.com publica A y AAAA. PHP resuelve, se queda con la PRIMERA
+     * dirección y ahí acaba su intento. En un servidor sin ruta IPv6 —que es lo
+     * normal en hosting compartido— esa primera puede ser la IPv6 y el envío
+     * muere con «Network is unreachable (errno 101)», mientras que un
+     * `nc -zv smtp.gmail.com 587` desde la misma máquina conecta sin problema
+     * porque él sí recorre la lista. Eso hacía parecer que el hosting bloqueaba
+     * la salida SMTP cuando no bloqueaba nada.
+     *
+     * Aquí se resuelve a mano y se prueba dirección por dirección. Devuelve el
+     * primer socket que abra, o null con el motivo del último intento.
+     *
+     * @param  resource $ctx  contexto con peer_name puesto al NOMBRE del host
+     * @return resource|null
+     */
+    private static function conectar(string $host, int $port, bool $ssl, int $timeout, $ctx, ?string &$fallo)
+    {
+        $esquema = $ssl ? 'ssl://' : 'tcp://';
+        $fallo = null;
+
+        foreach (self::direcciones($host) as $dir) {
+            // Una IPv6 literal va entre corchetes en el DSN.
+            $literal = strpos($dir, ':') !== false ? '[' . $dir . ']' : $dir;
+            $dsn = $esquema . $literal . ':' . $port;
+            $etiqueta = $dir === $host ? $dsn : $dsn . ' (' . $host . ')';
+            self::traza('→ conectando a ' . $etiqueta . ' (espera ' . $timeout . ' s)');
+
+            $fp = @stream_socket_client($dsn, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $ctx);
+            if ($fp) {
+                stream_set_timeout($fp, $timeout);
+                return $fp;
+            }
+            $fallo = $errstr !== '' ? $errstr : ('errno ' . $errno);
+            self::traza('✗ no se pudo abrir el socket: ' . $fallo . ' (errno ' . $errno . ')');
+        }
+
+        if ($fallo === null) $fallo = 'no se pudo resolver ' . $host;
+        return null;
+    }
+
+    /**
+     * ¿Se puede abrir ese puerto desde aquí? null si no se pudo comprobar.
+     *
+     * Lo usa el diagnóstico del panel. Prueba las mismas direcciones y en el
+     * mismo orden que el envío real, porque si no el diagnóstico decía «el
+     * hosting bloquea la salida» por una IPv6 sin ruta que el envío tampoco
+     * usaría, y mandaba a pelearse con el proveedor sin motivo.
+     *
+     * @return array{0: bool|null, 1: string}  [alcanzable, dirección que funcionó]
+     */
+    public static function puertoAlcanzable(string $host, int $puerto, int $timeout = 4): array
+    {
+        if (!function_exists('stream_socket_client')) return [null, ''];
+        foreach (self::direcciones($host) as $dir) {
+            $literal = strpos($dir, ':') !== false ? '[' . $dir . ']' : $dir;
+            $fp = @stream_socket_client('tcp://' . $literal . ':' . $puerto, $errno, $errstr, $timeout);
+            if ($fp) { fclose($fp); return [true, $dir]; }
+        }
+        return [false, ''];
+    }
+
+    /**
+     * Direcciones a probar, IPv4 primero.
+     *
+     * El orden importa: el fallo real que se ve en producción es un servidor
+     * con IPv6 en el DNS pero sin ruta. Si el host sólo tiene IPv6, la lista
+     * será sólo IPv6 y se prueba igual. Si no se puede resolver nada, se
+     * devuelve el nombre tal cual para que PHP lo intente a su manera.
+     *
+     * @return string[]
+     */
+    private static function direcciones(string $host): array
+    {
+        // Ya es una IP literal: nada que resolver.
+        if (filter_var($host, FILTER_VALIDATE_IP)) return [$host];
+        if (filter_var(trim($host, '[]'), FILTER_VALIDATE_IP)) return [trim($host, '[]')];
+
+        $v4 = @gethostbynamel($host) ?: [];
+        $v6 = [];
+        if (defined('DNS_AAAA')) {
+            foreach (@dns_get_record($host, DNS_AAAA) ?: [] as $r) {
+                if (!empty($r['ipv6'])) $v6[] = (string) $r['ipv6'];
+            }
+        }
+        $todas = array_values(array_unique(array_merge($v4, $v6)));
+        return $todas ?: [$host];
+    }
+
+    /**
      * Cliente SMTP mínimo pero correcto: EHLO, STARTTLS opcional, AUTH
      * LOGIN/PLAIN, MAIL FROM/RCPT TO/DATA con dot-stuffing.
      */
@@ -321,18 +412,19 @@ final class Mailer
         $timeout = max(5, (int) ($s['timeout'] ?? 15));
         if ($host === '') { $error = 'smtp_sin_host'; return false; }
 
+        // peer_name explícito: nos conectamos por IP (ver self::conectar), así
+        // que el certificado hay que validarlo contra el NOMBRE, no contra la
+        // dirección. Sin esto, ir por IP rompería la verificación TLS.
         $ctx = stream_context_create(['ssl' => [
             'verify_peer'       => true,
             'verify_peer_name'  => true,
             'allow_self_signed' => false,
             'SNI_enabled'       => true,
+            'peer_name'         => $host,
         ]]);
-        $dsn = ($secure === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port;
-        self::traza('→ conectando a ' . $dsn . ' (espera ' . $timeout . ' s)');
-        $fp = @stream_socket_client($dsn, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $ctx);
+        $fp = self::conectar($host, $port, $secure === 'ssl', $timeout, $ctx, $fallo);
         if (!$fp) {
-            $error = 'smtp_conexion: ' . $errstr;
-            self::traza('✗ no se pudo abrir el socket: ' . $errstr . ' (errno ' . $errno . ')');
+            $error = 'smtp_conexion: ' . $fallo;
             return false;
         }
         stream_set_timeout($fp, $timeout);

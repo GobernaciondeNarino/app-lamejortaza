@@ -5,6 +5,10 @@
 // étnico y la discapacidad son datos sensibles (Ley 1581/2012) y todas las
 // listas incluyen «Prefiero no decir». También puede borrar sus datos.
 
+// Valor sólo del desplegable: al elegirlo el país queda vacío y se pide a mano.
+// No se guarda nunca; lo que viaja es lo que la persona escriba.
+const OTRO_PAIS = "__otro_pais__";
+
 const PERFIL_ETIQUETAS = {
   genero: {
     hombre: "Hombre", mujer: "Mujer", otro: "Otro", prefiero_no_decir: "Prefiero no decir",
@@ -227,21 +231,53 @@ const PerfilVisitantePage = () => {
           </BloqueForm>
 
           <BloqueForm titulo="De dónde nos visitas">
+            {/* Tres campos encadenados: el país decide si se pregunta el
+                departamento, y el departamento decide si el municipio se elige
+                de los 64 de Nariño o se escribe. Cambiar uno limpia los de
+                abajo: si no, quedaba «Pasto» colgando de «Valle del Cauca». */}
             <div className="grid-2">
               <div className="field">
                 <label htmlFor="pf-pais">País</label>
-                <input id="pf-pais" value={form.pais} onChange={(e) => set("pais", e.target.value)} maxLength={80}/>
+                <select id="pf-pais" value={form.pais === "" ? "" : (form.pais === "Colombia" ? "Colombia" : OTRO_PAIS)}
+                  onChange={(e) => setForm((f) => ({
+                    ...f,
+                    pais: e.target.value === OTRO_PAIS ? "" : e.target.value,
+                    departamento: "", municipio: "",
+                  }))}>
+                  <option value="">Selecciona un país</option>
+                  <option value="Colombia">Colombia</option>
+                  <option value={OTRO_PAIS}>Otro país</option>
+                </select>
               </div>
-              <div className="field">
-                <label htmlFor="pf-dep">Departamento</label>
-                <input id="pf-dep" value={form.departamento} onChange={(e) => set("departamento", e.target.value)} maxLength={80} placeholder="Nariño"/>
-              </div>
+              {form.pais === "Colombia" ? (
+                <SelectorDepartamento id="pf-dep" valor={form.departamento}
+                  onCambio={(departamento) => setForm((f) => ({ ...f, departamento, municipio: "" }))}/>
+              ) : (
+                <div className="field">
+                  <label htmlFor="pf-pais-otro">¿Cuál?</label>
+                  <input id="pf-pais-otro" value={form.pais} maxLength={80} placeholder="Ecuador"
+                    onChange={(e) => set("pais", e.target.value)}/>
+                </div>
+              )}
             </div>
-            {/* Con salida para quien no es de Nariño: un visitante puede venir
-                de Cali o de Ecuador, y obligarle a elegir de la lista sería
-                pedirle que mienta. */}
-            <SelectorMunicipio id="pf-mun" valor={form.municipio} permitirOtro
-              onCambio={(municipio) => set("municipio", municipio)}/>
+
+            {form.pais === "Colombia" && esNarino(form.departamento) ? (
+              <SelectorMunicipio id="pf-mun" valor={form.municipio}
+                onCambio={(municipio) => set("municipio", municipio)}/>
+            ) : (
+              <div className="field">
+                <label htmlFor="pf-mun-texto">{form.pais === "Colombia" ? "Municipio" : "Ciudad"}</label>
+                <input id="pf-mun-texto" value={form.municipio} maxLength={80}
+                  disabled={form.pais === "Colombia" && !form.departamento}
+                  placeholder={form.pais === "Colombia" ? "Cali" : "Quito"}
+                  onChange={(e) => set("municipio", e.target.value)}/>
+                <span className="ayuda">
+                  {form.pais === "Colombia" && !form.departamento
+                    ? "Elige antes el departamento."
+                    : "Escríbelo como se llama; sólo los de Nariño salen de una lista."}
+                </span>
+              </div>
+            )}
           </BloqueForm>
 
           <BloqueForm titulo="Tu visita">

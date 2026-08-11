@@ -219,8 +219,11 @@ function correo_diagnostico(array $c): array
             if ($alcanzable === false) {
                 $avisos[] = [
                     'nivel' => 'critico',
-                    'texto' => "No se puede abrir el puerto {$s['port']} de {$host} desde este servidor. "
-                             . 'Muchos hostings bloquean la salida SMTP: pide que la habiliten o usa el relé del proveedor.',
+                    'texto' => "No se puede abrir el puerto {$s['port']} de {$host} desde este servidor, "
+                             . 'ni por IPv4 ni por IPv6. Si desde la consola del servidor '
+                             . "«nc -zv {$host} {$s['port']}» sí conecta, avísanos: el fallo estaría en PHP. "
+                             . 'Si tampoco conecta, el hosting bloquea la salida SMTP: pide que la habiliten '
+                             . 'o usa el relé del proveedor.',
                 ];
             }
             if (($s['user'] ?? '') === '') {
@@ -268,13 +271,14 @@ function correo_diagnostico(array $c): array
     ];
 }
 
-/** ¿Se puede abrir ese puerto desde aquí? null si no se pudo comprobar. */
+/**
+ * ¿Se puede abrir ese puerto desde aquí? null si no se pudo comprobar.
+ * Delega en el Mailer para probar las mismas direcciones que usará el envío.
+ */
 function correo_puerto_abierto(string $host, int $puerto): ?bool
 {
-    if (!function_exists('stream_socket_client')) return null;
-    $fp = @stream_socket_client('tcp://' . $host . ':' . $puerto, $errno, $errstr, 4);
-    if ($fp) { fclose($fp); return true; }
-    return false;
+    [$ok] = \LMT\Mailer::puertoAlcanzable($host, $puerto);
+    return $ok;
 }
 
 /** Traduce el fallo a lo siguiente que hay que hacer. */

@@ -23,6 +23,24 @@ if (PHP_SAPI !== 'cli') { http_response_code(403); exit("Sólo CLI.\n"); }
 
 const RAIZ = __DIR__ . '/..';
 
+/**
+ * Los 32 departamentos de Colombia más Bogotá D.C.
+ *
+ * No entran en el cruce con las subregiones —eso es sólo de Nariño—, pero se
+ * publican con el resto del catálogo porque el perfil del visitante pregunta de
+ * dónde viene y ahí también se escribían «Nariño», «nariño» y «N. de Santander»
+ * como si fueran sitios distintos. Elegir el departamento es además lo que
+ * decide si el municipio se elige de la lista de los 64 o se escribe.
+ */
+const DEPARTAMENTOS = [
+    'Amazonas', 'Antioquia', 'Arauca', 'Atlántico', 'Bogotá D.C.', 'Bolívar',
+    'Boyacá', 'Caldas', 'Caquetá', 'Casanare', 'Cauca', 'Cesar', 'Chocó',
+    'Córdoba', 'Cundinamarca', 'Guainía', 'Guaviare', 'Huila', 'La Guajira',
+    'Magdalena', 'Meta', 'Nariño', 'Norte de Santander', 'Putumayo', 'Quindío',
+    'Risaralda', 'San Andrés y Providencia', 'Santander', 'Sucre', 'Tolima',
+    'Valle del Cauca', 'Vaupés', 'Vichada',
+];
+
 /** Las 13 subregiones y sus municipios. */
 const SUBREGIONES = [
     'Centro'             => ['Pasto', 'Chachagüí', 'La Florida', 'Nariño', 'Tangua', 'Yacuanquer'],
@@ -136,10 +154,11 @@ usort($mapa['municipios'], fn($a, $b) => strcoll(
 ));
 
 $salida = [
-    'viewBox'     => $mapa['viewBox'],
-    'bounds'      => $mapa['bounds'],
-    'subregiones' => array_keys(SUBREGIONES),
-    'municipios'  => $mapa['municipios'],
+    'viewBox'       => $mapa['viewBox'],
+    'bounds'        => $mapa['bounds'],
+    'subregiones'   => array_keys(SUBREGIONES),
+    'departamentos' => DEPARTAMENTOS,
+    'municipios'    => $mapa['municipios'],
 ];
 
 $cabecera = <<<TXT
@@ -234,6 +253,8 @@ $php = "<?php\n"
     . "    public const SUBREGIONES = " . $exportarLista(array_keys(SUBREGIONES)) . ";\n\n"
     . "    /** Cómo lo escribe la gente => nombre oficial. */\n"
     . "    public const SINONIMOS = " . $exportarMapa(SINONIMOS) . ";\n\n"
+    . "    /** Los 32 departamentos de Colombia y Bogotá D.C. */\n"
+    . "    public const DEPARTAMENTOS = " . $exportarLista(DEPARTAMENTOS) . ";\n\n"
     . <<<'CUERPO'
     /** Nombre canónico del municipio, o null si no es de Nariño. */
     public static function municipio($nombre): ?string
@@ -267,6 +288,23 @@ $php = "<?php\n"
     public static function esSubregion($nombre): bool
     {
         return in_array((string) $nombre, self::SUBREGIONES, true);
+    }
+
+    /**
+     * Nombre canónico del departamento, o null si no es de Colombia.
+     *
+     * A diferencia del municipio del promotor, aquí null NO es un error: un
+     * visitante puede venir de Ecuador y escribir su provincia. Quien llama
+     * decide si lo rechaza o lo guarda tal cual.
+     */
+    public static function departamento($nombre): ?string
+    {
+        $clave = self::normalizar((string) $nombre);
+        if ($clave === '') return null;
+        foreach (self::DEPARTAMENTOS as $d) {
+            if (self::normalizar($d) === $clave) return $d;
+        }
+        return null;
     }
 
     /** Compara nombres sin que estorben tildes, mayúsculas ni artículos. */
