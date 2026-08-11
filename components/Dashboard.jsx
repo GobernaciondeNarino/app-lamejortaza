@@ -52,7 +52,7 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
       <PublicHeader/>
 
       <section className="lmt-three-wrap" ref={(el) => { if (el && window.LMTThree && !el.dataset.threeMounted) window.LMTThree.mount(el); }} data-three-bg
-               style={{ padding: "48px 32px 32px", display: "grid", gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr)", gap: 36, alignItems: "flex-end", position: "relative", overflow: "hidden", minHeight: 320 }}>
+               className="seccion" style={{ paddingTop: 48, paddingBottom: 32, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 36, alignItems: "flex-end", position: "relative", overflow: "hidden", minHeight: 320 }}>
         <div>
           <div className="mono">Ranking público</div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: "min(96px, 12vw)", fontWeight: 400, margin: "8px 0 0", lineHeight: 0.9, letterSpacing: "-0.03em" }}>
@@ -79,7 +79,7 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
 
       <section style={{ padding: "24px 32px 40px" }}>
         <div className="mono" style={{ marginBottom: 14 }}>Top 3 · Podio en vivo</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14, alignItems: "flex-end" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: 14, alignItems: "flex-end" }}>
           {[top3[1], top3[0], top3[2]].map((s, displayIdx) => {
             if (!s) return <div key={displayIdx}/>;
             const actualRank = [2, 1, 3][displayIdx];
@@ -118,7 +118,7 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
         </div>
       </section>
 
-      <section style={{ padding: "0 32px 40px", display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)", gap: 22 }}>
+      <section className="seccion" style={{ paddingBottom: 40, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 22 }}>
         <MapaNarino stands={stands} onDetail={onDetail}/>
         <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 22 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -162,24 +162,22 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
         </div>
       </section>
 
-      <section style={{ padding: "0 32px 56px" }}>
+      <section className="seccion" style={{ paddingBottom: 56 }}>
         <div className="mono" style={{ marginBottom: 14 }}>Tabla completa · {stands.length} stands</div>
         <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
           {sorted.map((s, i) => (
-            <a key={s.id} href={"/festival/" + s.id} data-route style={{
-              display: "grid", gridTemplateColumns: "60px 2.5fr 1.5fr 1fr 1fr 1fr",
-              padding: "16px 22px", borderBottom: i < sorted.length - 1 ? "1px solid var(--line)" : "none",
-              alignItems: "center", textDecoration: "none", color: "inherit",
+            <a key={s.id} href={"/festival/" + s.id} data-route className="rank-fila" style={{
+              borderBottom: i < sorted.length - 1 ? "1px solid var(--line)" : "none",
             }}>
-              <div className="mono" style={{ fontSize: 13 }}>{String(i + 1).padStart(2, "0")}</div>
-              <div>
+              <div className="mono rank-pos" style={{ fontSize: 13 }}>{String(i + 1).padStart(2, "0")}</div>
+              <div className="rank-nombre">
                 <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 20, letterSpacing: "-0.01em" }}>{s.nombre}</div>
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{(s.descripcion || "").slice(0, 80)}{s.descripcion && s.descripcion.length > 80 ? "…" : ""}</div>
               </div>
-              <div style={{ fontSize: 13 }}>{s.municipio}</div>
-              <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 24 }}>{calcScore(s.votos).toFixed(0)}</div>
-              <div style={{ fontSize: 13, color: "var(--ink-2)" }}>{totalVotos(s.votos)} votos</div>
-              <BarraVotos votos={s.votos}/>
+              <div className="rank-meta" style={{ fontSize: 13 }}>{s.municipio}</div>
+              <div className="rank-puntaje" style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 24 }}>{calcScore(s.votos).toFixed(0)}</div>
+              <div className="rank-meta" style={{ fontSize: 13, color: "var(--ink-2)" }}>{totalVotos(s.votos)} votos</div>
+              <div className="rank-barra"><BarraVotos votos={s.votos}/></div>
             </a>
           ))}
         </div>
@@ -253,26 +251,39 @@ const MapaNarino = ({ stands, onDetail }) => {
           const leftPct = (muni.cx / vw) * 100;
           const topPct = (muni.cy / vh) * 100;
           return (
+            // El punto sigue siendo pequeño (es un mapa: si crece, tapa el
+            // municipio de al lado), pero el BOTÓN mide 44px transparentes
+            // alrededor. Con 14px de área táctil, en un teléfono se acierta a
+            // otro stand o a ninguno.
             <button
               key={s.id}
               onClick={() => onDetail(s.id)}
               onMouseEnter={() => setHover(s.id)}
               onMouseLeave={() => setHover(null)}
+              aria-label={`${s.nombre} — ${s.municipio}`}
               style={{
                 position: "absolute",
                 left: leftPct + "%",
                 top: topPct + "%",
                 transform: "translate(-50%, -50%)",
-                width: size, height: size, borderRadius: "50%",
-                background: s.color, border: "2px solid var(--paper)",
-                boxShadow: hover === s.id ? `0 0 0 6px ${(s.color || "").replace(")", " / 0.2)")}` : "0 2px 4px oklch(0.22 0.02 60 / 0.2)",
-                transition: "box-shadow 0.2s",
+                width: 44, height: 44, padding: 0,
+                background: "transparent", border: "none",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "var(--paper)", fontSize: 10, fontWeight: 600, cursor: "pointer",
+                cursor: "pointer",
                 zIndex: hover === s.id ? 5 : 1,
               }}
             >
-              {rank <= 3 ? rank : ""}
+              <span style={{
+                width: size, height: size, borderRadius: "50%",
+                background: s.color, border: "2px solid var(--paper)",
+                boxShadow: hover === s.id ? `0 0 0 6px ${(s.color || "").replace(")", " / 0.2)")}` : "0 2px 4px oklch(0.22 0.02 60 / 0.2)",
+                transition: "box-shadow 0.2s, transform 0.2s",
+                transform: hover === s.id ? "scale(1.15)" : "scale(1)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "var(--paper)", fontSize: 10, fontWeight: 600,
+              }}>
+                {rank <= 3 ? rank : ""}
+              </span>
               {hover === s.id && (
                 <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: "var(--ink)", color: "var(--paper)", padding: "8px 12px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", fontSize: 12, fontWeight: 500, pointerEvents: "none", zIndex: 10 }}>
                   {s.nombre}
@@ -294,7 +305,7 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
   return (
     <div style={{ minHeight: "100dvh", background: "var(--paper)" }}>
       <PublicHeader/>
-      <section style={{ padding: "32px", display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)", gap: 32 }}>
+      <section className="seccion" style={{ paddingTop: 32, paddingBottom: 32, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 32 }}>
         <div>
           <a href="/festival" data-route style={{ color: "var(--ink-2)", fontSize: 13 }}>← Volver al ranking</a>
           <div className="mono" style={{ marginTop: 14 }}>Posición #{rank || "—"} · {stand.municipio}</div>

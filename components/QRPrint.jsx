@@ -77,7 +77,7 @@ const QRPrintView = ({ stands }) => {
 
   if (!stand) {
     return (
-      <div style={{ padding: "40px 48px" }}>
+      <div className="admin-page">
         <div className="mono">Códigos QR</div>
         <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 36, fontWeight: 400, margin: "4px 0 18px" }}>Aún no hay stands.</h1>
         <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar el primero</a>
@@ -86,7 +86,7 @@ const QRPrintView = ({ stands }) => {
   }
 
   return (
-    <div style={{ padding: "40px 48px" }} className="qr-print-screen">
+    <div className="admin-page qr-print-screen">
       <style>{`
         @media print {
           @page { size: A5; margin: 0; }
@@ -104,7 +104,7 @@ const QRPrintView = ({ stands }) => {
         Carteles A5
       </h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 36, alignItems: "flex-start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 280px) minmax(0, 1fr)", gap: 36, alignItems: "flex-start" }}>
         <aside>
           <div className="mono" style={{ marginBottom: 12 }}>Seleccionar stand</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 460, overflow: "auto", border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
@@ -166,7 +166,7 @@ const ActivityLive = ({ stands, comentarios }) => {
   const getEmoji = (e) => ({ bueno: "😍", regular: "😐", malo: "😞" }[e] || "•");
 
   return (
-    <div style={{ padding: "40px 48px" }}>
+    <div className="admin-page">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div className="mono">Actividad</div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 999, background: "oklch(0.6 0.14 145 / 0.12)", color: "var(--good)" }}>
