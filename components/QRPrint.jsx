@@ -104,7 +104,7 @@ const QRPrintView = ({ stands }) => {
         Carteles A5
       </h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 280px) minmax(0, 1fr)", gap: 36, alignItems: "flex-start" }}>
+      <div className="qr-layout">
         <aside>
           <div className="mono" style={{ marginBottom: 12 }}>Seleccionar stand</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 460, overflow: "auto", border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
@@ -118,7 +118,7 @@ const QRPrintView = ({ stands }) => {
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }}/>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: selected === s.id ? 500 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.nombre}</div>
-                  <div className="mono" style={{ fontSize: 9 }}>{s.id}</div>
+                  <div className="mono" style={{ fontSize: 10 }}>{s.id}</div>
                 </div>
               </button>
             ))}
@@ -134,7 +134,7 @@ const QRPrintView = ({ stands }) => {
             <a href={standUrl(stand.id)} target="_blank" rel="noopener" className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", marginBottom: 8, textDecoration: "none" }}>
               Probar URL del QR ↗
             </a>
-            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8, lineHeight: 1.5 }}>
+            <div className="nota-menor" style={{ color: "var(--ink-3)", marginTop: 8, lineHeight: 1.5 }}>
               Cartel A5 · 148 × 210 mm · Papel offset mate recomendado.<br/>
               Para PDF: imprimir → "Guardar como PDF".
             </div>
@@ -178,7 +178,7 @@ const ActivityLive = ({ stands, comentarios }) => {
         Votos en tiempo real
       </h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 22 }}>
+      <div className="grid-2" style={{ gap: 22 }}>
         <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 18 }}>
           <div className="mono" style={{ marginBottom: 14 }}>Últimos votos</div>
           {comentarios.length === 0 && (
@@ -214,7 +214,7 @@ const ActivityLive = ({ stands, comentarios }) => {
               <span className="mono" style={{ width: 24, fontSize: 13 }}>{String(i + 1).padStart(2, "0")}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{s.nombre}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.municipio} · {totalVotos(s.votos)} votos</div>
+                <div className="nota-menor" style={{ color: "var(--ink-3)" }}>{s.municipio} · {totalVotos(s.votos)} votos</div>
               </div>
               <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 22 }}>{calcScore(s.votos).toFixed(0)}</div>
             </div>
@@ -229,7 +229,7 @@ const ActivityLive = ({ stands, comentarios }) => {
           <a href={window.LMTApi ? window.LMTApi.urlFor("/export/stands.csv") : "#"} className="btn btn-ghost" download>⤓ Stands (CSV)</a>
           <a href={window.LMTApi ? window.LMTApi.urlFor("/export/pasaportes.csv") : "#"} className="btn btn-ghost" download>⤓ Pasaportes (CSV)</a>
         </div>
-        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8 }}>
+        <div className="nota-menor" style={{ color: "var(--ink-3)", marginTop: 8 }}>
           Las descargas requieren sesión activa de administrador.
         </div>
       </div>

@@ -209,6 +209,50 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .seccion { padding-left: 32px; padding-right: 32px; }
 @media (max-width: 760px) { .seccion { padding-left: 16px; padding-right: 16px; } }
 
+/* El libro del pasaporte.
+   La proporción 0.72 derivaba el alto del ancho, así que en horizontal el
+   lienzo salía de 708x983 px dentro de una ventana de 360 px de alto: se veía
+   una franja del libro y los botones ←/→ quedaban tres pantallas más abajo.
+   Limitando el ANCHO en función del alto disponible, la proporción se mantiene
+   y el libro entero cabe siempre en pantalla junto a sus controles. */
+.libro-marco {
+  aspect-ratio: 0.72;
+  max-width: min(100%, calc(64dvh * 0.72));
+  margin-inline: auto;
+  perspective: 1400px;
+}
+
+/* Móvil en horizontal: en vez de encoger el libro hasta lo ridículo, se pone
+   la navegación al lado. Es la única orientación donde sobra ancho y falta alto. */
+@media (orientation: landscape) and (max-height: 520px) {
+  /* La columna del libro necesita una medida EXPLÍCITA: con `auto` la rejilla
+     la colapsa a cero, porque el libro sólo tiene proporción y máximo, no un
+     ancho intrínseco del que partir. */
+  .pasaporte-horizontal {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 22px; align-items: center;
+  }
+  /* Ancho EXPLÍCITO, no heredado de la rejilla: el marco sólo tiene proporción
+     y máximo, así que sin un ancho del que partir el navegador lo resuelve
+     como contenido — y su único hijo está posicionado en absoluto, o sea 0. */
+  .pasaporte-horizontal .libro-marco {
+    margin-top: 0 !important;
+    width: calc(76dvh * 0.72);
+    max-width: none;
+  }
+  /* Los controles no deben repartirse a lo ancho de media pantalla: se
+     agrupan a un tamaño cómodo y se centran junto al libro. */
+  /* `space-between` no sirve aquí: reparte los botones a lo ancho de la
+     columna y el contador queda debajo de ellos. Se agrupan con gap. */
+  .pasaporte-horizontal .libro-controles {
+    margin-top: 0 !important;
+    justify-content: center !important;
+    gap: 18px;
+  }
+  .pasaporte-horizontal > .mono { grid-column: 2; margin-top: 10px !important; }
+}
+
 /* Tablas anchas: en vez de romper la página, se desplazan dentro de su caja. */
 .tabla-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tabla-scroll > * { min-width: 640px; }
@@ -222,6 +266,64 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .acciones { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 480px) {
   .acciones > .btn, .acciones > a.btn { flex: 1 1 100%; justify-content: center; }
+}
+
+/* Suelo tipográfico en móvil.
+   La clase .mono es de 11px, y los subtítulos del panel bajaban a 9px. Con
+   mayúsculas y letter-spacing, a esos tamaños no se lee con el teléfono en la
+   mano — y buena parte de la información de estado del panel vive justo ahí. */
+/* Subtítulo de las tarjetas de métrica ("/ 100", "totales"). */
+.sub-metrica, .nota-menor { font-size: 11px; }
+
+@media (max-width: 860px) {
+  /* El !important es deliberado: los componentes fijan estos tamaños con
+     estilos en línea (fontSize: 9/10/11) y un style inline gana siempre a una
+     clase. Es el único sitio donde una media query puede corregirlos sin
+     tocar cada componente uno a uno. */
+  .mono { font-size: 12px !important; }
+  .admin-nav .mono { font-size: 11px !important; }
+  .field label { font-size: 12px; }
+  .sub-metrica, .nota-menor { font-size: 12px; }
+  /* En la fila horizontal de navegación, el subtítulo de cada sección
+     ("REGISTRO", "INSCRIPCIONES") es ruido: la etiqueta principal ya dice
+     dónde estás y ocupa la mitad de ancho. */
+  .admin-nav a > .mono { display: none; }
+}
+
+/* Correos enmascarados, identificadores y URLs: cadenas largas sin espacios
+   que desbordaban su caja en las tarjetas de actividad. */
+.mono, code { overflow-wrap: anywhere; }
+
+/* Carteles QR. El cartel mide 420x594 px porque ES un A5 real que se va a
+   imprimir: no puede "hacerse responsive" sin dejar de ser lo que se imprime.
+   Se escala visualmente y se reserva el alto correspondiente, para que el
+   organizador pueda revisarlo desde el móvil antes de mandarlo a la impresora. */
+.qr-layout { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 36px; align-items: flex-start; }
+@media (max-width: 860px) {
+  .qr-layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+}
+@media (max-width: 560px) {
+  /* transform: scale() sólo escala lo que se VE: la caja de maquetación sigue
+     midiendo 420x594 y el marco seguía desbordando. Los márgenes negativos
+     recuperan exactamente el espacio que la escala deja libre
+     (420 x 0.34 = 143 px, 594 x 0.34 = 202 px), así que el marco encoge de
+     verdad y no hace falta fijarle un alto a mano. */
+  .qr-frame { padding: 10px !important; overflow: hidden; }
+  .qr-frame .qr-poster {
+    transform: scale(0.66); transform-origin: top left;
+    margin-right: -143px; margin-bottom: -202px;
+  }
+}
+@media (max-width: 400px) {
+  .qr-frame .qr-poster {
+    transform: scale(0.58);
+    margin-right: -176px; margin-bottom: -249px;
+  }
+}
+/* Al imprimir, ni escalado ni recorte: vuelve a ser un A5 exacto. */
+@media print {
+  .qr-frame { height: auto !important; overflow: visible !important; padding: 0 !important; }
+  .qr-frame .qr-poster { transform: none !important; }
 }
 
 /* Objetivos táctiles: 44px es el mínimo cómodo con el dedo. */

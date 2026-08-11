@@ -162,20 +162,22 @@ const PromotorRegistroPage = () => {
             </div>
             <div className="field">
               <label>Documento</label>
-              <input value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32}/>
+              <input value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32} inputMode="numeric"/>
+            </div>
+          </div>
+          <div className="grid-2">
+            <div className="field">
+              <label>Municipio</label>
+              <input value={form.municipio} onChange={(e) => set("municipio", e.target.value)} maxLength={80} placeholder="Sandoná"/>
+            </div>
+            <div className="field">
+              <label>Empresa o finca</label>
+              <input value={form.empresa} onChange={(e) => set("empresa", e.target.value)} maxLength={120} placeholder="Finca El Tambo"/>
             </div>
           </div>
           <div className="field">
-            <label>Municipio</label>
-            <input value={form.municipio} onChange={(e) => set("municipio", e.target.value)} maxLength={80} placeholder="Sandoná"/>
-          </div>
-          <div className="field">
-            <label>Nombre de tu empresa o finca</label>
-            <input value={form.empresa} onChange={(e) => set("empresa", e.target.value)} maxLength={120} placeholder="Finca El Tambo"/>
-          </div>
-          <div className="field">
             <label>Cuéntanos de tu café (opcional)</label>
-            <textarea rows={3} value={form.mensaje} onChange={(e) => set("mensaje", e.target.value)} maxLength={500}
+            <textarea rows={2} value={form.mensaje} onChange={(e) => set("mensaje", e.target.value)} maxLength={500}
               style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
           </div>
 
@@ -691,7 +693,7 @@ const PerfilEditor = ({ promotor, onGuardar }) => {
         </div>
         <div className="field">
           <label>Documento</label>
-          <input value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32}/>
+          <input value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32} inputMode="numeric"/>
         </div>
       </div>
       <div className="field">

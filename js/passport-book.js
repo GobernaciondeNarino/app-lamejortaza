@@ -483,6 +483,9 @@
 
     // Estado de animación
     var vuelo = null;      // { hoja, dir, t, dur, inicio, resolve, destino }
+    // Posición del lomo dentro del lienzo (0..1). La calcula colocarCamara() y
+    // la usa el gesto de toque para saber qué mitad es "avanzar".
+    var lomoEnLienzo = 0.5;
     var arrastre = null;
     var selloAnimado = {}; // páginas cuyo sello ya aterrizó
 
@@ -968,6 +971,13 @@
       var distH = (anchoEncuadre / 2) / (Math.tan(fovRad / 2) * camera.aspect);
       var cx = modo === "pliego" ? 0 : W * 0.42;
 
+      // El umbral del toque tiene que caer en el LOMO, no en el centro
+      // geométrico del lienzo. En modo "hoja" el lomo está al 20% del ancho:
+      // partir por la mitad hacía que tocar el borde izquierdo de la página que
+      // estás leyendo te llevara hacia atrás, que es justo lo contrario de lo
+      // que espera quien pasa una hoja.
+      lomoEnLienzo = Math.max(0.06, Math.min(0.94, (anchoEncuadre / 2 - cx) / anchoEncuadre));
+
       camera.position.set(cx, H * 0.045, Math.max(distV, distH) * 1.06);
       camera.lookAt(cx, 0, 0);
       camera.updateProjectionMatrix();
@@ -1201,7 +1211,8 @@
           // Tap: mitad derecha avanza, mitad izquierda retrocede.
           if (performance.now() - a.t0 < 250) {
             var rect = canvas.getBoundingClientRect();
-            if (e.clientX - rect.left > rect.width / 2) encolar(1); else encolar(-1);
+            var rel = (e.clientX - rect.left) / Math.max(1, rect.width);
+            if (rel > lomoEnLienzo) encolar(1); else encolar(-1);
           }
           return;
         }

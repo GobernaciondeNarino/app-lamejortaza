@@ -227,8 +227,8 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
         {/* El montador inserta su canvas como PRIMER hijo con z-index 0; el
             render CSS vive encima con z-index 1 y desaparece cuando el libro
             avisa que está listo. Así no hay parpadeo en ninguna dirección. */}
-        <div ref={wrapRef}
-          style={{ marginTop: 18, aspectRatio: "0.72", perspective: "1400px", position: "relative" }}>
+        <div className="pasaporte-horizontal">
+        <div ref={wrapRef} className="libro-marco" style={{ marginTop: 18, position: "relative" }}>
           {!book3d && (
             <React.Fragment>
               <div style={{ position: "absolute", inset: 0, zIndex: 1, borderRadius: "6px 12px 12px 6px", boxShadow: "0 30px 60px -20px rgba(0,0,0,0.6), -3px 0 0 rgba(0,0,0,0.3)" }}/>
@@ -254,7 +254,7 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
           Página {page + 1} de {total}. {resumen}
         </div>
 
-        <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
+        <div className="libro-controles" style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
           <button onClick={() => go(-1)} disabled={page === 0} style={{
             width: 44, height: 44, borderRadius: "50%",
             background: "var(--paper)", color: "var(--ink)", opacity: page === 0 ? 0.3 : 1,
@@ -271,6 +271,7 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
         </div>
         <div className="mono" style={{ textAlign: "center", color: "var(--paper-3)", marginTop: 14, lineHeight: 1.6 }}>
           {visitados.length} / {stands.length} stands sellados
+        </div>
         </div>
       </div>
     </div>

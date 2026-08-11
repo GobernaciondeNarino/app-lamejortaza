@@ -322,7 +322,7 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
               <div key={m.k} style={{ padding: 14, border: "1px solid var(--line)", borderRadius: "var(--r-md)" }}>
                 <div className="mono">{m.k}</div>
                 <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 32, marginTop: 6, lineHeight: 1 }}>{m.v}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{m.sub}</div>
+                <div className="sub-metrica" style={{ color: "var(--ink-3)" }}>{m.sub}</div>
               </div>
             ))}
           </div>

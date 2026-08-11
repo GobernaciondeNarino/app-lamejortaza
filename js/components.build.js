@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 700fe993b9bfb4b0
+// Huella de las fuentes: 171d649d49f3319a
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -1343,12 +1343,7 @@ const QRPrintView = ({
       margin: "4px 0 22px"
     }
   }, "Carteles A5"), React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "minmax(0, 280px) minmax(0, 1fr)",
-      gap: 36,
-      alignItems: "flex-start"
-    }
+    className: "qr-layout"
   }, React.createElement("aside", null, React.createElement("div", {
     className: "mono",
     style: {
@@ -1400,7 +1395,7 @@ const QRPrintView = ({
   }, s.nombre), React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 9
+      fontSize: 10
     }
   }, s.id))))), React.createElement("div", {
     style: {
@@ -1442,8 +1437,8 @@ const QRPrintView = ({
       textDecoration: "none"
     }
   }, "Probar URL del QR \u2197"), React.createElement("div", {
+    className: "nota-menor",
     style: {
-      fontSize: 11,
       color: "var(--ink-3)",
       marginTop: 8,
       lineHeight: 1.5
@@ -1522,9 +1517,8 @@ const ActivityLive = ({
       margin: "4px 0 22px"
     }
   }, "Votos en tiempo real"), React.createElement("div", {
+    className: "grid-2",
     style: {
-      display: "grid",
-      gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
       gap: 22
     }
   }, React.createElement("div", {
@@ -1632,8 +1626,8 @@ const ActivityLive = ({
       fontWeight: 500
     }
   }, s.nombre), React.createElement("div", {
+    className: "nota-menor",
     style: {
-      fontSize: 11,
       color: "var(--ink-3)"
     }
   }, s.municipio, " \xB7 ", totalVotos(s.votos), " votos")), React.createElement("div", {
@@ -1674,8 +1668,8 @@ const ActivityLive = ({
     className: "btn btn-ghost",
     download: true
   }, "\u2913 Pasaportes (CSV)")), React.createElement("div", {
+    className: "nota-menor",
     style: {
-      fontSize: 11,
       color: "var(--ink-3)",
       marginTop: 8
     }
@@ -2535,11 +2529,12 @@ const PassportBook = ({
       fontSize: 12
     }
   }, "Cerrar")), React.createElement("div", {
+    className: "pasaporte-horizontal"
+  }, React.createElement("div", {
     ref: wrapRef,
+    className: "libro-marco",
     style: {
       marginTop: 18,
-      aspectRatio: "0.72",
-      perspective: "1400px",
       position: "relative"
     }
   }, !book3d && React.createElement(React.Fragment, null, React.createElement("div", {
@@ -2581,6 +2576,7 @@ const PassportBook = ({
       whiteSpace: "nowrap"
     }
   }, "P\xE1gina ", page + 1, " de ", total, ". ", resumen), React.createElement("div", {
+    className: "libro-controles",
     style: {
       marginTop: 18,
       display: "flex",
@@ -2629,7 +2625,7 @@ const PassportBook = ({
       marginTop: 14,
       lineHeight: 1.6
     }
-  }, visitados.length, " / ", stands.length, " stands sellados")));
+  }, visitados.length, " / ", stands.length, " stands sellados"))));
 };
 const PassportPage_Page = ({
   pageData,
@@ -3622,8 +3618,8 @@ const PublicDetail = ({
       lineHeight: 1
     }
   }, m.v), React.createElement("div", {
+    className: "sub-metrica",
     style: {
-      fontSize: 11,
       color: "var(--ink-3)"
     }
   }, m.sub)))), React.createElement("div", {
@@ -4051,8 +4047,11 @@ const PromotorRegistroPage = () => {
   }, React.createElement("label", null, "Documento"), React.createElement("input", {
     value: form.documento,
     onChange: e => set("documento", e.target.value),
-    maxLength: 32
+    maxLength: 32,
+    inputMode: "numeric"
   }))), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Municipio"), React.createElement("input", {
     value: form.municipio,
@@ -4061,15 +4060,15 @@ const PromotorRegistroPage = () => {
     placeholder: "Sandon\xE1"
   })), React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Nombre de tu empresa o finca"), React.createElement("input", {
+  }, React.createElement("label", null, "Empresa o finca"), React.createElement("input", {
     value: form.empresa,
     onChange: e => set("empresa", e.target.value),
     maxLength: 120,
     placeholder: "Finca El Tambo"
-  })), React.createElement("div", {
+  }))), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Cu\xE9ntanos de tu caf\xE9 (opcional)"), React.createElement("textarea", {
-    rows: 3,
+    rows: 2,
     value: form.mensaje,
     onChange: e => set("mensaje", e.target.value),
     maxLength: 500,
@@ -5009,7 +5008,8 @@ const PerfilEditor = ({
   }, React.createElement("label", null, "Documento"), React.createElement("input", {
     value: form.documento,
     onChange: e => set("documento", e.target.value),
-    maxLength: 32
+    maxLength: 32,
+    inputMode: "numeric"
   }))), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Municipio"), React.createElement("input", {
