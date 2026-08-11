@@ -45,6 +45,7 @@ function register_routes_pasaportes(\LMT\Router $r): void
                 'numero'    => pasaporte_numero($correo),
                 'inicio'    => null,
                 'visitados' => [],
+                'valoraciones' => [],
             ]);
         }
 
@@ -60,8 +61,31 @@ function register_routes_pasaportes(\LMT\Router $r): void
             'numero'    => pasaporte_numero((string) $row['correo']),
             'inicio'    => $row['inicio'] ?? null,
             'visitados' => array_values(array_filter($visitados, [Validate::class, 'standId'])),
+            // Qué puntuó en cada stand. Va SÓLO con el testigo del perfil: este
+            // endpoint es público, y saber que alguien calificó un stand como
+            // «malo» no es lo mismo que saber que lo visitó. Sin testigo, la
+            // hoja del recorrido enseña los stands sin la calificación.
+            'valoraciones' => pasaporte_valoraciones($correo, is_string($_GET['t'] ?? null) ? $_GET['t'] : ''),
         ]);
     });
+}
+
+/**
+ * Emoji que el visitante puso a cada stand, indexado por stand.
+ *
+ * @return array<string, string>  vacío si el testigo no vale
+ */
+function pasaporte_valoraciones(string $correo, string $token): array
+{
+    if (!\visitante_token_valido($correo, $token)) return [];
+
+    $q = Db::pdo()->prepare('SELECT stand_id, emoji FROM votos WHERE correo = :c');
+    $q->execute([':c' => $correo]);
+    $out = [];
+    foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $v) {
+        $out[(string) $v['stand_id']] = (string) $v['emoji'];
+    }
+    return $out;
 }
 
 /**

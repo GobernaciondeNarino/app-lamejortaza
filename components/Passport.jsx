@@ -36,7 +36,11 @@ const PassportPage = ({ stands }) => {
   const load = React.useCallback(async (correo) => {
     setLoading(true); setError("");
     try {
-      const res = await window.LMTApi.getPasaporte(correo);
+      // Si este navegador guarda el testigo de ESTE correo, el servidor añade
+      // las calificaciones al recorrido. Si no, llega el pasaporte de siempre.
+      const g = (window.LMTPerfil && window.LMTPerfil.leer()) || {};
+      const t = g.correo === String(correo).toLowerCase() ? g.token : "";
+      const res = await window.LMTApi.getPasaporte(correo, t);
       setData(res);
       setAskingEmail(false);
     } catch (e) {
@@ -146,12 +150,17 @@ const PassportPage = ({ stands }) => {
     numero: data.numero || "",
     inicio: data.inicio || "",
     visitados: visitadosIds,
+    valoraciones: data.valoraciones || {},
     perfil: perfil,
   };
+  // El recorrido va AL FINAL: primero la hoja de datos, luego los sellos que se
+  // fueron ganando y, al cerrar, el resumen de lo que se visitó y cómo se
+  // calificó. Al principio no tenía nada que contar.
   const pages = [
     { type: "cover" },
     { type: "index" },
     ...visitados.map((s) => ({ type: "stamp", stand: s })),
+    { type: "travesia" },
     { type: "end" },
   ];
 
@@ -196,8 +205,15 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
       datosPagina(passport, stands.length)
     ),
     ...visitados.map((s, i) => ({ tipo: "sello", indice: i, stand: s })),
+    {
+      tipo: "travesia",
+      filas: filasTravesia(passport, visitados),
+      visitados: visitados.length,
+      totalStands: stands.length,
+    },
     { tipo: "final", visitados: visitados.length, totalStands: stands.length },
-  ], [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero, passport.perfil]);
+  ], [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero,
+      passport.perfil, passport.valoraciones]);
 
   const paginasRef = React.useRef(paginasLibro);
   paginasRef.current = paginasLibro;
@@ -252,6 +268,7 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
     ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}`
     : actual.type === "cover" ? "Portada del pasaporte"
     : actual.type === "index" ? `Página de datos de ${passport.nombre}`
+    : actual.type === "travesia" ? `Recorrido: ${visitados.length} stands sellados`
     : "Fin del pasaporte";
 
   return (
@@ -286,7 +303,7 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
                 transform: flipping ? "rotateY(-12deg)" : "rotateY(0deg)",
                 transition: "transform 0.5s cubic-bezier(.4,.1,.3,1)",
               }}>
-                <PassportPage_Page pageData={pages[Math.min(page, pages.length - 1)]} passport={passport} totalSlots={Math.max(8, visitados.length)} totalStands={stands.length}/>
+                <PassportPage_Page pageData={pages[Math.min(page, pages.length - 1)]} passport={passport} visitados={visitados} totalSlots={Math.max(8, visitados.length)} totalStands={stands.length}/>
               </div>
             </React.Fragment>
           )}
@@ -486,7 +503,80 @@ const PaginaDatos = ({ passport, totalStands }) => {
   );
 };
 
-const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
+// ── Hoja del recorrido ────────────────────────────────────────────────────
+// Va al final, cuando ya hay algo que resumir: qué stands se visitaron, en
+// qué orden y qué calificación les puso. La calificación sólo llega si este
+// navegador guarda el testigo del visitante (ver api/routes/pasaportes.php).
+// `token` es el nombre crudo de la variable: el render CSS lo envuelve en
+// var(), y el libro 3D lo busca en su paleta —que resuelve los mismos tokens
+// a rgb porque Canvas2D no entiende oklch—.
+const VALORACION = {
+  bueno:   { texto: "Excelente", token: "--good" },
+  regular: { texto: "Regular",   token: "--meh" },
+  malo:    { texto: "Mejorable", token: "--bad" },
+};
+
+// Lo que se enseña en la hoja del recorrido, en un sitio y para las dos vistas.
+const filasTravesia = (passport, visitados) => {
+  const val = passport.valoraciones || {};
+  return visitados.map((s, i) => {
+    const v = VALORACION[val[s.id]] || null;
+    return {
+      n: String(i + 1).padStart(2, "0"),
+      nombre: s.nombre,
+      municipio: s.municipio || "",
+      valoracion: v ? v.texto : "",
+      color: "var(" + (v ? v.token : "--ink-3") + ")",
+      colorPal: v ? v.token : "--ink-3",
+    };
+  });
+};
+
+const PaginaTravesia = ({ passport, visitados, totalStands }) => {
+  const filas = filasTravesia(passport, visitados);
+  const faltan = Math.max(0, totalStands - filas.length);
+
+  return (
+    <div style={{ height: "100%", padding: "22px 22px 0", display: "flex", flexDirection: "column" }}>
+      <div className="mono" style={{ marginBottom: 6 }}>Recorrido</div>
+      <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 28, fontWeight: 400, margin: "0 0 4px", lineHeight: 1 }}>
+        Tu travesía.
+      </h2>
+      <p style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5, margin: "0 0 14px" }}>
+        {filas.length === 1 ? "El stand que sellaste" : `Los ${filas.length} stands que sellaste`}
+        {passport.valoraciones && Object.keys(passport.valoraciones).length ? ", con tu calificación." : "."}
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 9, overflow: "hidden" }}>
+        {filas.map((f) => (
+          <div key={f.n} style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
+            <span className="mono" style={{ width: 20, flexShrink: 0, color: "var(--ink-3)" }}>{f.n}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {f.nombre}
+              </div>
+              {f.municipio && (
+                <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)" }}>{f.municipio}</div>
+              )}
+            </div>
+            {f.valoracion && (
+              <span className="mono" style={{ fontSize: 9, color: f.color, flexShrink: 0 }}>{f.valoracion}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mono" style={{ marginTop: "auto", padding: "14px 0 18px", borderTop: "1px solid var(--line-2)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span>{filas.length} sellados</span>
+          <span>{faltan} faltantes</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PassportPage_Page = ({ pageData, passport, visitados, totalSlots, totalStands }) => {
   const lineBg = { backgroundImage: "repeating-linear-gradient(var(--paper) 0, var(--paper) 26px, var(--line) 26px, var(--line) 27px)" };
 
   if (pageData.type === "cover") {
@@ -517,6 +607,10 @@ const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
 
   if (pageData.type === "index") {
     return <PaginaDatos passport={passport} totalStands={totalStands}/>;
+  }
+
+  if (pageData.type === "travesia") {
+    return <PaginaTravesia passport={passport} visitados={visitados} totalStands={totalStands}/>;
   }
 
   if (pageData.type === "stamp") {

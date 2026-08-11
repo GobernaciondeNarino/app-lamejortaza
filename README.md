@@ -77,7 +77,8 @@ Gobernación de Nariño.
 ### Pasaporte (`/pasaporte`)
 - Si hay correo guardado, carga la libreta directamente.
 - Si no, pide el correo y consulta `/api/pasaportes/{correo}`.
-- Portada, **hoja de datos** y una página por sello visitado.
+- Portada, **hoja de datos**, una página por sello visitado, **hoja del
+  recorrido** y cierre.
 - Botón "Cerrar" limpia el correo del dispositivo.
 
 **La hoja de datos** es la primera página interior, y está hecha a imagen de la
@@ -95,6 +96,17 @@ página se enseña y se fotografía.
 
 El número de pasaporte (`NAR-XXXX-XXXX`) es un hash del correo: estable para la
 misma persona y no reversible.
+
+**La hoja del recorrido** («Tu travesía») va **al final**, después de los sellos:
+ahí ya hay algo que resumir. Lista cada stand visitado con su número, su nombre,
+su municipio y **la calificación que el visitante le puso** —Excelente, Regular
+o Mejorable—, y cierra con sellados / faltantes. Al principio del pasaporte no
+era más que una columna de casillas vacías.
+
+Las calificaciones **también van detrás del testigo**: `/api/pasaportes/{correo}`
+es público, y que alguien visitara un stand no es lo mismo que saber que lo
+calificó de «mejorable». Sin testigo la hoja se ve igual, con los stands pero
+sin las notas.
 
 Lo pintan dos vistas —el render en CSS y el libro 3D, que dibuja en canvas— a
 partir de **un único `datosPagina()`**, para que no puedan acabar diciendo cosas

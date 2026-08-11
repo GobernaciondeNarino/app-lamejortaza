@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 89fc7520c2096897
+// Huella de las fuentes: d2d40bd333bff5a5
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -3033,7 +3033,9 @@ const PassportPage = ({
     setLoading(true);
     setError("");
     try {
-      const res = await window.LMTApi.getPasaporte(correo);
+      const g = window.LMTPerfil && window.LMTPerfil.leer() || {};
+      const t = g.correo === String(correo).toLowerCase() ? g.token : "";
+      const res = await window.LMTApi.getPasaporte(correo, t);
       setData(res);
       setAskingEmail(false);
     } catch (e) {
@@ -3209,6 +3211,7 @@ const PassportPage = ({
     numero: data.numero || "",
     inicio: data.inicio || "",
     visitados: visitadosIds,
+    valoraciones: data.valoraciones || {},
     perfil: perfil
   };
   const pages = [{
@@ -3219,6 +3222,8 @@ const PassportPage = ({
     type: "stamp",
     stand: s
   })), {
+    type: "travesia"
+  }, {
     type: "end"
   }];
   return React.createElement(PassportBook, {
@@ -3263,10 +3268,15 @@ const PassportBook = ({
     indice: i,
     stand: s
   })), {
+    tipo: "travesia",
+    filas: filasTravesia(passport, visitados),
+    visitados: visitados.length,
+    totalStands: stands.length
+  }, {
     tipo: "final",
     visitados: visitados.length,
     totalStands: stands.length
-  }], [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero, passport.perfil]);
+  }], [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero, passport.perfil, passport.valoraciones]);
   const paginasRef = React.useRef(paginasLibro);
   paginasRef.current = paginasLibro;
   React.useEffect(() => {
@@ -3309,7 +3319,7 @@ const PassportBook = ({
   };
   const total = book3d && libroRef.current ? libroRef.current.totalPaginas() : pages.length;
   const actual = pages[Math.min(page, pages.length - 1)] || pages[0];
-  const resumen = actual.type === "stamp" ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}` : actual.type === "cover" ? "Portada del pasaporte" : actual.type === "index" ? `Página de datos de ${passport.nombre}` : "Fin del pasaporte";
+  const resumen = actual.type === "stamp" ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}` : actual.type === "cover" ? "Portada del pasaporte" : actual.type === "index" ? `Página de datos de ${passport.nombre}` : actual.type === "travesia" ? `Recorrido: ${visitados.length} stands sellados` : "Fin del pasaporte";
   return React.createElement("div", {
     className: "pasaporte-vista",
     style: {
@@ -3400,6 +3410,7 @@ const PassportBook = ({
   }, React.createElement(PassportPage_Page, {
     pageData: pages[Math.min(page, pages.length - 1)],
     passport: passport,
+    visitados: visitados,
     totalSlots: Math.max(8, visitados.length),
     totalStands: stands.length
   })))), React.createElement("div", {
@@ -3731,9 +3742,134 @@ const PaginaDatos = ({
     }
   }, mrz1, React.createElement("br", null), mrz2)));
 };
+const VALORACION = {
+  bueno: {
+    texto: "Excelente",
+    token: "--good"
+  },
+  regular: {
+    texto: "Regular",
+    token: "--meh"
+  },
+  malo: {
+    texto: "Mejorable",
+    token: "--bad"
+  }
+};
+const filasTravesia = (passport, visitados) => {
+  const val = passport.valoraciones || {};
+  return visitados.map((s, i) => {
+    const v = VALORACION[val[s.id]] || null;
+    return {
+      n: String(i + 1).padStart(2, "0"),
+      nombre: s.nombre,
+      municipio: s.municipio || "",
+      valoracion: v ? v.texto : "",
+      color: "var(" + (v ? v.token : "--ink-3") + ")",
+      colorPal: v ? v.token : "--ink-3"
+    };
+  });
+};
+const PaginaTravesia = ({
+  passport,
+  visitados,
+  totalStands
+}) => {
+  const filas = filasTravesia(passport, visitados);
+  const faltan = Math.max(0, totalStands - filas.length);
+  return React.createElement("div", {
+    style: {
+      height: "100%",
+      padding: "22px 22px 0",
+      display: "flex",
+      flexDirection: "column"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 6
+    }
+  }, "Recorrido"), React.createElement("h2", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 28,
+      fontWeight: 400,
+      margin: "0 0 4px",
+      lineHeight: 1
+    }
+  }, "Tu traves\xEDa."), React.createElement("p", {
+    style: {
+      fontSize: 11,
+      color: "var(--ink-3)",
+      lineHeight: 1.5,
+      margin: "0 0 14px"
+    }
+  }, filas.length === 1 ? "El stand que sellaste" : `Los ${filas.length} stands que sellaste`, passport.valoraciones && Object.keys(passport.valoraciones).length ? ", con tu calificación." : "."), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 9,
+      overflow: "hidden"
+    }
+  }, filas.map(f => React.createElement("div", {
+    key: f.n,
+    style: {
+      display: "flex",
+      alignItems: "baseline",
+      gap: 9
+    }
+  }, React.createElement("span", {
+    className: "mono",
+    style: {
+      width: 20,
+      flexShrink: 0,
+      color: "var(--ink-3)"
+    }
+  }, f.n), React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 13,
+      lineHeight: 1.25,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, f.nombre), f.municipio && React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 9,
+      color: "var(--ink-3)"
+    }
+  }, f.municipio)), f.valoracion && React.createElement("span", {
+    className: "mono",
+    style: {
+      fontSize: 9,
+      color: f.color,
+      flexShrink: 0
+    }
+  }, f.valoracion)))), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: "auto",
+      padding: "14px 0 18px",
+      borderTop: "1px solid var(--line-2)"
+    }
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between"
+    }
+  }, React.createElement("span", null, filas.length, " sellados"), React.createElement("span", null, faltan, " faltantes"))));
+};
 const PassportPage_Page = ({
   pageData,
   passport,
+  visitados,
   totalSlots,
   totalStands
 }) => {
@@ -3815,6 +3951,13 @@ const PassportPage_Page = ({
   if (pageData.type === "index") {
     return React.createElement(PaginaDatos, {
       passport: passport,
+      totalStands: totalStands
+    });
+  }
+  if (pageData.type === "travesia") {
+    return React.createElement(PaginaTravesia, {
+      passport: passport,
+      visitados: visitados,
       totalStands: totalStands
     });
   }

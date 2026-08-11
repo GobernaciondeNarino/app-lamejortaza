@@ -322,8 +322,12 @@
   async function resumenVisitantes()        { return request("/admin/visitantes/resumen"); }
   async function expectativasVisitantes()   { return request("/admin/visitantes/expectativas"); }
 
-  async function getPasaporte(correo) {
-    return request("/pasaportes/" + correo);   // urlFor codifica; no duplicar
+  // El testigo del perfil es opcional: sin él llega el pasaporte de siempre;
+  // con él, además, la calificación que esta persona puso a cada stand. Es un
+  // endpoint público, así que esa parte no puede ir sin prueba de propiedad.
+  async function getPasaporte(correo, token) {
+    const t = token ? "?t=" + encodeURIComponent(token) : "";
+    return request("/pasaportes/" + correo + t);   // urlFor codifica; no duplicar
   }
 
   async function listStands()           { return (await request("/stands")).map(mapStand); }
