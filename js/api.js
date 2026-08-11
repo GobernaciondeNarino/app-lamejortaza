@@ -100,7 +100,10 @@
       propietario_documento: s.propietario_documento || "",
       nit: s.nit || "",
       sitio_web: s.sitio_web || "",
+      telefono: s.telefono || "",
       logo: s.logo || "",
+      lat: typeof s.lat === "number" ? s.lat : null,
+      lng: typeof s.lng === "number" ? s.lng : null,
       coords: s.coords || { x: 0.5, y: 0.5 },
       color: s.color || "oklch(0.45 0.1 40)",
       votos: s.votos || { bueno: 0, regular: 0, malo: 0 },
@@ -223,6 +226,7 @@
     return request("/promotores/logo-inscripcion", { method: "POST", body: archivoFormData(file) });
   }
   /** Logo de un stand desde el panel de administración. */
+  async function infoUploads()              { return request("/admin/uploads"); }
   async function subirLogoStand(file) {
     await ensureCsrf();
     return request("/stands/logo", { method: "POST", body: archivoFormData(file) });
@@ -352,6 +356,7 @@
     subirLogo,
     subirLogoInscripcion,
     subirLogoStand,
+    infoUploads,
     subirFotoProducto,
     listarPromotores,
     verPromotor,

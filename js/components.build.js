@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Correo.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: c62598ef6283e441
+// Huella de las fuentes: 9089d38806e8cb35
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -316,7 +316,9 @@ const SubirImagen = ({
   etiqueta,
   alto = 120,
   cuadrada = false,
-  ayuda
+  ayuda,
+  ruta,
+  almacen
 }) => {
   const ref = React.useRef(null);
   const [busy, setBusy] = React.useState(false);
@@ -375,7 +377,16 @@ const SubirImagen = ({
       background: "var(--paper-2)",
       flexWrap: "wrap"
     }
-  }, actual ? React.createElement("img", {
+  }, actual ? React.createElement("a", {
+    href: actual,
+    target: "_blank",
+    rel: "noopener",
+    title: "Abrir la imagen guardada",
+    style: {
+      display: "block",
+      flex: "0 0 auto"
+    }
+  }, React.createElement("img", {
     src: actual,
     alt: etiqueta,
     style: {
@@ -383,9 +394,10 @@ const SubirImagen = ({
       width: alto,
       objectFit: "cover",
       borderRadius: "var(--r-sm)",
-      background: "var(--paper)"
+      background: "var(--paper)",
+      border: "1px solid var(--line)"
     }
-  }) : React.createElement(Placeholder, {
+  })) : React.createElement(Placeholder, {
     width: alto,
     height: alto,
     label: "sin imagen"
@@ -406,7 +418,12 @@ const SubirImagen = ({
       lineHeight: 1.5,
       color: "var(--ink-3)"
     }
-  }, ayuda || ayudaImagen(cuadrada)), React.createElement("input", {
+  }, ayuda || ayudaImagen(cuadrada)), actual && ruta && React.createElement("div", {
+    className: "ruta",
+    style: {
+      marginTop: 8
+    }
+  }, "Archivo: ", ruta, almacen && React.createElement(React.Fragment, null, React.createElement("br", null), "En el servidor: ", almacen.replace(/\/$/, ""), "/", String(ruta).replace(/^uploads\//, ""))), React.createElement("input", {
     ref: ref,
     type: "file",
     accept: "image/jpeg,image/png,image/webp",
@@ -510,6 +527,236 @@ Object.assign(window, {
   ayudaImagen,
   urlImagen,
   BloqueForm
+});
+})();
+
+/* components/Mapa.jsx */
+(function () {
+const MAPA_NARINO = () => window.NARINO_MAPA || null;
+const mapaDimensiones = mapa => {
+  const [,, w, h] = (mapa.viewBox || "0 0 1000 1068").split(" ").map(Number);
+  return {
+    w,
+    h
+  };
+};
+const puntoAGeo = (mapa, x, y) => {
+  const {
+    w,
+    h
+  } = mapaDimensiones(mapa);
+  const b = mapa.bounds;
+  return {
+    lng: b.lonMin + x / w * (b.lonMax - b.lonMin),
+    lat: b.latMax - y / h * (b.latMax - b.latMin)
+  };
+};
+const geoAPunto = (mapa, lat, lng) => {
+  const {
+    w,
+    h
+  } = mapaDimensiones(mapa);
+  const b = mapa.bounds;
+  return {
+    x: (lng - b.lonMin) / (b.lonMax - b.lonMin) * w,
+    y: (b.latMax - lat) / (b.latMax - b.latMin) * h
+  };
+};
+const municipioEnPunto = (svg, mapa, x, y) => {
+  if (svg && svg.createSVGPoint) {
+    const pt = svg.createSVGPoint();
+    pt.x = x;
+    pt.y = y;
+    const trazos = svg.querySelectorAll("path[data-muni]");
+    for (const path of trazos) {
+      try {
+        if (path.isPointInFill(pt)) {
+          return mapa.municipios.find(m => m.id === path.getAttribute("data-muni")) || null;
+        }
+      } catch (_) {}
+    }
+  }
+  let mejor = null,
+    mejorD = Infinity;
+  mapa.municipios.forEach(m => {
+    const d = (m.cx - x) ** 2 + (m.cy - y) ** 2;
+    if (d < mejorD) {
+      mejorD = d;
+      mejor = m;
+    }
+  });
+  return mejor;
+};
+const SelectorUbicacion = ({
+  lat,
+  lng,
+  municipio,
+  onCambio,
+  alto = 380,
+  soloLectura = false
+}) => {
+  const mapa = MAPA_NARINO();
+  const svgRef = React.useRef(null);
+  const [aviso, setAviso] = React.useState("");
+  const [buscando, setBuscando] = React.useState(false);
+  if (!mapa || !mapa.bounds) {
+    return React.createElement(Aviso, {
+      tipo: "info"
+    }, "El mapa no est\xE1 disponible en este navegador. Puedes continuar sin marcar la ubicaci\xF3n.");
+  }
+  const {
+    w,
+    h
+  } = mapaDimensiones(mapa);
+  const tienePunto = typeof lat === "number" && typeof lng === "number" && !isNaN(lat) && !isNaN(lng);
+  const punto = tienePunto ? geoAPunto(mapa, lat, lng) : null;
+  const marcar = (clienteX, clienteY) => {
+    if (soloLectura) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const caja = svg.getBoundingClientRect();
+    const escala = Math.min(caja.width / w, caja.height / h);
+    const x = (clienteX - caja.left - (caja.width - w * escala) / 2) / escala;
+    const y = (clienteY - caja.top - (caja.height - h * escala) / 2) / escala;
+    if (x < 0 || y < 0 || x > w || y > h) return;
+    const geo = puntoAGeo(mapa, x, y);
+    const muni = municipioEnPunto(svg, mapa, x, y);
+    setAviso("");
+    onCambio({
+      lat: Math.round(geo.lat * 1e6) / 1e6,
+      lng: Math.round(geo.lng * 1e6) / 1e6,
+      municipio: muni ? muni.nombre : ""
+    });
+  };
+  const alTocar = e => {
+    const t = e.touches && e.touches[0] || e.changedTouches && e.changedTouches[0];
+    if (t) marcar(t.clientX, t.clientY);
+  };
+  const usarMiUbicacion = () => {
+    if (!navigator.geolocation) {
+      setAviso("Este navegador no puede darnos tu ubicación.");
+      return;
+    }
+    setBuscando(true);
+    setAviso("");
+    navigator.geolocation.getCurrentPosition(pos => {
+      setBuscando(false);
+      const la = pos.coords.latitude,
+        lo = pos.coords.longitude;
+      if (la < 0.2 || la > 2.9 || lo < -79.3 || lo > -76.5) {
+        setAviso("Tu ubicación actual está fuera de Nariño. Marca el punto en el mapa.");
+        return;
+      }
+      const p = geoAPunto(mapa, la, lo);
+      const muni = municipioEnPunto(svgRef.current, mapa, p.x, p.y);
+      onCambio({
+        lat: Math.round(la * 1e6) / 1e6,
+        lng: Math.round(lo * 1e6) / 1e6,
+        municipio: muni ? muni.nombre : ""
+      });
+    }, err => {
+      setBuscando(false);
+      setAviso(err && err.code === 1 ? "No diste permiso para usar tu ubicación. Marca el punto en el mapa." : "No pudimos obtener tu ubicación. Marca el punto en el mapa.");
+    }, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000
+    });
+  };
+  const activo = municipio ? normMuniSimple(municipio) : "";
+  return React.createElement("div", null, React.createElement("div", {
+    style: {
+      position: "relative",
+      background: "var(--paper-2)",
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      overflow: "hidden"
+    }
+  }, React.createElement("svg", {
+    ref: svgRef,
+    viewBox: mapa.viewBox,
+    preserveAspectRatio: "xMidYMid meet",
+    role: soloLectura ? "img" : "application",
+    "aria-label": soloLectura ? "Ubicación del stand en Nariño" : "Mapa de Nariño: toca para marcar la ubicación",
+    onClick: e => marcar(e.clientX, e.clientY),
+    onTouchEnd: alTocar,
+    style: {
+      display: "block",
+      width: "100%",
+      height: alto,
+      maxHeight: "70dvh",
+      cursor: soloLectura ? "default" : "crosshair",
+      touchAction: "manipulation"
+    }
+  }, mapa.municipios.map(m => {
+    const esActivo = activo && normMuniSimple(m.nombre) === activo;
+    return React.createElement("path", {
+      key: m.id,
+      d: m.d,
+      "data-muni": m.id,
+      fill: esActivo ? "color-mix(in oklch, var(--galeras) 26%, var(--paper))" : "var(--paper)",
+      stroke: "var(--line-2)",
+      strokeWidth: "1",
+      strokeLinejoin: "round"
+    }, React.createElement("title", null, m.nombre));
+  }), punto && React.createElement("g", {
+    transform: `translate(${punto.x} ${punto.y})`,
+    style: {
+      pointerEvents: "none"
+    }
+  }, React.createElement("circle", {
+    r: "26",
+    fill: "var(--galeras)",
+    opacity: "0.18"
+  }), React.createElement("circle", {
+    r: "9",
+    fill: "var(--galeras)",
+    stroke: "var(--paper)",
+    strokeWidth: "3"
+  })))), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap",
+      alignItems: "center",
+      marginTop: 10
+    }
+  }, !soloLectura && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: usarMiUbicacion,
+    disabled: buscando,
+    style: {
+      fontSize: 13,
+      padding: "8px 14px"
+    }
+  }, buscando ? "Buscando…" : "Usar mi ubicación actual"), tienePunto && !soloLectura && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: () => onCambio({
+      lat: null,
+      lng: null,
+      municipio
+    }),
+    style: {
+      fontSize: 13,
+      padding: "8px 14px"
+    }
+  }, "Quitar el punto"), React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)"
+    }
+  }, tienePunto ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "sin ubicación marcada")), aviso && React.createElement(Aviso, {
+    tipo: "info"
+  }, aviso));
+};
+const normMuniSimple = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+Object.assign(window, {
+  SelectorUbicacion,
+  geoAPunto,
+  puntoAGeo,
+  normMuniSimple
 });
 })();
 
@@ -1096,6 +1343,9 @@ const StandEditor = ({
     propietario_documento: "",
     nit: "",
     sitio_web: "",
+    telefono: "",
+    lat: null,
+    lng: null,
     logo: "",
     votos: {
       bueno: 0,
@@ -1111,10 +1361,20 @@ const StandEditor = ({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [almacen, setAlmacen] = React.useState(null);
   const update = (k, v) => setForm(f => ({
     ...f,
     [k]: v
   }));
+  React.useEffect(() => {
+    let vivo = true;
+    window.LMTApi.infoUploads().then(d => {
+      if (vivo) setAlmacen(d);
+    }).catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
   const save = async () => {
     setError("");
     setBusy(true);
@@ -1131,6 +1391,9 @@ const StandEditor = ({
         propietario_documento: form.propietario_documento,
         nit: form.nit,
         sitio_web: form.sitio_web,
+        telefono: form.telefono,
+        lat: form.lat,
+        lng: form.lng,
         logo: form.logo || null,
         coords: form.coords,
         color: form.color
@@ -1235,6 +1498,11 @@ const StandEditor = ({
     onChange: e => update("direccion", e.target.value),
     maxLength: 255
   })), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 20
+    }
+  }, React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Correo de contacto"), React.createElement("input", {
     type: "email",
@@ -1242,6 +1510,13 @@ const StandEditor = ({
     onChange: e => update("correo", e.target.value),
     maxLength: 254
   })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Tel\xE9fono"), React.createElement("input", {
+    value: form.telefono,
+    onChange: e => update("telefono", e.target.value),
+    maxLength: 32,
+    inputMode: "tel"
+  }))), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Descripci\xF3n corta"), React.createElement("textarea", {
     value: form.descripcion,
@@ -1290,8 +1565,39 @@ const StandEditor = ({
     actual: urlImagen(form.logo),
     etiqueta: "Logo del producto",
     cuadrada: true,
+    ruta: form.logo,
+    almacen: almacen && almacen.dir,
     onSubir: subirLogo
-  }), React.createElement("div", null, React.createElement("div", {
+  }), almacen && React.createElement("div", {
+    className: "ruta",
+    style: {
+      marginTop: -8
+    }
+  }, "Las im\xE1genes se guardan en ", React.createElement("strong", null, almacen.dir), " · ", "se sirven desde ", React.createElement("strong", null, almacen.url_base), !almacen.escribible && React.createElement("span", {
+    style: {
+      color: "var(--bad)"
+    }
+  }, React.createElement("br", null), "Esa carpeta NO tiene permiso de escritura: las subidas fallar\xE1n."), !almacen.protegida && React.createElement("span", {
+    style: {
+      color: "var(--meh)"
+    }
+  }, React.createElement("br", null), "Falta el .htaccess que impide ejecutar c\xF3digo ah\xED; se crear\xE1 con la pr\xF3xima subida.")), React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "Ubicaci\xF3n en Nari\xF1o"), React.createElement(SelectorUbicacion, {
+    lat: form.lat,
+    lng: form.lng,
+    municipio: form.municipio,
+    alto: 300,
+    onCambio: u => setForm(f => ({
+      ...f,
+      lat: u.lat,
+      lng: u.lng,
+      municipio: u.municipio || f.municipio
+    }))
+  })), React.createElement("div", null, React.createElement("div", {
     className: "mono",
     style: {
       marginBottom: 12
@@ -4253,6 +4559,10 @@ const PromotorRegistroPage = () => {
     stand_sitio_web: ""
   };
   const [form, setForm] = React.useState(vacio);
+  const [ubicacion, setUbicacion] = React.useState({
+    lat: null,
+    lng: null
+  });
   const [logo, setLogo] = React.useState("");
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -4293,6 +4603,8 @@ const PromotorRegistroPage = () => {
         stand_nombre: form.stand_nombre.trim() || form.empresa.trim(),
         email: sec.normalizeEmail(form.email),
         logo: logo || null,
+        lat: ubicacion.lat,
+        lng: ubicacion.lng,
         acepta_datos: true
       });
       setEnviado(true);
@@ -4535,7 +4847,23 @@ const PromotorRegistroPage = () => {
     actual: logo ? urlImagen(logo) : "",
     etiqueta: "Logo de tu producto",
     cuadrada: true,
+    ruta: logo,
     onSubir: subirLogo
+  })), React.createElement(BloqueForm, {
+    titulo: "\xBFD\xF3nde est\xE1s?",
+    nota: "Toca el mapa de Nari\xF1o donde queda tu finca o tu negocio. Al marcarlo se completa solo el municipio. Es opcional, pero ayuda a los visitantes a encontrarte y al festival a saber de qu\xE9 zonas viene el caf\xE9."
+  }, React.createElement(SelectorUbicacion, {
+    lat: ubicacion.lat,
+    lng: ubicacion.lng,
+    municipio: form.municipio,
+    alto: 320,
+    onCambio: u => {
+      setUbicacion({
+        lat: u.lat,
+        lng: u.lng
+      });
+      if (u.municipio) set("municipio", u.municipio);
+    }
   })), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
@@ -5304,6 +5632,7 @@ const EmpresaEditor = ({
     actual: logoUrl,
     etiqueta: "Logo del producto o de la empresa",
     cuadrada: true,
+    ruta: empresa && empresa.logo,
     onSubir: onLogo
   }) : React.createElement(Aviso, {
     tipo: "info"

@@ -11,6 +11,7 @@ function register_routes_stands(\LMT\Router $r): void
         $rows = Db::pdo()->query(
             'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
                     propietario, propietario_documento, nit, sitio_web, logo_path,
+                    telefono, lat, lng,
                     coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
              FROM stands ORDER BY id'
         )->fetchAll();
@@ -24,6 +25,7 @@ function register_routes_stands(\LMT\Router $r): void
         $stmt = Db::pdo()->prepare(
             'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
                     propietario, propietario_documento, nit, sitio_web, logo_path,
+                    telefono, lat, lng,
                     coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
              FROM stands WHERE id = :id'
         );
@@ -40,9 +42,9 @@ function register_routes_stands(\LMT\Router $r): void
         $stmt = Db::pdo()->prepare(
             'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
                                  propietario, propietario_documento, nit, sitio_web, logo_path,
-                                 coords_x, coords_y, color)
+                                 telefono, lat, lng, coords_x, coords_y, color)
              VALUES (:id, :nombre, :municipio, :region, :direccion, :correo, :descripcion,
-                     :prop, :propdoc, :nit, :web, :logo, :cx, :cy, :color)'
+                     :prop, :propdoc, :nit, :web, :logo, :tel, :lat, :lng, :cx, :cy, :color)'
         );
         $stmt->execute([
             ':id'          => $stand['id'],
@@ -57,6 +59,9 @@ function register_routes_stands(\LMT\Router $r): void
             ':nit'         => $stand['nit'],
             ':web'         => $stand['sitio_web'],
             ':logo'        => $stand['logo_path'],
+            ':tel'         => $stand['telefono'],
+            ':lat'         => $stand['lat'],
+            ':lng'         => $stand['lng'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
@@ -78,6 +83,7 @@ function register_routes_stands(\LMT\Router $r): void
                                 direccion=:direccion, correo=:correo, descripcion=:descripcion,
                                 propietario=:prop, propietario_documento=:propdoc,
                                 nit=:nit, sitio_web=:web, logo_path=COALESCE(:logo, logo_path),
+                                telefono=:tel, lat=:lat, lng=:lng,
                                 coords_x=:cx, coords_y=:cy, color=:color
              WHERE id=:id'
         );
@@ -93,6 +99,9 @@ function register_routes_stands(\LMT\Router $r): void
             ':nit'         => $stand['nit'],
             ':web'         => $stand['sitio_web'],
             ':logo'        => $stand['logo_path'],
+            ':tel'         => $stand['telefono'],
+            ':lat'         => $stand['lat'],
+            ':lng'         => $stand['lng'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
@@ -120,6 +129,46 @@ function register_routes_stands(\LMT\Router $r): void
             'logo'      => $ruta,
             'max_bytes' => \LMT\Uploads::maxBytes(),
             'max_dim'   => \LMT\Uploads::maxDim(),
+        ]);
+    });
+
+    /**
+     * Dónde acaban las imágenes que sube la gente.
+     *
+     * El organizador necesita saberlo para hacer copia de seguridad, para
+     * mirarlas por FTP y para entender por qué una subida falla (carpeta llena
+     * o sin permiso de escritura). Es información del servidor: sólo para
+     * administración.
+     */
+    $r->get('/admin/uploads', function () {
+        Security::requireAdmin();
+        $dir = \LMT\Uploads::raiz();
+        $carpetas = [];
+        foreach (['stands', 'inscripciones', 'promotores'] as $sub) {
+            $ruta = $dir . '/' . $sub;
+            $n = 0; $bytes = 0;
+            if (is_dir($ruta)) {
+                foreach (glob($ruta . '/*.{jpg,png,webp}', GLOB_BRACE) ?: [] as $f) {
+                    $n++; $bytes += (int) @filesize($f);
+                }
+            }
+            $carpetas[] = [
+                'nombre'    => $sub,
+                'ruta'      => $ruta,
+                'existe'    => is_dir($ruta),
+                'escribible'=> is_dir($ruta) && is_writable($ruta),
+                'archivos'  => $n,
+                'bytes'     => $bytes,
+            ];
+        }
+        Response::ok([
+            'dir'        => $dir,
+            'escribible' => is_dir($dir) && is_writable($dir),
+            'url_base'   => rtrim(Security::baseUrlPublica(), '/') . '/uploads/',
+            'max_bytes'  => \LMT\Uploads::maxBytes(),
+            'max_dim'    => \LMT\Uploads::maxDim(),
+            'protegida'  => is_file($dir . '/.htaccess'),
+            'carpetas'   => $carpetas,
         ]);
     });
 
@@ -162,7 +211,12 @@ function stand_row_to_api(array $r): array
         'propietario_documento' => $esAdmin ? (string) ($r['propietario_documento'] ?? '') : '',
         'nit'         => (string) ($r['nit'] ?? ''),
         'sitio_web'   => (string) ($r['sitio_web'] ?? ''),
+        'telefono'    => $esAdmin ? (string) ($r['telefono'] ?? '') : '',
         'logo'        => stand_ruta_publica($r['logo_path'] ?? null),
+        // La ubicación del stand SÍ es pública: es lo que se pinta en el mapa
+        // del festival y lo que un visitante necesita para llegar.
+        'lat'         => isset($r['lat']) && $r['lat'] !== null ? (float) $r['lat'] : null,
+        'lng'         => isset($r['lng']) && $r['lng'] !== null ? (float) $r['lng'] : null,
         'coords'      => [
             'x' => isset($r['coords_x']) ? (float)$r['coords_x'] : 0.5,
             'y' => isset($r['coords_y']) ? (float)$r['coords_y'] : 0.5,
@@ -191,6 +245,14 @@ function stand_payload(array $b, bool $needsId): array
     $descripcion = Validate::comment((string)($b['descripcion'] ?? ''), 800);
     $correo    = Validate::email($b['correo'] ?? null) ?? '';
 
+    $telefono              = Validate::telefono($b['telefono'] ?? null);
+    // Mismo criterio que en la inscripción: fuera del rectángulo de Nariño no
+    // se guarda nada, porque sólo puede ser un error.
+    $lat = is_numeric($b['lat'] ?? null) ? (float) $b['lat'] : null;
+    $lng = is_numeric($b['lng'] ?? null) ? (float) $b['lng'] : null;
+    if ($lat === null || $lng === null || $lat < 0.2 || $lat > 2.9 || $lng < -79.3 || $lng > -76.5) {
+        $lat = null; $lng = null;
+    }
     $propietario           = Validate::nombre($b['propietario'] ?? null, 120);
     $propietario_documento = Validate::documento($b['propietario_documento'] ?? null);
     $nit                   = Validate::documento($b['nit'] ?? null);
@@ -210,7 +272,8 @@ function stand_payload(array $b, bool $needsId): array
 
     return compact(
         'id', 'nombre', 'municipio', 'region', 'direccion', 'correo', 'descripcion', 'color',
-        'propietario', 'propietario_documento', 'nit', 'sitio_web', 'logo_path'
+        'propietario', 'propietario_documento', 'nit', 'sitio_web', 'logo_path',
+        'telefono', 'lat', 'lng'
     ) + ['coords_x' => $cx, 'coords_y' => $cy];
 }
 

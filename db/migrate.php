@@ -88,6 +88,9 @@ $columnasNuevas = [
         'nit'                   => ['mysql' => 'VARCHAR(32) DEFAULT NULL',   'sqlite' => 'TEXT'],
         'sitio_web'             => ['mysql' => 'VARCHAR(255) DEFAULT NULL',  'sqlite' => 'TEXT'],
         'logo_path'             => ['mysql' => 'VARCHAR(255) DEFAULT NULL',  'sqlite' => 'TEXT'],
+        'telefono'              => ['mysql' => 'VARCHAR(32) DEFAULT NULL',   'sqlite' => 'TEXT'],
+        'lat'                   => ['mysql' => 'DECIMAL(9,6) DEFAULT NULL',  'sqlite' => 'REAL'],
+        'lng'                   => ['mysql' => 'DECIMAL(9,6) DEFAULT NULL',  'sqlite' => 'REAL'],
     ],
     'admins' => [
         'nombre'               => ['mysql' => 'VARCHAR(120) DEFAULT NULL', 'sqlite' => 'TEXT'],
@@ -104,6 +107,8 @@ $columnasNuevas = [
         'stand_nit'         => ['mysql' => 'VARCHAR(32) DEFAULT NULL',  'sqlite' => 'TEXT'],
         'stand_sitio_web'   => ['mysql' => 'VARCHAR(255) DEFAULT NULL', 'sqlite' => 'TEXT'],
         'logo_path'         => ['mysql' => 'VARCHAR(255) DEFAULT NULL', 'sqlite' => 'TEXT'],
+        'stand_lat'         => ['mysql' => 'DECIMAL(9,6) DEFAULT NULL', 'sqlite' => 'REAL'],
+        'stand_lng'         => ['mysql' => 'DECIMAL(9,6) DEFAULT NULL', 'sqlite' => 'REAL'],
     ],
 ];
 

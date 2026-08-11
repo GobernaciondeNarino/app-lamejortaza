@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS stands (
   nit           VARCHAR(32)  DEFAULT NULL,
   sitio_web     VARCHAR(255) DEFAULT NULL,
   logo_path     VARCHAR(255) DEFAULT NULL,
+  telefono      VARCHAR(32)  DEFAULT NULL,
+  -- Ubicación geográfica del stand, elegida en el mapa de la inscripción.
+  lat           DECIMAL(9,6) DEFAULT NULL,
+  lng           DECIMAL(9,6) DEFAULT NULL,
   votos_bueno   INT UNSIGNED NOT NULL DEFAULT 0,
   votos_regular INT UNSIGNED NOT NULL DEFAULT 0,
   votos_malo    INT UNSIGNED NOT NULL DEFAULT 0,
@@ -112,6 +116,8 @@ CREATE TABLE IF NOT EXISTS promotores (
   stand_nit            VARCHAR(32)  DEFAULT NULL,
   stand_sitio_web      VARCHAR(255) DEFAULT NULL,
   logo_path            VARCHAR(255) DEFAULT NULL,
+  stand_lat            DECIMAL(9,6) DEFAULT NULL,
+  stand_lng            DECIMAL(9,6) DEFAULT NULL,
   estado               ENUM('pendiente','verificado','activo','rechazado','suspendido')
                        NOT NULL DEFAULT 'pendiente',
   password_hash        VARCHAR(255) DEFAULT NULL,

@@ -14,6 +14,7 @@ function register_routes_dashboard(\LMT\Router $r): void
         $stands = Db::pdo()->query(
             'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
                     propietario, propietario_documento, nit, sitio_web, logo_path,
+                    telefono, lat, lng,
                     coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
              FROM stands ORDER BY id'
         )->fetchAll();

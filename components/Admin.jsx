@@ -244,6 +244,7 @@ const StandEditor = ({ stand }) => {
     id: "st-" + Math.random().toString(36).slice(2, 6),
     nombre: "", municipio: "", region: "", direccion: "", correo: "",
     descripcion: "", propietario: "", propietario_documento: "", nit: "", sitio_web: "",
+    telefono: "", lat: null, lng: null,
     logo: "", votos: { bueno: 0, regular: 0, malo: 0 },
     coords: { x: 0.5, y: 0.5 },
     color: "oklch(0.45 0.1 40)",
@@ -251,7 +252,16 @@ const StandEditor = ({ stand }) => {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [almacen, setAlmacen] = React.useState(null);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Dónde acaban las imágenes en el servidor: hace falta para la copia de
+  // seguridad y para saber dónde mirar cuando una subida no aparece.
+  React.useEffect(() => {
+    let vivo = true;
+    window.LMTApi.infoUploads().then((d) => { if (vivo) setAlmacen(d); }).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
 
   const save = async () => {
     setError(""); setBusy(true);
@@ -268,6 +278,9 @@ const StandEditor = ({ stand }) => {
         propietario_documento: form.propietario_documento,
         nit: form.nit,
         sitio_web: form.sitio_web,
+        telefono: form.telefono,
+        lat: form.lat,
+        lng: form.lng,
         logo: form.logo || null,
         coords: form.coords,
         color: form.color,
@@ -339,9 +352,15 @@ const StandEditor = ({ stand }) => {
             <label>Dirección</label>
             <input value={form.direccion} onChange={e => update("direccion", e.target.value)} maxLength={255}/>
           </div>
-          <div className="field">
-            <label>Correo de contacto</label>
-            <input type="email" value={form.correo} onChange={e => update("correo", e.target.value)} maxLength={254}/>
+          <div className="grid-2" style={{ gap: 20 }}>
+            <div className="field">
+              <label>Correo de contacto</label>
+              <input type="email" value={form.correo} onChange={e => update("correo", e.target.value)} maxLength={254}/>
+            </div>
+            <div className="field">
+              <label>Teléfono</label>
+              <input value={form.telefono} onChange={e => update("telefono", e.target.value)} maxLength={32} inputMode="tel"/>
+            </div>
           </div>
           <div className="field">
             <label>Descripción corta</label>
@@ -376,7 +395,31 @@ const StandEditor = ({ stand }) => {
             actual={urlImagen(form.logo)}
             etiqueta="Logo del producto"
             cuadrada
+            ruta={form.logo}
+            almacen={almacen && almacen.dir}
             onSubir={subirLogo}/>
+          {almacen && (
+            <div className="ruta" style={{ marginTop: -8 }}>
+              Las imágenes se guardan en <strong>{almacen.dir}</strong>
+              {" · "}se sirven desde <strong>{almacen.url_base}</strong>
+              {!almacen.escribible && (
+                <span style={{ color: "var(--bad)" }}><br/>Esa carpeta NO tiene permiso de escritura: las subidas fallarán.</span>
+              )}
+              {!almacen.protegida && (
+                <span style={{ color: "var(--meh)" }}><br/>Falta el .htaccess que impide ejecutar código ahí; se creará con la próxima subida.</span>
+              )}
+            </div>
+          )}
+
+          <div>
+            <div className="mono" style={{ marginBottom: 8 }}>Ubicación en Nariño</div>
+            <SelectorUbicacion
+              lat={form.lat} lng={form.lng} municipio={form.municipio} alto={300}
+              onCambio={(u) => setForm((f) => ({
+                ...f, lat: u.lat, lng: u.lng,
+                municipio: u.municipio || f.municipio,
+              }))}/>
+          </div>
 
           <div>
             <div className="mono" style={{ marginBottom: 12 }}>Color del sello</div>
