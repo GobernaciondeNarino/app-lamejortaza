@@ -52,6 +52,13 @@ $bootstrap = [
     // mod_rewrite — el cliente añade `?path=...` con la ruta deseada.
     'apiBase' => $base . '/api/index.php',
     'siteName'=> 'La Mejor Taza',
+    // Límites reales de las imágenes, para que el formulario anuncie los del
+    // servidor y no una cifra escrita a mano que se queda desfasada cuando el
+    // operador cambia api/config.php.
+    'uploads' => [
+        'maxBytes' => max(65536, (int) ($cfg['uploads']['max_bytes'] ?? 3 * 1024 * 1024)),
+        'maxDim'   => max(320, min(4000, (int) ($cfg['uploads']['max_dim'] ?? 1600))),
+    ],
 ];
 
 // ---------------------------------------------------------------------------

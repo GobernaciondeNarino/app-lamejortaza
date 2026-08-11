@@ -239,7 +239,8 @@ const StandEditor = ({ stand }) => {
   const [form, setForm] = React.useState(stand || {
     id: "st-" + Math.random().toString(36).slice(2, 6),
     nombre: "", municipio: "", region: "", direccion: "", correo: "",
-    descripcion: "", votos: { bueno: 0, regular: 0, malo: 0 },
+    descripcion: "", propietario: "", propietario_documento: "", nit: "", sitio_web: "",
+    logo: "", votos: { bueno: 0, regular: 0, malo: 0 },
     coords: { x: 0.5, y: 0.5 },
     color: "oklch(0.45 0.1 40)",
   });
@@ -259,6 +260,11 @@ const StandEditor = ({ stand }) => {
         direccion: form.direccion,
         correo: form.correo,
         descripcion: form.descripcion,
+        propietario: form.propietario,
+        propietario_documento: form.propietario_documento,
+        nit: form.nit,
+        sitio_web: form.sitio_web,
+        logo: form.logo || null,
         coords: form.coords,
         color: form.color,
       };
@@ -274,6 +280,13 @@ const StandEditor = ({ stand }) => {
       else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");
       else setError("No fue posible guardar: " + code);
     } finally { setBusy(false); }
+  };
+
+  // El logo se sube aparte y se guarda con el stand: un stand nuevo todavía no
+  // tiene id al que asociar el fichero.
+  const subirLogo = async (file) => {
+    const res = await window.LMTApi.subirLogoStand(file);
+    update("logo", res.logo || "");
   };
 
   const remove = async () => {
@@ -330,6 +343,36 @@ const StandEditor = ({ stand }) => {
             <label>Descripción corta</label>
             <textarea value={form.descripcion} onChange={e => update("descripcion", e.target.value)} rows={3} maxLength={800}/>
           </div>
+
+          {/* Los mismos datos que pide la inscripción: un stand y su promotor
+              son la misma cosa, y al verificar una solicitud el sistema
+              rellena justo estos campos. */}
+          <div className="grid-2" style={{ gap: 20 }}>
+            <div className="field">
+              <label>Propietario</label>
+              <input value={form.propietario} onChange={e => update("propietario", e.target.value)} maxLength={120} placeholder="Nombre completo"/>
+            </div>
+            <div className="field">
+              <label>Documento del propietario</label>
+              <input value={form.propietario_documento} onChange={e => update("propietario_documento", e.target.value)} maxLength={32} inputMode="numeric"/>
+            </div>
+          </div>
+          <div className="grid-2" style={{ gap: 20 }}>
+            <div className="field">
+              <label>NIT o RUT</label>
+              <input value={form.nit} onChange={e => update("nit", e.target.value)} maxLength={32}/>
+            </div>
+            <div className="field">
+              <label>Sitio web o red social</label>
+              <input type="url" value={form.sitio_web} onChange={e => update("sitio_web", e.target.value)} maxLength={255} placeholder="https://…"/>
+            </div>
+          </div>
+
+          <SubirImagen
+            actual={urlImagen(form.logo)}
+            etiqueta="Logo del producto"
+            cuadrada
+            onSubir={subirLogo}/>
 
           <div>
             <div className="mono" style={{ marginBottom: 12 }}>Color del sello</div>

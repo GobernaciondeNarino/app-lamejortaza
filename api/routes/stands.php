@@ -10,6 +10,7 @@ function register_routes_stands(\LMT\Router $r): void
     $r->get('/stands', function () {
         $rows = Db::pdo()->query(
             'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
+                    propietario, propietario_documento, nit, sitio_web, logo_path,
                     coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
              FROM stands ORDER BY id'
         )->fetchAll();
@@ -22,6 +23,7 @@ function register_routes_stands(\LMT\Router $r): void
         if (!$id) Response::error(400, 'bad_id');
         $stmt = Db::pdo()->prepare(
             'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
+                    propietario, propietario_documento, nit, sitio_web, logo_path,
                     coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
              FROM stands WHERE id = :id'
         );
@@ -37,9 +39,10 @@ function register_routes_stands(\LMT\Router $r): void
         $stand = stand_payload($b, true);
         $stmt = Db::pdo()->prepare(
             'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
+                                 propietario, propietario_documento, nit, sitio_web, logo_path,
                                  coords_x, coords_y, color)
              VALUES (:id, :nombre, :municipio, :region, :direccion, :correo, :descripcion,
-                     :cx, :cy, :color)'
+                     :prop, :propdoc, :nit, :web, :logo, :cx, :cy, :color)'
         );
         $stmt->execute([
             ':id'          => $stand['id'],
@@ -49,6 +52,11 @@ function register_routes_stands(\LMT\Router $r): void
             ':direccion'   => $stand['direccion'],
             ':correo'      => $stand['correo'],
             ':descripcion' => $stand['descripcion'],
+            ':prop'        => $stand['propietario'],
+            ':propdoc'     => $stand['propietario_documento'],
+            ':nit'         => $stand['nit'],
+            ':web'         => $stand['sitio_web'],
+            ':logo'        => $stand['logo_path'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
@@ -62,9 +70,14 @@ function register_routes_stands(\LMT\Router $r): void
         if (!$id) Response::error(400, 'bad_id');
         $b = Security::jsonBody();
         $stand = stand_payload($b, false);
+        // El logo se conserva si la petición no trae uno nuevo: el editor
+        // manda el formulario entero y, sin el COALESCE, guardar cualquier
+        // cambio de texto borraba la imagen que había subido el promotor.
         $stmt = Db::pdo()->prepare(
             'UPDATE stands SET nombre=:nombre, municipio=:municipio, region=:region,
                                 direccion=:direccion, correo=:correo, descripcion=:descripcion,
+                                propietario=:prop, propietario_documento=:propdoc,
+                                nit=:nit, sitio_web=:web, logo_path=COALESCE(:logo, logo_path),
                                 coords_x=:cx, coords_y=:cy, color=:color
              WHERE id=:id'
         );
@@ -75,12 +88,39 @@ function register_routes_stands(\LMT\Router $r): void
             ':direccion'   => $stand['direccion'],
             ':correo'      => $stand['correo'],
             ':descripcion' => $stand['descripcion'],
+            ':prop'        => $stand['propietario'],
+            ':propdoc'     => $stand['propietario_documento'],
+            ':nit'         => $stand['nit'],
+            ':web'         => $stand['sitio_web'],
+            ':logo'        => $stand['logo_path'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
             ':id'          => $id,
         ]);
         Response::ok(null);
+    });
+
+    /**
+     * Logo del stand subido desde el panel. Devuelve la ruta; el editor la
+     * manda después en el PUT/POST del stand. Se separa de la escritura del
+     * stand porque el editor de un stand NUEVO todavía no tiene id.
+     */
+    $r->post('/stands/logo', function () {
+        Security::requireAdmin();
+        if (empty($_FILES['archivo']) || !is_array($_FILES['archivo'])) {
+            Response::error(422, 'archivo_ausente');
+        }
+        try {
+            $ruta = \LMT\Uploads::imagen($_FILES['archivo'], 'stands');
+        } catch (\RuntimeException $e) {
+            Response::error(422, $e->getMessage());
+        }
+        Response::ok([
+            'logo'      => $ruta,
+            'max_bytes' => \LMT\Uploads::maxBytes(),
+            'max_dim'   => \LMT\Uploads::maxDim(),
+        ]);
     });
 
     $r->delete('/stands/:id', function (array $p) {
@@ -114,6 +154,15 @@ function stand_row_to_api(array $r): array
         'direccion'   => $esAdmin ? ($r['direccion'] ?? '') : '',
         'correo'      => $esAdmin ? ($r['correo'] ?? '') : '',
         'descripcion' => $r['descripcion'] ?? '',
+        // Los mismos campos que rellena el promotor al inscribirse: un stand y
+        // su promotor son la misma cosa y el panel edita lo mismo que él envió.
+        // El nombre y el documento del propietario identifican a una persona,
+        // así que siguen la regla del correo y la dirección.
+        'propietario'           => $esAdmin ? (string) ($r['propietario'] ?? '') : '',
+        'propietario_documento' => $esAdmin ? (string) ($r['propietario_documento'] ?? '') : '',
+        'nit'         => (string) ($r['nit'] ?? ''),
+        'sitio_web'   => (string) ($r['sitio_web'] ?? ''),
+        'logo'        => stand_ruta_publica($r['logo_path'] ?? null),
         'coords'      => [
             'x' => isset($r['coords_x']) ? (float)$r['coords_x'] : 0.5,
             'y' => isset($r['coords_y']) ? (float)$r['coords_y'] : 0.5,
@@ -142,6 +191,13 @@ function stand_payload(array $b, bool $needsId): array
     $descripcion = Validate::comment((string)($b['descripcion'] ?? ''), 800);
     $correo    = Validate::email($b['correo'] ?? null) ?? '';
 
+    $propietario           = Validate::nombre($b['propietario'] ?? null, 120);
+    $propietario_documento = Validate::documento($b['propietario_documento'] ?? null);
+    $nit                   = Validate::documento($b['nit'] ?? null);
+    $sitio_web             = Validate::url($b['sitio_web'] ?? null, 255);
+    // null = "no toques el logo". El UPDATE lo trata con COALESCE.
+    $logo_path             = stand_logo_reclamado($b['logo'] ?? null);
+
     $color = (string)($b['color'] ?? 'oklch(0.45 0.1 40)');
     if (!preg_match('/^oklch\([^)]{1,80}\)$/i', $color) && !preg_match('/^#[0-9a-f]{3,8}$/i', $color)) {
         $color = 'oklch(0.45 0.1 40)';
@@ -152,6 +208,31 @@ function stand_payload(array $b, bool $needsId): array
     $cx = max(0.0, min(1.0, $cx));
     $cy = max(0.0, min(1.0, $cy));
 
-    return compact('id', 'nombre', 'municipio', 'region', 'direccion', 'correo', 'descripcion', 'color')
-        + ['coords_x' => $cx, 'coords_y' => $cy];
+    return compact(
+        'id', 'nombre', 'municipio', 'region', 'direccion', 'correo', 'descripcion', 'color',
+        'propietario', 'propietario_documento', 'nit', 'sitio_web', 'logo_path'
+    ) + ['coords_x' => $cx, 'coords_y' => $cy];
+}
+
+/** Ruta de imagen que se puede devolver al cliente, o null. */
+function stand_ruta_publica(?string $ruta): ?string
+{
+    if (!is_string($ruta) || $ruta === '') return null;
+    return preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(jpg|png|webp)$#', $ruta) ? $ruta : null;
+}
+
+/**
+ * Logo que el editor dice haber subido.
+ *
+ * Se acepta sólo una ruta con la forma exacta que produce Uploads::imagen() y
+ * que además exista en disco: sin la comprobación, un administrador —o quien
+ * le robara la sesión— podría apuntar logo_path a cualquier fichero del
+ * servidor y luego pedirlo por HTTP.
+ */
+function stand_logo_reclamado($valor): ?string
+{
+    if (!is_string($valor) || $valor === '') return null;
+    if (!preg_match('#^uploads/(stands|inscripciones|logos)/[0-9a-f]{32}\.(jpg|png|webp)$#', $valor)) return null;
+    $abs = \LMT\Uploads::raiz() . '/' . substr($valor, strlen('uploads/'));
+    return is_file($abs) ? $valor : null;
 }

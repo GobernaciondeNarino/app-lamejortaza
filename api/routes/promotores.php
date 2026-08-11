@@ -151,8 +151,9 @@ function register_routes_promotores(\LMT\Router $r): void
         }
         $ruta = promotor_guardar_imagen('inscripciones');
         Response::ok([
-            'logo' => $ruta,
+            'logo'      => $ruta,
             'max_bytes' => Uploads::maxBytes(),
+            'max_dim'   => Uploads::maxDim(),
         ]);
     });
 

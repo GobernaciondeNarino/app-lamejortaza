@@ -32,7 +32,8 @@ final class Uploads
         return max(65536, (int) ($cfg['max_bytes'] ?? 3 * 1024 * 1024));
     }
 
-    private static function maxDim(): int
+    /** Lado máximo al que se reduce la imagen. Público: la interfaz lo anuncia. */
+    public static function maxDim(): int
     {
         $cfg = (array) Config::get('uploads', []);
         return max(320, min(4000, (int) ($cfg['max_dim'] ?? 1600)));

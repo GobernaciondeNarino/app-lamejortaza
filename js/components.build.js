@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 8d9f255a32e5747f
+// Huella de las fuentes: 2a03564ce9a5be7f
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -256,6 +256,166 @@ const calcScore = votos => {
   return (votos.bueno * 100 + votos.regular * 50) / total;
 };
 const totalVotos = votos => votos.bueno + votos.regular + votos.malo;
+const urlImagen = ruta => {
+  if (!ruta) return "";
+  if (/^(https?:)?\/\//.test(ruta) || ruta.startsWith("data:")) return ruta;
+  const base = (window.LMT_BASE_URL || "").replace(/\/$/, "");
+  return base + "/" + String(ruta).replace(/^\//, "");
+};
+const BloqueForm = ({
+  titulo,
+  nota,
+  children
+}) => React.createElement("fieldset", {
+  style: {
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-md)",
+    padding: "18px 16px",
+    margin: 0,
+    minWidth: 0
+  }
+}, React.createElement("legend", {
+  className: "mono",
+  style: {
+    padding: "0 8px"
+  }
+}, titulo), nota && React.createElement("p", {
+  style: {
+    fontSize: 13,
+    color: "var(--ink-3)",
+    lineHeight: 1.5,
+    margin: "0 0 16px"
+  }
+}, nota), React.createElement("div", {
+  style: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 18
+  }
+}, children));
+const LIMITES_IMAGEN = () => {
+  const u = window.LMT_BOOTSTRAP && window.LMT_BOOTSTRAP.uploads || {};
+  return {
+    maxBytes: u.maxBytes || 3 * 1024 * 1024,
+    maxDim: u.maxDim || 1600
+  };
+};
+const enMegas = bytes => (bytes / (1024 * 1024)).toFixed(bytes % (1024 * 1024) === 0 ? 0 : 1);
+const ayudaImagen = cuadrada => {
+  const {
+    maxBytes,
+    maxDim
+  } = LIMITES_IMAGEN();
+  return (cuadrada ? "Imagen cuadrada (misma altura que anchura). " : "") + `JPG, PNG o WEBP · máximo ${maxDim}×${maxDim} px y ${enMegas(maxBytes)} MB.` + (cuadrada ? " Si no es cuadrada se verá recortada." : "");
+};
+const SubirImagen = ({
+  actual,
+  onSubir,
+  etiqueta,
+  alto = 120,
+  cuadrada = false,
+  ayuda
+}) => {
+  const ref = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [nota, setNota] = React.useState("");
+  const elegir = async e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setError("");
+    setNota("");
+    const {
+      maxBytes,
+      maxDim
+    } = LIMITES_IMAGEN();
+    if (file.size > maxBytes) {
+      setError(`La imagen pesa ${enMegas(file.size)} MB y el máximo son ${enMegas(maxBytes)} MB. Reduce su tamaño e inténtalo de nuevo.`);
+      if (ref.current) ref.current.value = "";
+      return;
+    }
+    if (cuadrada && window.createImageBitmap) {
+      try {
+        const bmp = await createImageBitmap(file);
+        const proporcion = bmp.width / bmp.height;
+        const grande = Math.max(bmp.width, bmp.height);
+        bmp.close && bmp.close();
+        if (proporcion < 0.9 || proporcion > 1.1) {
+          setNota(`La imagen mide ${bmp.width}×${bmp.height}. Se recomienda cuadrada: se mostrará recortada al centro.`);
+        } else if (grande > maxDim) {
+          setNota(`Se reducirá a ${maxDim}×${maxDim} px al guardarla.`);
+        }
+      } catch (_) {}
+    }
+    setBusy(true);
+    try {
+      await onSubir(file);
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible subir la imagen."));
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+  return React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, etiqueta), React.createElement("div", {
+    style: {
+      border: "1px dashed var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      background: "var(--paper-2)",
+      flexWrap: "wrap"
+    }
+  }, actual ? React.createElement("img", {
+    src: actual,
+    alt: etiqueta,
+    style: {
+      height: alto,
+      width: alto,
+      objectFit: "cover",
+      borderRadius: "var(--r-sm)",
+      background: "var(--paper)"
+    }
+  }) : React.createElement(Placeholder, {
+    width: alto,
+    height: alto,
+    label: "sin imagen"
+  }), React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 180
+    }
+  }, React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: () => ref.current && ref.current.click()
+  }, busy ? "Subiendo…" : actual ? "Cambiar imagen" : "Subir imagen"), React.createElement("div", {
+    style: {
+      marginTop: 8,
+      fontSize: 12,
+      lineHeight: 1.5,
+      color: "var(--ink-3)"
+    }
+  }, ayuda || ayudaImagen(cuadrada)), React.createElement("input", {
+    ref: ref,
+    type: "file",
+    accept: "image/jpeg,image/png,image/webp",
+    onChange: elegir,
+    style: {
+      display: "none"
+    }
+  }))), nota && React.createElement(Aviso, {
+    tipo: "info"
+  }, nota), React.createElement(Aviso, null, error));
+};
 const ERRORES = {
   email_invalido: "El correo no es válido.",
   nombre_invalido: "Escribe tu nombre completo.",
@@ -343,7 +503,11 @@ Object.assign(window, {
   standUrl,
   ERRORES,
   mensajeError,
-  Aviso
+  Aviso,
+  SubirImagen,
+  ayudaImagen,
+  urlImagen,
+  BloqueForm
 });
 })();
 
@@ -908,6 +1072,11 @@ const StandEditor = ({
     direccion: "",
     correo: "",
     descripcion: "",
+    propietario: "",
+    propietario_documento: "",
+    nit: "",
+    sitio_web: "",
+    logo: "",
     votos: {
       bueno: 0,
       regular: 0,
@@ -938,6 +1107,11 @@ const StandEditor = ({
         direccion: form.direccion,
         correo: form.correo,
         descripcion: form.descripcion,
+        propietario: form.propietario,
+        propietario_documento: form.propietario_documento,
+        nit: form.nit,
+        sitio_web: form.sitio_web,
+        logo: form.logo || null,
         coords: form.coords,
         color: form.color
       };
@@ -950,6 +1124,10 @@ const StandEditor = ({
     } finally {
       setBusy(false);
     }
+  };
+  const subirLogo = async file => {
+    const res = await window.LMTApi.subirLogoStand(file);
+    update("logo", res.logo || "");
   };
   const remove = async () => {
     if (!confirmDelete || isNew) return;
@@ -1050,7 +1228,50 @@ const StandEditor = ({
     onChange: e => update("descripcion", e.target.value),
     rows: 3,
     maxLength: 800
-  })), React.createElement("div", null, React.createElement("div", {
+  })), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 20
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Propietario"), React.createElement("input", {
+    value: form.propietario,
+    onChange: e => update("propietario", e.target.value),
+    maxLength: 120,
+    placeholder: "Nombre completo"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Documento del propietario"), React.createElement("input", {
+    value: form.propietario_documento,
+    onChange: e => update("propietario_documento", e.target.value),
+    maxLength: 32,
+    inputMode: "numeric"
+  }))), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 20
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "NIT o RUT"), React.createElement("input", {
+    value: form.nit,
+    onChange: e => update("nit", e.target.value),
+    maxLength: 32
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Sitio web o red social"), React.createElement("input", {
+    type: "url",
+    value: form.sitio_web,
+    onChange: e => update("sitio_web", e.target.value),
+    maxLength: 255,
+    placeholder: "https://\u2026"
+  }))), React.createElement(SubirImagen, {
+    actual: urlImagen(form.logo),
+    etiqueta: "Logo del producto",
+    cuadrada: true,
+    onSubir: subirLogo
+  }), React.createElement("div", null, React.createElement("div", {
     className: "mono",
     style: {
       marginBottom: 12
@@ -3928,9 +4149,16 @@ const PromotorRegistroPage = () => {
     documento: "",
     municipio: "",
     empresa: "",
-    mensaje: ""
+    mensaje: "",
+    stand_nombre: "",
+    stand_region: "",
+    stand_direccion: "",
+    stand_descripcion: "",
+    stand_nit: "",
+    stand_sitio_web: ""
   };
   const [form, setForm] = React.useState(vacio);
+  const [logo, setLogo] = React.useState("");
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
@@ -3939,6 +4167,10 @@ const PromotorRegistroPage = () => {
     ...f,
     [k]: v
   }));
+  const subirLogo = async file => {
+    const res = await window.LMTApi.subirLogoInscripcion(file);
+    setLogo(res.logo || "");
+  };
   const enviar = async e => {
     e.preventDefault();
     setError("");
@@ -3951,6 +4183,10 @@ const PromotorRegistroPage = () => {
       setError(ERRORES.email_invalido);
       return;
     }
+    if (!form.municipio.trim()) {
+      setError("Indica el municipio de tu stand.");
+      return;
+    }
     if (!acepta) {
       setError(ERRORES.debe_aceptar_tratamiento_datos);
       return;
@@ -3959,7 +4195,9 @@ const PromotorRegistroPage = () => {
     try {
       await window.LMTApi.promotorRegistro({
         ...form,
+        stand_nombre: form.stand_nombre.trim() || form.empresa.trim(),
         email: sec.normalizeEmail(form.email),
+        logo: logo || null,
         acepta_datos: true
       });
       setEnviado(true);
@@ -3995,7 +4233,7 @@ const PromotorRegistroPage = () => {
         lineHeight: 1.65,
         marginBottom: 24
       }
-    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " tu contrase\xF1a para entrar al portal y cargar la informaci\xF3n de tu empresa y tus productos."), React.createElement("a", {
+    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " tu contrase\xF1a para entrar al portal y el", React.createElement("strong", null, " c\xF3digo QR de tu stand"), ", listo para imprimir y pegar en tu puesto."), React.createElement("a", {
       href: "/",
       "data-route": true,
       className: "btn btn-ghost",
@@ -4036,24 +4274,58 @@ const PromotorRegistroPage = () => {
       lineHeight: 1.6,
       marginBottom: 26
     }
-  }, "Completa tus datos. Un organizador revisar\xE1 la solicitud y te enviar\xE1 por correo el acceso al portal, donde podr\xE1s registrar tu empresa y tus productos."), React.createElement("form", {
+  }, "Completa los datos de tu stand. Un organizador revisar\xE1 la solicitud y te enviar\xE1 por correo tu acceso al portal y el c\xF3digo QR de tu stand, ya listo para imprimir."), React.createElement("form", {
     onSubmit: enviar,
     style: {
       display: "flex",
       flexDirection: "column",
       gap: 20
     }
+  }, React.createElement(BloqueForm, {
+    titulo: "Qui\xE9n eres",
+    nota: "La persona responsable del stand."
   }, React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Nombre completo *"), React.createElement("input", {
+  }, React.createElement("label", {
+    htmlFor: "in-nombre"
+  }, "Nombre completo del propietario *"), React.createElement("input", {
+    id: "in-nombre",
     value: form.nombre,
     onChange: e => set("nombre", e.target.value),
     maxLength: 120,
     required: true,
     autoComplete: "name"
   })), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Correo electr\xF3nico *"), React.createElement("input", {
+  }, React.createElement("label", {
+    htmlFor: "in-doc"
+  }, "Documento de identidad"), React.createElement("input", {
+    id: "in-doc",
+    value: form.documento,
+    onChange: e => set("documento", e.target.value),
+    maxLength: 32,
+    inputMode: "numeric"
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "C\xE9dula del propietario, sin puntos.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-tel"
+  }, "Tel\xE9fono"), React.createElement("input", {
+    id: "in-tel",
+    value: form.telefono,
+    onChange: e => set("telefono", e.target.value),
+    maxLength: 32,
+    inputMode: "tel",
+    autoComplete: "tel"
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-email"
+  }, "Correo electr\xF3nico *"), React.createElement("input", {
+    id: "in-email",
     type: "email",
     value: form.email,
     onChange: e => set("email", e.target.value),
@@ -4061,48 +4333,120 @@ const PromotorRegistroPage = () => {
     required: true,
     autoComplete: "email"
   }), React.createElement("span", {
-    className: "mono",
-    style: {
-      textTransform: "none",
-      letterSpacing: 0,
-      color: "var(--ink-3)"
-    }
-  }, "Aqu\xED llegar\xE1 tu contrase\xF1a de acceso.")), React.createElement("div", {
-    className: "grid-2"
+    className: "ayuda"
+  }, "Aqu\xED llegar\xE1n tu contrase\xF1a de acceso y el QR de tu stand."))), React.createElement(BloqueForm, {
+    titulo: "Tu stand",
+    nota: "Es lo que ver\xE1n los visitantes del festival."
   }, React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Tel\xE9fono"), React.createElement("input", {
-    value: form.telefono,
-    onChange: e => set("telefono", e.target.value),
-    maxLength: 32,
-    inputMode: "tel",
-    autoComplete: "tel"
-  })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Documento"), React.createElement("input", {
-    value: form.documento,
-    onChange: e => set("documento", e.target.value),
-    maxLength: 32,
-    inputMode: "numeric"
-  }))), React.createElement("div", {
-    className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Municipio"), React.createElement("input", {
-    value: form.municipio,
-    onChange: e => set("municipio", e.target.value),
-    maxLength: 80,
-    placeholder: "Sandon\xE1"
-  })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Empresa o finca"), React.createElement("input", {
+  }, React.createElement("label", {
+    htmlFor: "in-empresa"
+  }, "Empresa, finca o marca *"), React.createElement("input", {
+    id: "in-empresa",
     value: form.empresa,
     onChange: e => set("empresa", e.target.value),
     maxLength: 120,
+    required: true,
     placeholder: "Finca El Tambo"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-stand-nombre"
+  }, "Nombre del stand"), React.createElement("input", {
+    id: "in-stand-nombre",
+    value: form.stand_nombre,
+    onChange: e => set("stand_nombre", e.target.value),
+    maxLength: 80,
+    placeholder: form.empresa || "Igual al de la empresa"
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "D\xE9jalo vac\xEDo para usar el nombre de la empresa.")), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-mun"
+  }, "Municipio *"), React.createElement("input", {
+    id: "in-mun",
+    value: form.municipio,
+    onChange: e => set("municipio", e.target.value),
+    maxLength: 80,
+    required: true,
+    placeholder: "Sandon\xE1"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-region"
+  }, "Regi\xF3n"), React.createElement("input", {
+    id: "in-region",
+    value: form.stand_region,
+    onChange: e => set("stand_region", e.target.value),
+    maxLength: 80,
+    placeholder: "Occidente"
   }))), React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Cu\xE9ntanos de tu caf\xE9 (opcional)"), React.createElement("textarea", {
+  }, React.createElement("label", {
+    htmlFor: "in-dir"
+  }, "Direcci\xF3n"), React.createElement("input", {
+    id: "in-dir",
+    value: form.stand_direccion,
+    onChange: e => set("stand_direccion", e.target.value),
+    maxLength: 255,
+    placeholder: "Vereda El Ingenio"
+  })), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-nit"
+  }, "NIT o RUT"), React.createElement("input", {
+    id: "in-nit",
+    value: form.stand_nit,
+    onChange: e => set("stand_nit", e.target.value),
+    maxLength: 32
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Si est\xE1s constituido como empresa.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-web"
+  }, "Sitio web o red social"), React.createElement("input", {
+    id: "in-web",
+    type: "url",
+    value: form.stand_sitio_web,
+    onChange: e => set("stand_sitio_web", e.target.value),
+    maxLength: 255,
+    placeholder: "https://\u2026",
+    inputMode: "url"
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-desc"
+  }, "Descripci\xF3n del stand"), React.createElement("textarea", {
+    id: "in-desc",
+    rows: 3,
+    value: form.stand_descripcion,
+    onChange: e => set("stand_descripcion", e.target.value),
+    maxLength: 800,
+    placeholder: "Variedad, proceso, altura, historia de la finca\u2026",
+    style: {
+      border: "1px solid var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 12
+    }
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Se muestra en la ficha p\xFAblica de tu stand.")), React.createElement(SubirImagen, {
+    actual: logo ? urlImagen(logo) : "",
+    etiqueta: "Logo de tu producto",
+    cuadrada: true,
+    onSubir: subirLogo
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-msg"
+  }, "Mensaje para el organizador (opcional)"), React.createElement("textarea", {
+    id: "in-msg",
     rows: 2,
     value: form.mensaje,
     onChange: e => set("mensaje", e.target.value),
@@ -4355,85 +4699,6 @@ const PromotorCambioClave = ({
     }
   }, busy ? "Guardando…" : "Guardar y continuar →"))));
 };
-const SubirImagen = ({
-  actual,
-  onSubir,
-  etiqueta,
-  alto = 120
-}) => {
-  const ref = React.useRef(null);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState("");
-  const elegir = async e => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    setError("");
-    setBusy(true);
-    try {
-      await onSubir(file);
-    } catch (err) {
-      setError(mensajeError(err, "No fue posible subir la imagen."));
-    } finally {
-      setBusy(false);
-      if (ref.current) ref.current.value = "";
-    }
-  };
-  return React.createElement("div", null, React.createElement("div", {
-    className: "mono",
-    style: {
-      marginBottom: 8
-    }
-  }, etiqueta), React.createElement("div", {
-    style: {
-      border: "1px dashed var(--line-2)",
-      borderRadius: "var(--r-md)",
-      padding: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      background: "var(--paper-2)"
-    }
-  }, actual ? React.createElement("img", {
-    src: actual,
-    alt: etiqueta,
-    style: {
-      height: alto,
-      width: alto,
-      objectFit: "cover",
-      borderRadius: "var(--r-sm)",
-      background: "var(--paper)"
-    }
-  }) : React.createElement(Placeholder, {
-    width: alto,
-    height: alto,
-    label: "sin imagen"
-  }), React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, React.createElement("button", {
-    type: "button",
-    className: "btn btn-ghost",
-    disabled: busy,
-    onClick: () => ref.current && ref.current.click()
-  }, busy ? "Subiendo…" : actual ? "Cambiar imagen" : "Subir imagen"), React.createElement("div", {
-    className: "mono",
-    style: {
-      marginTop: 8,
-      color: "var(--ink-3)",
-      textTransform: "none",
-      letterSpacing: 0
-    }
-  }, "JPG, PNG o WEBP \xB7 m\xE1x. 3 MB"), React.createElement("input", {
-    ref: ref,
-    type: "file",
-    accept: "image/jpeg,image/png,image/webp",
-    onChange: elegir,
-    style: {
-      display: "none"
-    }
-  }))), React.createElement(Aviso, null, error));
-};
 const ProductoEditor = ({
   producto,
   onGuardar,
@@ -4668,8 +4933,6 @@ const PromotorPortalPage = ({
     }, "Salir")));
   }
   const p = datos.promotor;
-  const base = (window.LMT_BASE_URL || "").replace(/\/$/, "");
-  const urlImagen = r => r ? base + "/" + r : null;
   const guardarEmpresa = async body => {
     setDatos(await window.LMTApi.guardarEmpresa(body));
   };
@@ -4944,7 +5207,8 @@ const EmpresaEditor = ({
     }
   })), empresa ? React.createElement(SubirImagen, {
     actual: logoUrl,
-    etiqueta: "Logo de la empresa",
+    etiqueta: "Logo del producto o de la empresa",
+    cuadrada: true,
     onSubir: onLogo
   }) : React.createElement(Aviso, {
     tipo: "info"

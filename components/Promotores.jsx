@@ -35,13 +35,26 @@ const EstadoPill = ({ estado }) => {
 // ---------------------------------------------------------------------------
 
 const PromotorRegistroPage = () => {
-  const vacio = { nombre: "", email: "", telefono: "", documento: "", municipio: "", empresa: "", mensaje: "" };
+  // Un promotor y su stand son la misma cosa, así que aquí se pide de una vez
+  // todo lo que el stand necesita. Al verificar la solicitud el stand se crea
+  // solo, con estos datos y su QR, sin que nadie los vuelva a escribir.
+  const vacio = {
+    nombre: "", email: "", telefono: "", documento: "", municipio: "", empresa: "", mensaje: "",
+    stand_nombre: "", stand_region: "", stand_direccion: "", stand_descripcion: "",
+    stand_nit: "", stand_sitio_web: "",
+  };
   const [form, setForm] = React.useState(vacio);
+  const [logo, setLogo] = React.useState("");        // ruta devuelta por el servidor
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const subirLogo = async (file) => {
+    const res = await window.LMTApi.subirLogoInscripcion(file);
+    setLogo(res.logo || "");
+  };
 
   const enviar = async (e) => {
     e.preventDefault();
@@ -49,10 +62,20 @@ const PromotorRegistroPage = () => {
     const sec = window.LMTSecurity;
     if (!form.nombre.trim()) { setError(ERRORES.nombre_invalido); return; }
     if (!sec || !sec.isEmail(form.email.trim())) { setError(ERRORES.email_invalido); return; }
+    if (!form.municipio.trim()) { setError("Indica el municipio de tu stand."); return; }
     if (!acepta) { setError(ERRORES.debe_aceptar_tratamiento_datos); return; }
     setBusy(true);
     try {
-      await window.LMTApi.promotorRegistro({ ...form, email: sec.normalizeEmail(form.email), acepta_datos: true });
+      await window.LMTApi.promotorRegistro({
+        ...form,
+        // El nombre del stand cae al de la empresa si se deja en blanco; el
+        // backend hace lo mismo, pero así el resumen que ve el organizador ya
+        // viene completo.
+        stand_nombre: form.stand_nombre.trim() || form.empresa.trim(),
+        email: sec.normalizeEmail(form.email),
+        logo: logo || null,
+        acepta_datos: true,
+      });
       setEnviado(true);
     } catch (err) {
       setError(mensajeError(err, "No fue posible enviar tu solicitud."));
@@ -71,8 +94,8 @@ const PromotorRegistroPage = () => {
           </h2>
           <p style={{ color: "var(--ink-2)", lineHeight: 1.65, marginBottom: 24 }}>
             El equipo organizador revisará tu inscripción. Cuando quede aprobada te llegará
-            a <strong>{form.email}</strong> tu contraseña para entrar al portal y cargar la
-            información de tu empresa y tus productos.
+            a <strong>{form.email}</strong> tu contraseña para entrar al portal y el
+            <strong> código QR de tu stand</strong>, listo para imprimir y pegar en tu puesto.
           </p>
           <a href="/" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>← Volver al inicio</a>
         </div>
@@ -89,45 +112,88 @@ const PromotorRegistroPage = () => {
           Inscribe tu stand<br/>en el festival.
         </h1>
         <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.6, marginBottom: 26 }}>
-          Completa tus datos. Un organizador revisará la solicitud y te enviará por correo el
-          acceso al portal, donde podrás registrar tu empresa y tus productos.
+          Completa los datos de tu stand. Un organizador revisará la solicitud y te enviará por
+          correo tu acceso al portal y el código QR de tu stand, ya listo para imprimir.
         </p>
 
         <form onSubmit={enviar} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <BloqueForm titulo="Quién eres" nota="La persona responsable del stand.">
+            <div className="field">
+              <label htmlFor="in-nombre">Nombre completo del propietario *</label>
+              <input id="in-nombre" value={form.nombre} onChange={(e) => set("nombre", e.target.value)} maxLength={120} required autoComplete="name"/>
+            </div>
+            <div className="grid-2">
+              <div className="field">
+                <label htmlFor="in-doc">Documento de identidad</label>
+                <input id="in-doc" value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32} inputMode="numeric"/>
+                <span className="ayuda">Cédula del propietario, sin puntos.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="in-tel">Teléfono</label>
+                <input id="in-tel" value={form.telefono} onChange={(e) => set("telefono", e.target.value)} maxLength={32} inputMode="tel" autoComplete="tel"/>
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="in-email">Correo electrónico *</label>
+              <input id="in-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} maxLength={254} required autoComplete="email"/>
+              <span className="ayuda">Aquí llegarán tu contraseña de acceso y el QR de tu stand.</span>
+            </div>
+          </BloqueForm>
+
+          <BloqueForm titulo="Tu stand" nota="Es lo que verán los visitantes del festival.">
+            <div className="field">
+              <label htmlFor="in-empresa">Empresa, finca o marca *</label>
+              <input id="in-empresa" value={form.empresa} onChange={(e) => set("empresa", e.target.value)} maxLength={120} required placeholder="Finca El Tambo"/>
+            </div>
+            <div className="field">
+              <label htmlFor="in-stand-nombre">Nombre del stand</label>
+              <input id="in-stand-nombre" value={form.stand_nombre} onChange={(e) => set("stand_nombre", e.target.value)} maxLength={80}
+                placeholder={form.empresa || "Igual al de la empresa"}/>
+              <span className="ayuda">Déjalo vacío para usar el nombre de la empresa.</span>
+            </div>
+            <div className="grid-2">
+              <div className="field">
+                <label htmlFor="in-mun">Municipio *</label>
+                <input id="in-mun" value={form.municipio} onChange={(e) => set("municipio", e.target.value)} maxLength={80} required placeholder="Sandoná"/>
+              </div>
+              <div className="field">
+                <label htmlFor="in-region">Región</label>
+                <input id="in-region" value={form.stand_region} onChange={(e) => set("stand_region", e.target.value)} maxLength={80} placeholder="Occidente"/>
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="in-dir">Dirección</label>
+              <input id="in-dir" value={form.stand_direccion} onChange={(e) => set("stand_direccion", e.target.value)} maxLength={255} placeholder="Vereda El Ingenio"/>
+            </div>
+            <div className="grid-2">
+              <div className="field">
+                <label htmlFor="in-nit">NIT o RUT</label>
+                <input id="in-nit" value={form.stand_nit} onChange={(e) => set("stand_nit", e.target.value)} maxLength={32}/>
+                <span className="ayuda">Si estás constituido como empresa.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="in-web">Sitio web o red social</label>
+                <input id="in-web" type="url" value={form.stand_sitio_web} onChange={(e) => set("stand_sitio_web", e.target.value)} maxLength={255}
+                  placeholder="https://…" inputMode="url"/>
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="in-desc">Descripción del stand</label>
+              <textarea id="in-desc" rows={3} value={form.stand_descripcion} onChange={(e) => set("stand_descripcion", e.target.value)} maxLength={800}
+                placeholder="Variedad, proceso, altura, historia de la finca…"
+                style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
+              <span className="ayuda">Se muestra en la ficha pública de tu stand.</span>
+            </div>
+            <SubirImagen
+              actual={logo ? urlImagen(logo) : ""}
+              etiqueta="Logo de tu producto"
+              cuadrada
+              onSubir={subirLogo}/>
+          </BloqueForm>
+
           <div className="field">
-            <label>Nombre completo *</label>
-            <input value={form.nombre} onChange={(e) => set("nombre", e.target.value)} maxLength={120} required autoComplete="name"/>
-          </div>
-          <div className="field">
-            <label>Correo electrónico *</label>
-            <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} maxLength={254} required autoComplete="email"/>
-            <span className="mono" style={{ textTransform: "none", letterSpacing: 0, color: "var(--ink-3)" }}>
-              Aquí llegará tu contraseña de acceso.
-            </span>
-          </div>
-          <div className="grid-2">
-            <div className="field">
-              <label>Teléfono</label>
-              <input value={form.telefono} onChange={(e) => set("telefono", e.target.value)} maxLength={32} inputMode="tel" autoComplete="tel"/>
-            </div>
-            <div className="field">
-              <label>Documento</label>
-              <input value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32} inputMode="numeric"/>
-            </div>
-          </div>
-          <div className="grid-2">
-            <div className="field">
-              <label>Municipio</label>
-              <input value={form.municipio} onChange={(e) => set("municipio", e.target.value)} maxLength={80} placeholder="Sandoná"/>
-            </div>
-            <div className="field">
-              <label>Empresa o finca</label>
-              <input value={form.empresa} onChange={(e) => set("empresa", e.target.value)} maxLength={120} placeholder="Finca El Tambo"/>
-            </div>
-          </div>
-          <div className="field">
-            <label>Cuéntanos de tu café (opcional)</label>
-            <textarea rows={2} value={form.mensaje} onChange={(e) => set("mensaje", e.target.value)} maxLength={500}
+            <label htmlFor="in-msg">Mensaje para el organizador (opcional)</label>
+            <textarea id="in-msg" rows={2} value={form.mensaje} onChange={(e) => set("mensaje", e.target.value)} maxLength={500}
               style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
           </div>
 
@@ -282,49 +348,8 @@ const PromotorCambioClave = ({ onListo }) => {
 // 4. Portal del promotor
 // ---------------------------------------------------------------------------
 
-const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120 }) => {
-  const ref = React.useRef(null);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState("");
-
-  const elegir = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    setError(""); setBusy(true);
-    try {
-      await onSubir(file);
-    } catch (err) {
-      setError(mensajeError(err, "No fue posible subir la imagen."));
-    } finally {
-      setBusy(false);
-      if (ref.current) ref.current.value = "";
-    }
-  };
-
-  return (
-    <div>
-      <div className="mono" style={{ marginBottom: 8 }}>{etiqueta}</div>
-      <div style={{
-        border: "1px dashed var(--line-2)", borderRadius: "var(--r-md)", padding: 12,
-        display: "flex", alignItems: "center", gap: 14, background: "var(--paper-2)",
-      }}>
-        {actual
-          ? <img src={actual} alt={etiqueta} style={{ height: alto, width: alto, objectFit: "cover", borderRadius: "var(--r-sm)", background: "var(--paper)" }}/>
-          : <Placeholder width={alto} height={alto} label="sin imagen"/>}
-        <div style={{ flex: 1 }}>
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => ref.current && ref.current.click()}>
-            {busy ? "Subiendo…" : (actual ? "Cambiar imagen" : "Subir imagen")}
-          </button>
-          <div className="mono" style={{ marginTop: 8, color: "var(--ink-3)", textTransform: "none", letterSpacing: 0 }}>
-            JPG, PNG o WEBP · máx. 3 MB
-          </div>
-          <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" onChange={elegir} style={{ display: "none" }}/>
-        </div>
-      </div>
-      <Aviso>{error}</Aviso>
-    </div>
-  );
-};
+// SubirImagen vive en components/Shared.jsx: el mismo control aparece en la
+// inscripción, en el portal del promotor y en el editor de stands del panel.
 
 const ProductoEditor = ({ producto, onGuardar, onBorrar, onFoto }) => {
   const vacio = { nombre: "", variedad: "", proceso: "", altura_msnm: "", notas_cata: "", presentacion: "", precio: "", descripcion: "", publicado: true };
@@ -450,9 +475,7 @@ const PromotorPortalPage = ({ onSalir }) => {
     );
   }
 
-  const p = datos.promotor;
-  const base = (window.LMT_BASE_URL || "").replace(/\/$/, "");
-  const urlImagen = (r) => (r ? base + "/" + r : null);
+  const p = datos.promotor;   // urlImagen vive en Shared.jsx
 
   const guardarEmpresa = async (body) => { setDatos(await window.LMTApi.guardarEmpresa(body)); };
   const subirLogo = async (file) => { setDatos(await window.LMTApi.subirLogo(file)); };
@@ -591,7 +614,7 @@ const EmpresaEditor = ({ empresa, logoUrl, onGuardar, onLogo }) => {
       </div>
 
       {empresa
-        ? <SubirImagen actual={logoUrl} etiqueta="Logo de la empresa" onSubir={onLogo}/>
+        ? <SubirImagen actual={logoUrl} etiqueta="Logo del producto o de la empresa" cuadrada onSubir={onLogo}/>
         : <Aviso tipo="info">Guarda los datos y después podrás subir el logo.</Aviso>}
 
       <Aviso>{error}</Aviso>

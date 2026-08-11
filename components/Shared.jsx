@@ -134,6 +134,124 @@ const calcScore = (votos) => {
 const totalVotos = (votos) => votos.bueno + votos.regular + votos.malo;
 
 // ---------------------------------------------------------------------------
+// Subida de imágenes (logo del producto, foto del producto)
+//
+// Vive en Shared.jsx porque el mismo control aparece en tres sitios: la
+// inscripción pública, el portal del promotor y el editor de stands del panel.
+// ---------------------------------------------------------------------------
+
+/** Ruta relativa devuelta por el servidor ("uploads/…") → URL servible. */
+const urlImagen = (ruta) => {
+  if (!ruta) return "";
+  if (/^(https?:)?\/\//.test(ruta) || ruta.startsWith("data:")) return ruta;
+  const base = (window.LMT_BASE_URL || "").replace(/\/$/, "");
+  return base + "/" + String(ruta).replace(/^\//, "");
+};
+
+/**
+ * Grupo de campos con título. Los formularios largos —la inscripción pide ya
+ * todo lo del stand— se leen fatal en un teléfono como una lista plana de
+ * veinte campos; agrupados, se sabe siempre en qué parte se va.
+ */
+const BloqueForm = ({ titulo, nota, children }) => (
+  <fieldset style={{
+    border: "1px solid var(--line)", borderRadius: "var(--r-md)",
+    padding: "18px 16px", margin: 0, minWidth: 0,
+  }}>
+    <legend className="mono" style={{ padding: "0 8px" }}>{titulo}</legend>
+    {nota && <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5, margin: "0 0 16px" }}>{nota}</p>}
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>{children}</div>
+  </fieldset>
+);
+
+const LIMITES_IMAGEN = () => {
+  const u = (window.LMT_BOOTSTRAP && window.LMT_BOOTSTRAP.uploads) || {};
+  return { maxBytes: u.maxBytes || 3 * 1024 * 1024, maxDim: u.maxDim || 1600 };
+};
+
+const enMegas = (bytes) => (bytes / (1024 * 1024)).toFixed(bytes % (1024 * 1024) === 0 ? 0 : 1);
+
+/** Texto de ayuda con los límites reales del servidor. */
+const ayudaImagen = (cuadrada) => {
+  const { maxBytes, maxDim } = LIMITES_IMAGEN();
+  return (cuadrada ? "Imagen cuadrada (misma altura que anchura). " : "")
+    + `JPG, PNG o WEBP · máximo ${maxDim}×${maxDim} px y ${enMegas(maxBytes)} MB.`
+    + (cuadrada ? " Si no es cuadrada se verá recortada." : "");
+};
+
+const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, ayuda }) => {
+  const ref = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [nota, setNota] = React.useState("");
+
+  const elegir = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setError(""); setNota("");
+    const { maxBytes, maxDim } = LIMITES_IMAGEN();
+
+    // Se comprueba aquí además de en el servidor: subir 8 MB por datos móviles
+    // para que al final el servidor los rechace es tiempo y plan de datos del
+    // caficultor. El servidor sigue siendo quien decide.
+    if (file.size > maxBytes) {
+      setError(`La imagen pesa ${enMegas(file.size)} MB y el máximo son ${enMegas(maxBytes)} MB. Reduce su tamaño e inténtalo de nuevo.`);
+      if (ref.current) ref.current.value = "";
+      return;
+    }
+
+    if (cuadrada && window.createImageBitmap) {
+      try {
+        const bmp = await createImageBitmap(file);
+        const proporcion = bmp.width / bmp.height;
+        const grande = Math.max(bmp.width, bmp.height);
+        bmp.close && bmp.close();
+        if (proporcion < 0.9 || proporcion > 1.1) {
+          setNota(`La imagen mide ${bmp.width}×${bmp.height}. Se recomienda cuadrada: se mostrará recortada al centro.`);
+        } else if (grande > maxDim) {
+          setNota(`Se reducirá a ${maxDim}×${maxDim} px al guardarla.`);
+        }
+      } catch (_) { /* si el navegador no puede leerla, decide el servidor */ }
+    }
+
+    setBusy(true);
+    try {
+      await onSubir(file);
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible subir la imagen."));
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+
+  return (
+    <div>
+      <div className="mono" style={{ marginBottom: 8 }}>{etiqueta}</div>
+      <div style={{
+        border: "1px dashed var(--line-2)", borderRadius: "var(--r-md)", padding: 12,
+        display: "flex", alignItems: "center", gap: 14, background: "var(--paper-2)", flexWrap: "wrap",
+      }}>
+        {actual
+          ? <img src={actual} alt={etiqueta} style={{ height: alto, width: alto, objectFit: "cover", borderRadius: "var(--r-sm)", background: "var(--paper)" }}/>
+          : <Placeholder width={alto} height={alto} label="sin imagen"/>}
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => ref.current && ref.current.click()}>
+            {busy ? "Subiendo…" : (actual ? "Cambiar imagen" : "Subir imagen")}
+          </button>
+          <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5, color: "var(--ink-3)" }}>
+            {ayuda || ayudaImagen(cuadrada)}
+          </div>
+          <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" onChange={elegir} style={{ display: "none" }}/>
+        </div>
+      </div>
+      {nota && <Aviso tipo="info">{nota}</Aviso>}
+      <Aviso>{error}</Aviso>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Errores y avisos
 //
 // Viven aquí y no en Promotores.jsx porque el módulo de cuentas de
@@ -222,4 +340,5 @@ Object.assign(window, {
   LogoTaza, Wordmark, MontanasSilueta, SelloCircular, Placeholder, QRCode,
   BarraVotos, calcScore, totalVotos, standUrl,
   ERRORES, mensajeError, Aviso,
+  SubirImagen, ayudaImagen, urlImagen, BloqueForm,
 });

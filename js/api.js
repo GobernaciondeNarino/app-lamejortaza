@@ -96,6 +96,11 @@
       direccion: s.direccion,
       correo: s.correo,
       descripcion: s.descripcion,
+      propietario: s.propietario || "",
+      propietario_documento: s.propietario_documento || "",
+      nit: s.nit || "",
+      sitio_web: s.sitio_web || "",
+      logo: s.logo || "",
       coords: s.coords || { x: 0.5, y: 0.5 },
       color: s.color || "oklch(0.45 0.1 40)",
       votos: s.votos || { bueno: 0, regular: 0, malo: 0 },
@@ -212,6 +217,16 @@
     await ensureCsrf();
     return request("/promotores/logo", { method: "POST", body: archivoFormData(file) });
   }
+  /** Logo durante la inscripción: sin sesión, con su propio límite por IP. */
+  async function subirLogoInscripcion(file) {
+    await ensureCsrf();
+    return request("/promotores/logo-inscripcion", { method: "POST", body: archivoFormData(file) });
+  }
+  /** Logo de un stand desde el panel de administración. */
+  async function subirLogoStand(file) {
+    await ensureCsrf();
+    return request("/stands/logo", { method: "POST", body: archivoFormData(file) });
+  }
   async function subirFotoProducto(id, file) {
     await ensureCsrf();
     return request("/promotores/productos/" + id + "/foto", { method: "POST", body: archivoFormData(file) });
@@ -304,6 +319,8 @@
     actualizarProducto,
     borrarProducto,
     subirLogo,
+    subirLogoInscripcion,
+    subirLogoStand,
     subirFotoProducto,
     listarPromotores,
     verPromotor,
