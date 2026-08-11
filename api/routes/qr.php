@@ -35,7 +35,11 @@ function register_routes_qr(\LMT\Router $r): void
         }
 
         header('Content-Type: image/png');
-        header('Cache-Control: public, max-age=3600');
+        // Privada, no compartida: el contenido depende de la configuración del
+        // sitio y no queremos que un proxy sirva a otros una versión que se
+        // generó en circunstancias distintas.
+        header('Cache-Control: private, max-age=600');
+        header('Vary: Host');
         header('Content-Length: ' . strlen($png));
         header('Content-Disposition: inline; filename="qr-' . $id . '.png"');
         echo $png;
@@ -54,22 +58,10 @@ function register_routes_qr(\LMT\Router $r): void
  */
 function qr_stand_url(string $id): string
 {
-    // 1) Override explícito (debe incluir el subdirectorio si aplica).
-    $override = rtrim((string) Config::get('public_base_url', ''), '/');
-    if ($override !== '') {
-        return $override . '/s/' . $id;
-    }
-
-    // 2) Derivar del request (esquema + host + ruta base de la app).
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-    $scheme = $https ? 'https' : 'http';
-    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-
-    // Ruta base = directorio que contiene /api/. SCRIPT_NAME suele ser
-    // "/<subdir>/api/index.php"; quitamos el sufijo "/api/<archivo>.php".
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/api/index.php'));
-    $appBase = rtrim((string) preg_replace('#/api/[^/]*$#', '', $scriptName), '/');
-
-    return $scheme . '://' . $host . $appBase . '/s/' . $id;
+    // El host NO puede salir de la cabecera Host: estos QR se imprimen y se
+    // pegan en los stands. Con Host manipulado (y la respuesta cacheada
+    // públicamente durante una hora) se generaban carteles con el sello de la
+    // Gobernación que llevaban al sitio del atacante a recolectar correos.
+    // Security::baseUrlPublica() sólo acepta el host si está en allowed_origins.
+    return \LMT\Security::baseUrlPublica() . '/s/' . $id;
 }

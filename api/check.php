@@ -10,9 +10,9 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 // SÓLO debe confirmar "PHP corre" sin revelar detalles del servidor. No se
 // exponen rutas absolutas (DOCUMENT_ROOT), software del servidor ni la URI:
 // esos datos ayudan a un atacante a hacer reconocimiento dirigido.
+// Ni siquiera la versión de PHP: es lo primero que mira quien busca un
+// exploit conocido, y para saber "¿corre PHP aquí?" basta con que responda.
 echo json_encode([
-    'ok'          => true,
-    'php_version' => PHP_VERSION,
-    'sapi'        => PHP_SAPI,
-    'message'     => 'PHP corre correctamente en api/.',
+    'ok'      => true,
+    'message' => 'PHP corre correctamente en api/.',
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

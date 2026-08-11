@@ -32,7 +32,16 @@ error_reporting(E_ALL);
     if (!is_file($cfgFile)) return; // pre-instalación: nada sensible que proteger
     if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
     $cfg = @include $cfgFile;
-    if (!is_array($cfg)) return; // config rota: diag debe poder reportarlo
+    // FALLA CERRADO. Antes, un config.php ilegible o corrupto hacía `return`
+    // y el volcado completo quedaba abierto — justo el escenario que produce
+    // el endurecimiento de permisos que uno recomienda (chmod 600). Si el
+    // config existe pero no se puede leer, no hay forma de comprobar el token,
+    // así que se deniega.
+    if (!is_array($cfg)) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'forbidden'], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
     $expected = (string) ($cfg['diag_token'] ?? '');
     $sent = isset($_GET['token']) && is_string($_GET['token']) ? $_GET['token'] : '';
     if ($expected === '' || !hash_equals($expected, $sent)) {

@@ -93,15 +93,26 @@ function register_routes_stands(\LMT\Router $r): void
     });
 }
 
+/**
+ * Proyección de un stand hacia el cliente.
+ *
+ * El correo y la dirección del caficultor son datos de contacto de una persona
+ * concreta (Ley 1581/2012) y salían en el GET /stands público: bastaba una
+ * petición sin sesión para llevarse el directorio completo de participantes y
+ * montar una campaña de phishing dirigida. Ahora sólo viajan si quien pregunta
+ * es administrador; el resto del contenido (nombre, municipio, descripción,
+ * votos) sigue siendo público porque es el propósito del festival.
+ */
 function stand_row_to_api(array $r): array
 {
+    $esAdmin = \LMT\Session::isAdmin();
     return [
         'id'          => $r['id'],
         'nombre'      => $r['nombre'],
         'municipio'   => $r['municipio'],
         'region'      => $r['region'] ?? '',
-        'direccion'   => $r['direccion'] ?? '',
-        'correo'      => $r['correo'] ?? '',
+        'direccion'   => $esAdmin ? ($r['direccion'] ?? '') : '',
+        'correo'      => $esAdmin ? ($r['correo'] ?? '') : '',
         'descripcion' => $r['descripcion'] ?? '',
         'coords'      => [
             'x' => isset($r['coords_x']) ? (float)$r['coords_x'] : 0.5,
