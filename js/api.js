@@ -96,6 +96,11 @@
       direccion: s.direccion,
       correo: s.correo,
       descripcion: s.descripcion,
+      propietario: s.propietario || "",
+      propietario_documento: s.propietario_documento || "",
+      nit: s.nit || "",
+      sitio_web: s.sitio_web || "",
+      logo: s.logo || "",
       coords: s.coords || { x: 0.5, y: 0.5 },
       color: s.color || "oklch(0.45 0.1 40)",
       votos: s.votos || { bueno: 0, regular: 0, malo: 0 },
@@ -212,6 +217,16 @@
     await ensureCsrf();
     return request("/promotores/logo", { method: "POST", body: archivoFormData(file) });
   }
+  /** Logo durante la inscripción: sin sesión, con su propio límite por IP. */
+  async function subirLogoInscripcion(file) {
+    await ensureCsrf();
+    return request("/promotores/logo-inscripcion", { method: "POST", body: archivoFormData(file) });
+  }
+  /** Logo de un stand desde el panel de administración. */
+  async function subirLogoStand(file) {
+    await ensureCsrf();
+    return request("/stands/logo", { method: "POST", body: archivoFormData(file) });
+  }
   async function subirFotoProducto(id, file) {
     await ensureCsrf();
     return request("/promotores/productos/" + id + "/foto", { method: "POST", body: archivoFormData(file) });
@@ -237,6 +252,25 @@
   async function listarEmails(limit)        { return request("/admin/emails" + (limit ? "?limit=" + encodeURIComponent(limit) : "")); }
   async function getVitrina()               { return request("/vitrina"); }
 
+  // Administradores (sólo propietario)
+  async function listarAdmins()             { return request("/admin/administradores"); }
+  async function crearAdmin(b)              { await ensureCsrf(); return request("/admin/administradores", { method: "POST", body: b }); }
+  async function actualizarAdmin(id, b)     { await ensureCsrf(); return request("/admin/administradores/" + id, { method: "PUT", body: b }); }
+  async function reponerClaveAdmin(id)      { await ensureCsrf(); return request("/admin/administradores/" + id + "/clave", { method: "POST" }); }
+  async function borrarAdmin(id)            { await ensureCsrf(); return request("/admin/administradores/" + id, { method: "DELETE" }); }
+
+  /** Cambio de la propia contraseña de administrador. */
+  async function cambiarClaveAdmin(actual, nueva) {
+    await ensureCsrf();
+    const data = await request("/auth/password", {
+      method: "POST",
+      body: { password_actual: actual, password_nueva: nueva },
+    });
+    if (user) user = Object.assign({}, user, { must_change: false });
+    dispatchAuth();
+    return data;
+  }
+
   async function ensureCsrf() {
     if (csrf) return;
     try { const me = await request("/auth/me"); csrf = me.csrf || ""; } catch (_) {}
@@ -247,11 +281,36 @@
     const payload = window.LMTSecurity.buildVotePayload(raw);
     if (!window.LMTSecurity.canVote(payload.stand)) throw new Error("rate_limited");
     await ensureCsrf();
-    await request("/votos", { method: "POST", body: payload });
+    const res = await request("/votos", { method: "POST", body: payload });
     window.LMTSecurity.markVote(payload.stand);
     pollDashboard();
-    return payload;
+    // Se devuelve la respuesta del servidor (trae el testigo del perfil) junto
+    // con lo enviado, que es lo que esperaban los llamadores anteriores.
+    return Object.assign({}, payload, res || {});
   }
+
+  // -----------------------------------------------------------------------
+  // Perfil del visitante
+  // -----------------------------------------------------------------------
+
+  async function getPerfilVisitante(correo, token) {
+    return request("/visitantes/perfil?correo=" + encodeURIComponent(correo) + "&t=" + encodeURIComponent(token));
+  }
+  async function guardarPerfilVisitante(correo, token, body) {
+    await ensureCsrf();
+    return request("/visitantes/perfil", { method: "PUT", body: Object.assign({ correo, token }, body) });
+  }
+  async function borrarPerfilVisitante(correo, token) {
+    await ensureCsrf();
+    return request("/visitantes/perfil", { method: "DELETE", body: { correo, token } });
+  }
+  async function pedirEnlacePerfil(correo) {
+    await ensureCsrf();
+    return request("/visitantes/enlace", { method: "POST", body: { correo } });
+  }
+  async function opcionesVisitante()        { return request("/visitantes/opciones"); }
+  async function resumenVisitantes()        { return request("/admin/visitantes/resumen"); }
+  async function expectativasVisitantes()   { return request("/admin/visitantes/expectativas"); }
 
   async function getPasaporte(correo) {
     return request("/pasaportes/" + correo);   // urlFor codifica; no duplicar
@@ -285,6 +344,8 @@
     actualizarProducto,
     borrarProducto,
     subirLogo,
+    subirLogoInscripcion,
+    subirLogoStand,
     subirFotoProducto,
     listarPromotores,
     verPromotor,
@@ -295,7 +356,20 @@
     vincularStand,
     listarEmails,
     getVitrina,
+    listarAdmins,
+    crearAdmin,
+    actualizarAdmin,
+    reponerClaveAdmin,
+    borrarAdmin,
+    cambiarClaveAdmin,
     submitVote,
+    getPerfilVisitante,
+    guardarPerfilVisitante,
+    borrarPerfilVisitante,
+    pedirEnlacePerfil,
+    opcionesVisitante,
+    resumenVisitantes,
+    expectativasVisitantes,
     getPasaporte,
     listStands,
     getStand,
@@ -303,6 +377,41 @@
     updateStand,
     deleteStand,
     pollDashboard,
+  };
+
+  /**
+   * Testigo del perfil del visitante, guardado en este navegador.
+   *
+   * No es una sesión: es la prueba —emitida por el servidor al votar— de que
+   * quien está delante controla ese correo. Vive en localStorage porque el
+   * visitante no tiene cuenta y volverá desde el mismo teléfono; quien cambie
+   * de dispositivo pide el enlace a su buzón.
+   */
+  window.LMTPerfil = {
+    guardar(correo, token) {
+      try {
+        localStorage.setItem("lmt.perfil.correo", String(correo || "").toLowerCase());
+        localStorage.setItem("lmt.perfil.token", String(token || ""));
+      } catch (_) { /* navegación privada: el perfil se abre por el enlace del correo */ }
+    },
+    leer() {
+      try {
+        return {
+          correo: localStorage.getItem("lmt.perfil.correo") || "",
+          token:  localStorage.getItem("lmt.perfil.token")  || "",
+        };
+      } catch (_) { return { correo: "", token: "" }; }
+    },
+    tieneTestigo() {
+      const c = window.LMTPerfil.leer();
+      return !!(c.correo && c.token);
+    },
+    olvidar() {
+      try {
+        localStorage.removeItem("lmt.perfil.correo");
+        localStorage.removeItem("lmt.perfil.token");
+      } catch (_) {}
+    },
   };
 
   // Arranque automático

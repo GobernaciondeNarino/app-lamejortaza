@@ -90,7 +90,13 @@ final class Mailer
      * @param string $tipo etiqueta para la bitácora (p.ej. 'clave_promotor')
      * @return bool true si el transporte aceptó el mensaje.
      */
-    public static function send(string $to, string $toName, string $subject, string $html, string $text, string $tipo = 'generico'): bool
+    /**
+     * @param array $adjuntos Lista de ['nombre','mime','datos','cid'?]. Si el
+     *        elemento trae 'cid', se incrusta en el HTML (referenciable con
+     *        src="cid:EL_CID") en vez de aparecer como adjunto suelto; es lo
+     *        que permite meter el QR del stand DENTRO del correo.
+     */
+    public static function send(string $to, string $toName, string $subject, string $html, string $text, string $tipo = 'generico', array $adjuntos = []): bool
     {
         $cfg  = self::cfg();
         $dest = self::addr($to);
@@ -108,6 +114,7 @@ final class Mailer
 
         $subject   = self::sanitizeHeader($subject);
         $boundary  = 'lmt-' . bin2hex(random_bytes(12));
+        $boundaryRel = 'lmtrel-' . bin2hex(random_bytes(12));
         $fromName  = self::encodeHeader((string) $cfg['from_name']);
         $toHeader  = ($toName !== '' ? self::encodeHeader($toName) . ' ' : '') . '<' . $dest . '>';
 
@@ -118,12 +125,15 @@ final class Mailer
             'Message-ID: <' . bin2hex(random_bytes(16)) . '@' . self::hostname($from) . '>',
             'X-Mailer: La Mejor Taza',
             'Auto-Submitted: auto-generated',
-            'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
+            $adjuntos
+                ? 'Content-Type: multipart/related; boundary="' . $boundaryRel . '"; type="multipart/alternative"'
+                : 'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
         ];
         $replyTo = self::addr((string) $cfg['reply_to']);
         if ($replyTo !== '') $headers[] = 'Reply-To: <' . $replyTo . '>';
 
         $body = self::cuerpoMime($boundary, $text, $html);
+        if ($adjuntos) $body = self::envolverConAdjuntos($boundaryRel, $boundary, $body, $adjuntos);
 
         $transport = (string) $cfg['transport'];
         $ok = false;
@@ -165,6 +175,44 @@ final class Mailer
         $out .= 'Content-Transfer-Encoding: base64' . $nl . $nl;
         $out .= chunk_split(base64_encode($html), 76, $nl) . $nl;
         $out .= '--' . $boundary . '--' . $nl;
+        return $out;
+    }
+
+    /**
+     * Envuelve el cuerpo alternativo (texto + HTML) junto a las imágenes
+     * incrustadas en un multipart/related, que es lo que entienden los
+     * clientes de correo para mostrar un <img src="cid:...">.
+     */
+    private static function envolverConAdjuntos(string $bRel, string $bAlt, string $cuerpoAlt, array $adjuntos): string
+    {
+        $nl = "\r\n";
+        $out  = '--' . $bRel . $nl;
+        $out .= 'Content-Type: multipart/alternative; boundary="' . $bAlt . '"' . $nl . $nl;
+        $out .= $cuerpoAlt . $nl;
+
+        foreach ($adjuntos as $a) {
+            $nombre = self::sanitizeHeader((string) ($a['nombre'] ?? 'adjunto.bin'));
+            // El nombre acaba dentro de una cabecera: fuera todo lo que no sea
+            // un nombre de fichero sencillo.
+            $nombre = preg_replace('/[^A-Za-z0-9._-]/', '', $nombre) ?: 'adjunto.bin';
+            $mime   = self::sanitizeHeader((string) ($a['mime'] ?? 'application/octet-stream'));
+            $datos  = (string) ($a['datos'] ?? '');
+            if ($datos === '') continue;
+
+            $out .= '--' . $bRel . $nl;
+            $out .= 'Content-Type: ' . $mime . '; name="' . $nombre . '"' . $nl;
+            $out .= 'Content-Transfer-Encoding: base64' . $nl;
+            if (!empty($a['cid'])) {
+                $cid = preg_replace('/[^A-Za-z0-9._@-]/', '', (string) $a['cid']) ?: 'img';
+                $out .= 'Content-ID: <' . $cid . '>' . $nl;
+                $out .= 'Content-Disposition: inline; filename="' . $nombre . '"' . $nl;
+            } else {
+                $out .= 'Content-Disposition: attachment; filename="' . $nombre . '"' . $nl;
+            }
+            $out .= $nl . chunk_split(base64_encode($datos), 76, $nl) . $nl;
+        }
+
+        $out .= '--' . $bRel . '--' . $nl;
         return $out;
     }
 

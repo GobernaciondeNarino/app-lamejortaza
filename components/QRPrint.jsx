@@ -1,6 +1,6 @@
 // Vista QR para imprimir (A5) + selector + acción de impresión real.
 
-const QRPoster = ({ stand, variant = "vertical" }) => {
+const QRPoster = ({ stand, variant = "vertical", paraImprimir = false }) => {
   const url = standUrl(stand.id);
   return (
     <div className="qr-poster" style={{
@@ -37,7 +37,7 @@ const QRPoster = ({ stand, variant = "vertical" }) => {
       </div>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16, border: "1px solid var(--line)", borderRadius: "var(--r-md)", position: "relative", background: "#fff" }}>
-        <QRCode data={url} size={240} fg="#111111" bg="#ffffff"/>
+        <QRCode data={url} size={240} fg="#111111" bg="#ffffff" ansioso={paraImprimir}/>
         <div className="mono" style={{ marginTop: 14, color: "var(--ink-2)", textAlign: "center", maxWidth: 320, wordBreak: "break-all" }}>{url}</div>
         <div style={{ position: "absolute", top: -20, right: -20 }}>
           <SelloCircular stand={stand} size={80} rotation={12}/>
@@ -61,19 +61,70 @@ const QRPoster = ({ stand, variant = "vertical" }) => {
   );
 };
 
+/**
+ * Hojas que se mandan a la impresora.
+ *
+ * Van en un portal colgado directamente de <body>, NO dentro del panel. Antes
+ * los carteles vivían dentro del marco de vista previa y la hoja de impresión
+ * ocultaba ese marco con `display: none`: se llevaba por delante a sus propios
+ * hijos y de la impresora salía una hoja en blanco. Colgando de <body> basta
+ * con ocultar los demás hermanos, y no hay ningún ancestro que pueda esconder
+ * el cartel sin querer.
+ */
+const QRHojas = ({ stands }) => {
+  if (!stands || stands.length === 0) return null;
+  return ReactDOM.createPortal(
+    <div className="qr-imprimible">
+      {stands.map((s) => (
+        <div key={s.id} className="qr-hoja"><QRPoster stand={s} paraImprimir/></div>
+      ))}
+    </div>,
+    document.body
+  );
+};
+
+/** Espera a que las imágenes de la hoja estén cargadas (o a que se agote el plazo). */
+const esperarImagenes = (raiz, msMax = 8000) => {
+  const imgs = Array.from((raiz || document).querySelectorAll("img"));
+  const pendientes = imgs.filter((i) => !i.complete || i.naturalWidth === 0);
+  if (pendientes.length === 0) return Promise.resolve();
+  return Promise.race([
+    Promise.all(pendientes.map((img) => new Promise((listo) => {
+      img.addEventListener("load", listo, { once: true });
+      img.addEventListener("error", listo, { once: true });
+    }))),
+    new Promise((listo) => setTimeout(listo, msMax)),
+  ]);
+};
+
 const QRPrintView = ({ stands }) => {
   const [selected, setSelected] = React.useState(stands[0] ? stands[0].id : null);
-  const [printAll, setPrintAll] = React.useState(false);
+  const [hojas, setHojas] = React.useState([]);       // lo que hay montado para imprimir
+  const [preparando, setPreparando] = React.useState("");
   const stand = stands.find((s) => s.id === selected) || stands[0];
 
+  // Imprimir es el objetivo de esta pantalla, así que el camino es explícito:
+  // montar las hojas → esperar a que los QR estén descargados → llamar a
+  // print(). Sin la espera, "imprimir todos" salía con los códigos en blanco
+  // porque el navegador aún no había pedido las imágenes.
+  const imprimir = React.useCallback(async (lista) => {
+    if (!lista.length) return;
+    setPreparando(lista.length > 1 ? `Preparando ${lista.length} carteles…` : "Preparando el cartel…");
+    setHojas(lista);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await esperarImagenes(document.querySelector(".qr-imprimible"));
+    setPreparando("");
+    window.print();
+  }, []);
+
+  // Las hojas se desmontan al terminar el diálogo de impresión, no antes: en
+  // Chrome el diálogo es asíncrono y quitarlas demasiado pronto vaciaba la
+  // previsualización.
   React.useEffect(() => {
-    if (!printAll) return;
-    const t = setTimeout(() => {
-      window.print();
-      setPrintAll(false);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [printAll]);
+    const alTerminar = () => setHojas([]);
+    window.addEventListener("afterprint", alTerminar);
+    return () => window.removeEventListener("afterprint", alTerminar);
+  }, []);
 
   if (!stand) {
     return (
@@ -87,18 +138,7 @@ const QRPrintView = ({ stands }) => {
 
   return (
     <div className="admin-page qr-print-screen">
-      <style>{`
-        @media print {
-          @page { size: A5; margin: 0; }
-          body { background: #fff !important; }
-          .qr-print-screen aside, .qr-print-screen .mono, .qr-print-screen h1, .qr-print-screen .qr-frame, .lmt-admin-aside { display: none !important; }
-          .qr-print-screen { padding: 0 !important; }
-          .qr-print-page { display: block !important; page-break-after: always; padding: 0; background: #fff; }
-          .qr-poster { box-shadow: none !important; border: none !important; transform: none !important; margin: 0 auto; }
-          aside, header { display: none !important; }
-        }
-      `}</style>
-
+      <QRHojas stands={hojas}/>
       <div className="mono">Códigos QR · Imprimir y pegar</div>
       <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "4px 0 22px" }}>
         Carteles A5
@@ -125,18 +165,26 @@ const QRPrintView = ({ stands }) => {
           </div>
           <div style={{ marginTop: 18, padding: 16, border: "1px solid var(--line)", borderRadius: "var(--r-md)" }}>
             <div className="mono" style={{ marginBottom: 8 }}>Acciones</div>
-            <button className="btn btn-primary" onClick={() => window.print()} style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}>
+            <button className="btn btn-primary" disabled={!!preparando}
+              onClick={() => imprimir([stand])}
+              style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}>
               🖨 Imprimir este cartel
             </button>
-            <button className="btn btn-ghost" onClick={() => setPrintAll(true)} style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}>
+            <button className="btn btn-ghost" disabled={!!preparando}
+              onClick={() => imprimir(stands)}
+              style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}>
               Imprimir todos ({stands.length})
             </button>
             <a href={standUrl(stand.id)} target="_blank" rel="noopener" className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", marginBottom: 8, textDecoration: "none" }}>
               Probar URL del QR ↗
             </a>
+            {preparando && (
+              <div className="mono" role="status" style={{ color: "var(--grano)", marginTop: 4 }}>{preparando}</div>
+            )}
             <div className="nota-menor" style={{ color: "var(--ink-3)", marginTop: 8, lineHeight: 1.5 }}>
-              Cartel A5 · 148 × 210 mm · Papel offset mate recomendado.<br/>
-              Para PDF: imprimir → "Guardar como PDF".
+              Un cartel A5 (148 × 210 mm) por hoja. Papel offset mate recomendado.<br/>
+              Si tu impresora tiene A4, marca «Ajustar al papel» en el diálogo.<br/>
+              Para PDF: imprimir → «Guardar como PDF».
             </div>
           </div>
         </aside>
@@ -148,13 +196,7 @@ const QRPrintView = ({ stands }) => {
           backgroundSize: "16px 16px",
           backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
         }}>
-          {printAll ? (
-            stands.map((s) => (
-              <div key={s.id} className="qr-print-page"><QRPoster stand={s}/></div>
-            ))
-          ) : (
-            <QRPoster stand={stand}/>
-          )}
+          <QRPoster stand={stand}/>
         </div>
       </div>
     </div>

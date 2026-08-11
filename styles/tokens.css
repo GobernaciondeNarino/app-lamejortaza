@@ -83,6 +83,11 @@ input, textarea, select { font-family: inherit; color: inherit; }
 }
 .field input:focus, .field textarea:focus { border-bottom-color: var(--ink); }
 .field textarea { resize: vertical; min-height: 60px; }
+/* Texto de ayuda bajo un campo: qué formato, qué tamaño, para qué sirve. */
+.field .ayuda {
+  font-size: 12px; line-height: 1.5; color: var(--ink-3);
+  text-transform: none; letter-spacing: 0;
+}
 
 /* Divider con estrellita */
 .divider-stamp {
@@ -209,6 +214,16 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .seccion { padding-left: 32px; padding-right: 32px; }
 @media (max-width: 760px) { .seccion { padding-left: 16px; padding-right: 16px; } }
 
+/* El pasaporte aprovecha todo el ancho del teléfono: .mobile-inner limita a
+   460px, que en un móvil grande deja franjas muertas a los lados. */
+@media (max-width: 719px) {
+  /* 6px, no 12: en portrait el libro está limitado por el ANCHO de la pantalla
+     —nunca por el alto—, así que cada píxel de relleno lateral sale
+     directamente del tamaño del pasaporte. */
+  .pasaporte-vista .mobile-inner { max-width: none; padding-left: 6px; padding-right: 6px; }
+  .pasaporte-vista { padding-left: 4px !important; padding-right: 4px !important; }
+}
+
 /* El libro del pasaporte.
    La proporción 0.72 derivaba el alto del ancho, así que en horizontal el
    lienzo salía de 708x983 px dentro de una ventana de 360 px de alto: se veía
@@ -217,7 +232,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
    y el libro entero cabe siempre en pantalla junto a sus controles. */
 .libro-marco {
   aspect-ratio: 0.72;
-  max-width: min(100%, calc(64dvh * 0.72));
+  /* 78dvh: el libro manda en la pantalla. Con 64 quedaba legible pero
+     pequeño, y es el contenido principal de esta vista, no un adorno. El tope
+     sigue existiendo para que los controles ←/→ nunca queden fuera. */
+  max-width: min(100%, calc(78dvh * 0.72));
   margin-inline: auto;
   perspective: 1400px;
 }
@@ -238,7 +256,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
      como contenido — y su único hijo está posicionado en absoluto, o sea 0. */
   .pasaporte-horizontal .libro-marco {
     margin-top: 0 !important;
-    width: calc(76dvh * 0.72);
+    width: calc(82dvh * 0.72);
     max-width: none;
   }
   /* Los controles no deben repartirse a lo ancho de media pantalla: se
@@ -320,16 +338,61 @@ input, textarea, select { font-family: inherit; color: inherit; }
     margin-right: -176px; margin-bottom: -249px;
   }
 }
-/* Al imprimir, ni escalado ni recorte: vuelve a ser un A5 exacto. */
+/* Hoja de impresión de los carteles QR.
+   ---------------------------------------------------------------------------
+   El contenedor .qr-imprimible cuelga de <body> (portal de React), no del
+   panel. Así basta con ocultar a sus hermanos: antes se ocultaba el marco de
+   vista previa —que era quien CONTENÍA los carteles— y de la impresora salía
+   una hoja en blanco.
+
+   En pantalla no se ve nunca; sólo existe para la impresora. */
+.qr-imprimible { display: none; }
+
 @media print {
-  .qr-frame { height: auto !important; overflow: visible !important; padding: 0 !important; }
-  .qr-frame .qr-poster { transform: none !important; }
+  @page { size: A5 portrait; margin: 0; }
+
+  /* Sólo el área imprimible. `body > *` alcanza al #root entero de una vez. */
+  body > *:not(.qr-imprimible) { display: none !important; }
+  .qr-imprimible { display: block !important; }
+
+  html, body {
+    background: #fff !important;
+    margin: 0 !important; padding: 0 !important;
+    min-height: 0 !important; height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Una hoja por cartel, centrado y a tamaño de página. */
+  .qr-hoja {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100vh; overflow: hidden;
+    break-after: page; page-break-after: always;
+  }
+  .qr-hoja:last-child { break-after: auto; page-break-after: auto; }
+
+  /* El cartel se diseña a 420×594 px para verse en pantalla; al imprimir se
+     amplía hasta llenar el A5 dejando un margen para recortar y pegar. */
+  .qr-hoja .qr-poster {
+    transform: scale(1.25); transform-origin: center center;
+    box-shadow: none !important; border: none !important;
+    /* Fondo blanco: el papel crema de la pantalla, impreso, es un A5 entero de
+       tinta de fondo por cada stand. */
+    background: #fff !important;
+  }
+
+  /* Sin esto el navegador descarta fondos e imprime el sello sin color. */
+  .qr-imprimible, .qr-imprimible * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 /* Objetivos táctiles: 44px es el mínimo cómodo con el dedo. */
 @media (pointer: coarse) {
-  .btn { min-height: 44px; }
-  button, a.btn { touch-action: manipulation; }
+  /* `select` incluido: los desplegables de perfil y de estado quedaban en 35px
+     de alto y con el dedo se fallaba al primer intento. */
+  .btn, button, select { min-height: 44px; }
+  button, a.btn, select { touch-action: manipulation; }
 }
 
 /* iOS hace zoom automático al enfocar un input de menos de 16px. Ese zoom

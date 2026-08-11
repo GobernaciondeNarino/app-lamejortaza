@@ -62,6 +62,17 @@ function register_routes_promotores(\LMT\Router $r): void
         $mensaje   = Validate::texto($b['mensaje'] ?? null, 500);
         $acepta    = Validate::bool($b['acepta_datos'] ?? null) === true;
 
+        // Datos del stand. Un promotor y su stand son la misma cosa, así que el
+        // formulario público pide ya todo lo que el stand necesita y al
+        // verificar no hay que volver a escribirlo.
+        $standNombre  = Validate::nombre($b['stand_nombre'] ?? null, 80) ?? $empresa;
+        $standRegion  = Validate::nombre($b['stand_region'] ?? null, 80);
+        $standDir     = Validate::texto($b['stand_direccion'] ?? null, 255);
+        $standDesc    = Validate::texto($b['stand_descripcion'] ?? null, 800);
+        $standNit     = Validate::documento($b['stand_nit'] ?? null);
+        $standWeb     = Validate::url($b['stand_sitio_web'] ?? null, 255);
+        $logo         = promotor_logo_reclamado($b['logo'] ?? null);
+
         if (!$email)  Response::error(422, 'email_invalido');
         if (!$nombre) Response::error(422, 'nombre_invalido');
         if (!$acepta) Response::error(422, 'debe_aceptar_tratamiento_datos');
@@ -82,20 +93,30 @@ function register_routes_promotores(\LMT\Router $r): void
         try {
             $ins = $pdo->prepare(
                 'INSERT INTO promotores (email, nombre, documento, telefono, municipio,
-                                         empresa_tentativa, mensaje, estado, acepta_datos, ip_hash,
+                                         empresa_tentativa, mensaje, stand_nombre, stand_region,
+                                         stand_direccion, stand_descripcion, stand_nit,
+                                         stand_sitio_web, logo_path, estado, acepta_datos, ip_hash,
                                          created_at, updated_at)
-                 VALUES (:e, :n, :doc, :tel, :mun, :emp, :msg, \'pendiente\', 1, :ip,
+                 VALUES (:e, :n, :doc, :tel, :mun, :emp, :msg, :sn, :sr, :sd, :sdesc, :snit,
+                         :sweb, :logo, \'pendiente\', 1, :ip,
                          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
             );
             $ins->execute([
-                ':e'   => $email,
-                ':n'   => $nombre,
-                ':doc' => $documento,
-                ':tel' => $telefono,
-                ':mun' => $municipio,
-                ':emp' => $empresa,
-                ':msg' => $mensaje !== '' ? $mensaje : null,
-                ':ip'  => RateLimit::ipHash(),
+                ':e'     => $email,
+                ':n'     => $nombre,
+                ':doc'   => $documento,
+                ':tel'   => $telefono,
+                ':mun'   => $municipio,
+                ':emp'   => $empresa,
+                ':msg'   => $mensaje !== '' ? $mensaje : null,
+                ':sn'    => $standNombre,
+                ':sr'    => $standRegion,
+                ':sd'    => $standDir !== '' ? $standDir : null,
+                ':sdesc' => $standDesc !== '' ? $standDesc : null,
+                ':snit'  => $standNit,
+                ':sweb'  => $standWeb,
+                ':logo'  => $logo,
+                ':ip'    => RateLimit::ipHash(),
             ]);
         } catch (\PDOException $e) {
             // Carrera con otra petición sobre el mismo correo: mismo desenlace
@@ -111,6 +132,29 @@ function register_routes_promotores(\LMT\Router $r): void
         promotores_avisar_admins($nombre, $email, (string) $municipio);
 
         Response::ok(['recibido' => true]);
+    });
+
+    /**
+     * Logo del producto durante la INSCRIPCIÓN, es decir, sin sesión.
+     *
+     * Aceptar ficheros de un anónimo es lo más delicado del módulo. Se apoya en
+     * tres cosas: Uploads::imagen() decide el tipo por el contenido y
+     * re-codifica la imagen (lo que destruye cualquier carga útil escondida),
+     * el nombre es aleatorio, y este endpoint tiene su propio límite por IP.
+     * Los ficheros van a uploads/inscripciones/ hasta que se verifique la
+     * solicitud; los de solicitudes que nunca se aprueban se pueden borrar sin
+     * riesgo (ver db/limpiar-inscripciones.php).
+     */
+    $r->post('/promotores/logo-inscripcion', function () {
+        if (!RateLimit::hit('promotor_logo_publico', RateLimit::ipHash())) {
+            Response::error(429, 'rate_limited');
+        }
+        $ruta = promotor_guardar_imagen('inscripciones');
+        Response::ok([
+            'logo'      => $ruta,
+            'max_bytes' => Uploads::maxBytes(),
+            'max_dim'   => Uploads::maxDim(),
+        ]);
     });
 
     $r->post('/promotores/login', function () {
@@ -675,32 +719,139 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo)
     $expira = date('Y-m-d H:i:s', time() + LMT_CLAVE_TEMPORAL_HORAS * 3600);
     $admin = Session::user();
 
+    // El stand se crea AQUÍ, con lo que el promotor escribió al inscribirse.
+    // Promotor y stand son la misma entidad: separarlos obligaría al
+    // organizador a teclear otra vez unos datos que ya tiene delante.
+    $stand = promotor_asegurar_stand($pdo, $row);
+
     $pdo->prepare(
         'UPDATE promotores SET password_hash = :h, must_change_password = 1, password_expira_at = :exp,
                                estado = \'verificado\', intentos_fallidos = 0, bloqueado_hasta = NULL,
                                verificado_por = :adm, verificado_at = CURRENT_TIMESTAMP,
-                               motivo = NULL, updated_at = CURRENT_TIMESTAMP
+                               stand_id = :sid, motivo = NULL, updated_at = CURRENT_TIMESTAMP
          WHERE id = :id'
     )->execute([
         ':h'   => Security::hashPassword($clave),
         ':exp' => $expira,
         ':adm' => $admin['id'] ?? null,
+        ':sid' => $stand['id'] ?? null,
         ':id'  => (int) $row['id'],
     ]);
 
-    $pl = Correos::credenciales((string) $row['nombre'], (string) $row['email'], $clave, LMT_CLAVE_TEMPORAL_HORAS);
-    $enviado = Mailer::send((string) $row['email'], (string) $row['nombre'], $pl['asunto'], $pl['html'], $pl['texto'], $tipoCorreo);
+    // QR del stand incrustado en el correo. Si falla la generación no se
+    // aborta el envío: la clave es lo imprescindible, el QR es una comodidad
+    // y el organizador siempre lo puede reimprimir desde /admin/qr.
+    $adjuntos = [];
+    if (!empty($stand['id'])) {
+        try {
+            $adjuntos[] = [
+                'nombre' => 'qr-' . $stand['id'] . '.png',
+                'mime'   => 'image/png',
+                'datos'  => \LMT\QrCode::png(Security::baseUrlPublica() . '/s/' . $stand['id'], 8, 4),
+                'cid'    => 'qrstand',
+            ];
+        } catch (\Throwable $e) {
+            error_log('[lmt][promotores][qr] ' . $e->getMessage());
+        }
+    }
+
+    $pl = Correos::credenciales((string) $row['nombre'], (string) $row['email'], $clave, LMT_CLAVE_TEMPORAL_HORAS, $stand);
+    $enviado = Mailer::send((string) $row['email'], (string) $row['nombre'], $pl['asunto'], $pl['html'], $pl['texto'], $tipoCorreo, $adjuntos);
 
     $salida = [
         'estado'         => 'verificado',
         'correo_enviado' => $enviado,
         'expira_en'      => $expira,
+        'stand_id'       => $stand['id'] ?? null,
     ];
     if (!$enviado) {
         $salida['clave_temporal'] = $clave;
         $salida['aviso'] = 'El correo no pudo enviarse. Entrega esta clave al promotor por un canal seguro y revisa la configuración de correo.';
     }
     return $salida;
+}
+
+/**
+ * Devuelve el stand del promotor, creándolo a partir del borrador de la
+ * inscripción si todavía no existe. Idempotente: si ya está vinculado, sólo
+ * refresca los datos que el promotor aportó.
+ */
+function promotor_asegurar_stand(\PDO $pdo, array $row): array
+{
+    $promotorId = (int) $row['id'];
+    $sel = $pdo->prepare(
+        'SELECT stand_id, nombre, documento, telefono, municipio, email,
+                stand_nombre, stand_region, stand_direccion, stand_descripcion,
+                stand_nit, stand_sitio_web, logo_path, empresa_tentativa
+         FROM promotores WHERE id = :id'
+    );
+    $sel->execute([':id' => $promotorId]);
+    $p = $sel->fetch();
+    if (!$p) return [];
+
+    $nombreStand = (string) ($p['stand_nombre'] ?: $p['empresa_tentativa'] ?: $p['nombre']);
+    $municipio   = (string) ($p['municipio'] ?: 'Nariño');
+
+    $datos = [
+        ':nombre' => mb_substr($nombreStand, 0, 80, 'UTF-8'),
+        ':mun'    => mb_substr($municipio, 0, 80, 'UTF-8'),
+        ':reg'    => $p['stand_region'] ?: null,
+        ':dir'    => $p['stand_direccion'] ?: null,
+        ':correo' => $p['email'],
+        ':desc'   => $p['stand_descripcion'] ?: null,
+        ':prop'   => $p['nombre'] ?: null,
+        ':propdoc'=> $p['documento'] ?: null,
+        ':nit'    => $p['stand_nit'] ?: null,
+        ':web'    => $p['stand_sitio_web'] ?: null,
+        ':logo'   => promotor_ruta_publica($p['logo_path'] ?? null),
+    ];
+
+    if (!empty($p['stand_id'])) {
+        $pdo->prepare(
+            'UPDATE stands SET nombre=:nombre, municipio=:mun, region=:reg, direccion=:dir,
+                               correo=:correo, descripcion=:desc, propietario=:prop,
+                               propietario_documento=:propdoc, nit=:nit, sitio_web=:web,
+                               logo_path=COALESCE(:logo, logo_path)
+             WHERE id=:id'
+        )->execute($datos + [':id' => $p['stand_id']]);
+        return ['id' => (string) $p['stand_id'], 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun']];
+    }
+
+    $id = promotor_id_stand_libre($pdo, $nombreStand);
+    $pdo->prepare(
+        'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
+                             propietario, propietario_documento, nit, sitio_web, logo_path,
+                             coords_x, coords_y, color)
+         VALUES (:id, :nombre, :mun, :reg, :dir, :correo, :desc, :prop, :propdoc, :nit, :web,
+                 :logo, 0.5, 0.5, :color)'
+    )->execute($datos + [':id' => $id, ':color' => promotor_color_stand($id)]);
+
+    return ['id' => $id, 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun']];
+}
+
+/** Identificador legible y libre para el stand, derivado del nombre. */
+function promotor_id_stand_libre(\PDO $pdo, string $nombre): string
+{
+    $base = Validate::plegarAscii($nombre);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base) ?? '';
+    $base = trim((string) $base, '-');
+    if (mb_strlen($base) < 2) $base = 'stand';
+    $base = mb_substr($base, 0, 24, 'UTF-8');
+
+    $chk = $pdo->prepare('SELECT 1 FROM stands WHERE id = :id');
+    foreach (array_merge([''], range(2, 60)) as $sufijo) {
+        $id = $sufijo === '' ? $base : $base . '-' . $sufijo;
+        $chk->execute([':id' => $id]);
+        if (!$chk->fetchColumn()) return $id;
+    }
+    return 'stand-' . bin2hex(random_bytes(4));
+}
+
+/** Color estable derivado del id, para que cada stand se distinga en el mapa. */
+function promotor_color_stand(string $id): string
+{
+    $tono = hexdec(substr(md5($id), 0, 2)) % 360;
+    return 'oklch(0.48 0.1 ' . $tono . ')';
 }
 
 /** Suma un intento fallido y bloquea la cuenta si se pasa del umbral. */
@@ -782,6 +933,20 @@ function promotor_guardar_imagen(string $sub): string
         Response::error(422, $e->getMessage());
     }
     return ''; // inalcanzable: Response::error termina la petición
+}
+
+/**
+ * Valida la referencia al logo que el formulario de inscripción dice haber
+ * subido. Sólo se acepta una ruta con la forma exacta que produce
+ * Uploads::imagen() dentro de uploads/inscripciones/ y que además EXISTA: si no
+ * se comprobara, cualquiera podría apuntar a un fichero arbitrario del disco.
+ */
+function promotor_logo_reclamado($valor): ?string
+{
+    if (!is_string($valor) || $valor === '') return null;
+    if (!preg_match('#^uploads/inscripciones/[0-9a-f]{32}\.(jpg|png|webp)$#', $valor)) return null;
+    $abs = Uploads::raiz() . '/' . substr($valor, strlen('uploads/'));
+    return is_file($abs) ? $valor : null;
 }
 
 /** Ruta de imagen lista para el cliente, o null si no hay o no es válida. */

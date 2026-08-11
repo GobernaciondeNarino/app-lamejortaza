@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 171d649d49f3319a
+// Huella de las fuentes: 6a1f965362635180
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -182,7 +182,7 @@ const Placeholder = ({
     alignItems: "center",
     justifyContent: "center",
     fontFamily: "var(--font-mono)",
-    fontSize: 10,
+    fontSize: 12,
     color: "var(--ink-3)",
     textTransform: "uppercase",
     letterSpacing: "0.1em",
@@ -196,7 +196,8 @@ const standUrl = standId => {
 const QRCode = ({
   data = "st-01",
   size = 140,
-  bg = "#ffffff"
+  bg = "#ffffff",
+  ansioso = false
 }) => {
   const raw = String(data == null ? "" : data);
   const m = raw.match(/\/s\/([a-z0-9\-]{2,32})/i);
@@ -218,7 +219,8 @@ const QRCode = ({
       imageRendering: "pixelated",
       borderRadius: 4
     },
-    loading: "lazy"
+    loading: ansioso ? "eager" : "lazy",
+    decoding: ansioso ? "sync" : "async"
   });
 };
 const BarraVotos = ({
@@ -256,6 +258,240 @@ const calcScore = votos => {
   return (votos.bueno * 100 + votos.regular * 50) / total;
 };
 const totalVotos = votos => votos.bueno + votos.regular + votos.malo;
+const urlImagen = ruta => {
+  if (!ruta) return "";
+  if (/^(https?:)?\/\//.test(ruta) || ruta.startsWith("data:")) return ruta;
+  const base = (window.LMT_BASE_URL || "").replace(/\/$/, "");
+  return base + "/" + String(ruta).replace(/^\//, "");
+};
+const BloqueForm = ({
+  titulo,
+  nota,
+  children
+}) => React.createElement("fieldset", {
+  style: {
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-md)",
+    padding: "18px 16px",
+    margin: 0,
+    minWidth: 0
+  }
+}, React.createElement("legend", {
+  className: "mono",
+  style: {
+    padding: "0 8px"
+  }
+}, titulo), nota && React.createElement("p", {
+  style: {
+    fontSize: 13,
+    color: "var(--ink-3)",
+    lineHeight: 1.5,
+    margin: "0 0 16px"
+  }
+}, nota), React.createElement("div", {
+  style: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 18
+  }
+}, children));
+const LIMITES_IMAGEN = () => {
+  const u = window.LMT_BOOTSTRAP && window.LMT_BOOTSTRAP.uploads || {};
+  return {
+    maxBytes: u.maxBytes || 3 * 1024 * 1024,
+    maxDim: u.maxDim || 1600
+  };
+};
+const enMegas = bytes => (bytes / (1024 * 1024)).toFixed(bytes % (1024 * 1024) === 0 ? 0 : 1);
+const ayudaImagen = cuadrada => {
+  const {
+    maxBytes,
+    maxDim
+  } = LIMITES_IMAGEN();
+  return (cuadrada ? "Imagen cuadrada (misma altura que anchura). " : "") + `JPG, PNG o WEBP · máximo ${maxDim}×${maxDim} px y ${enMegas(maxBytes)} MB.` + (cuadrada ? " Si no es cuadrada se verá recortada." : "");
+};
+const SubirImagen = ({
+  actual,
+  onSubir,
+  etiqueta,
+  alto = 120,
+  cuadrada = false,
+  ayuda
+}) => {
+  const ref = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [nota, setNota] = React.useState("");
+  const elegir = async e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setError("");
+    setNota("");
+    const {
+      maxBytes,
+      maxDim
+    } = LIMITES_IMAGEN();
+    if (file.size > maxBytes) {
+      setError(`La imagen pesa ${enMegas(file.size)} MB y el máximo son ${enMegas(maxBytes)} MB. Reduce su tamaño e inténtalo de nuevo.`);
+      if (ref.current) ref.current.value = "";
+      return;
+    }
+    if (cuadrada && window.createImageBitmap) {
+      try {
+        const bmp = await createImageBitmap(file);
+        const proporcion = bmp.width / bmp.height;
+        const grande = Math.max(bmp.width, bmp.height);
+        bmp.close && bmp.close();
+        if (proporcion < 0.9 || proporcion > 1.1) {
+          setNota(`La imagen mide ${bmp.width}×${bmp.height}. Se recomienda cuadrada: se mostrará recortada al centro.`);
+        } else if (grande > maxDim) {
+          setNota(`Se reducirá a ${maxDim}×${maxDim} px al guardarla.`);
+        }
+      } catch (_) {}
+    }
+    setBusy(true);
+    try {
+      await onSubir(file);
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible subir la imagen."));
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+  return React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, etiqueta), React.createElement("div", {
+    style: {
+      border: "1px dashed var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      background: "var(--paper-2)",
+      flexWrap: "wrap"
+    }
+  }, actual ? React.createElement("img", {
+    src: actual,
+    alt: etiqueta,
+    style: {
+      height: alto,
+      width: alto,
+      objectFit: "cover",
+      borderRadius: "var(--r-sm)",
+      background: "var(--paper)"
+    }
+  }) : React.createElement(Placeholder, {
+    width: alto,
+    height: alto,
+    label: "sin imagen"
+  }), React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 180
+    }
+  }, React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: () => ref.current && ref.current.click()
+  }, busy ? "Subiendo…" : actual ? "Cambiar imagen" : "Subir imagen"), React.createElement("div", {
+    style: {
+      marginTop: 8,
+      fontSize: 12,
+      lineHeight: 1.5,
+      color: "var(--ink-3)"
+    }
+  }, ayuda || ayudaImagen(cuadrada)), React.createElement("input", {
+    ref: ref,
+    type: "file",
+    accept: "image/jpeg,image/png,image/webp",
+    onChange: elegir,
+    style: {
+      display: "none"
+    }
+  }))), nota && React.createElement(Aviso, {
+    tipo: "info"
+  }, nota), React.createElement(Aviso, null, error));
+};
+const ERRORES = {
+  email_invalido: "El correo no es válido.",
+  nombre_invalido: "Escribe tu nombre completo.",
+  debe_aceptar_tratamiento_datos: "Debes autorizar el tratamiento de tus datos para continuar.",
+  invalid_credentials: "Usuario o contraseña incorrectos.",
+  cuenta_bloqueada: "Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.",
+  cuenta_suspendida: "Tu cuenta está suspendida. Comunícate con el equipo organizador.",
+  solicitud_rechazada: "Tu solicitud no fue aprobada.",
+  pendiente_de_verificacion: "Tu solicitud aún está en revisión.",
+  password_expirada: "La contraseña temporal caducó. Pide al organizador que te la reenvíe.",
+  password_actual_incorrecta: "La contraseña actual no coincide.",
+  password_corta: "La contraseña debe tener al menos 10 caracteres.",
+  password_larga: "La contraseña es demasiado larga.",
+  password_simple: "Combina mayúsculas, minúsculas, números y símbolos.",
+  password_predecible: "Evita tu nombre, tu correo o palabras del festival.",
+  password_repetida: "La nueva contraseña debe ser distinta de la actual.",
+  password_change_required: "Primero debes cambiar tu contraseña temporal.",
+  rate_limited: "Demasiadas solicitudes seguidas. Espera un momento.",
+  nombre_empresa_invalido: "El nombre de la empresa es obligatorio.",
+  nombre_producto_invalido: "El nombre del producto es obligatorio.",
+  altura_invalida: "La altura debe estar entre 0 y 6000 msnm.",
+  precio_invalido: "El precio no es válido.",
+  limite_productos: "Alcanzaste el máximo de 30 productos.",
+  registra_la_empresa_primero: "Guarda primero los datos de tu empresa.",
+  archivo_muy_grande: "La imagen supera el tamaño máximo (3 MB).",
+  no_es_imagen: "El archivo no es una imagen válida.",
+  formato_no_permitido: "Sólo se aceptan imágenes JPG, PNG o WEBP.",
+  imagen_muy_pequena: "La imagen es demasiado pequeña.",
+  archivo_ausente: "Selecciona un archivo.",
+  unauthorized: "Tu sesión expiró. Vuelve a entrar.",
+  not_found: "No encontrado.",
+  ya_verificado: "Este promotor ya estaba verificado.",
+  sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
+  stand_no_existe: "Ese stand no existe.",
+  estado_invalido: "Ese cambio de estado no es válido.",
+  estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
+  bad_id: "El identificador no es válido. Recarga la página.",
+  bad_json: "Los datos enviados no son válidos. Recarga la página.",
+  password_invalida: "La contraseña no es válida.",
+  payload_too_large: "El contenido es demasiado grande.",
+  admin_ya_existe: "Ya hay una cuenta con ese correo.",
+  requiere_propietario: "Sólo un propietario puede administrar cuentas.",
+  ultimo_propietario: "Debe quedar al menos un propietario activo.",
+  no_puedes_eliminarte: "No puedes eliminar tu propia cuenta.",
+  origin_not_allowed: "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
+  csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
+  internal_error: "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado."
+};
+const mensajeError = (e, porDefecto) => {
+  const code = String(e && (e.code || e.message) || e || "");
+  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
+  const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
+  return (porDefecto || "Ocurrió un error.") + (limpio ? ` (código: ${limpio})` : "");
+};
+const Aviso = ({
+  tipo = "error",
+  children
+}) => {
+  if (!children) return null;
+  const color = tipo === "ok" ? "var(--good)" : tipo === "info" ? "var(--ink-2)" : "var(--bad)";
+  return React.createElement("div", {
+    role: tipo === "error" ? "alert" : "status",
+    style: {
+      marginTop: 14,
+      padding: "10px 12px",
+      fontSize: 13,
+      lineHeight: 1.5,
+      border: `1px solid ${color}`,
+      color,
+      borderRadius: "var(--r-sm)",
+      background: `color-mix(in oklch, ${color} 6%, var(--paper))`
+    }
+  }, children);
+};
 Object.assign(window, {
   LogoTaza,
   Wordmark,
@@ -266,7 +502,14 @@ Object.assign(window, {
   BarraVotos,
   calcScore,
   totalVotos,
-  standUrl
+  standUrl,
+  ERRORES,
+  mensajeError,
+  Aviso,
+  SubirImagen,
+  ayudaImagen,
+  urlImagen,
+  BloqueForm
 });
 })();
 
@@ -298,11 +541,21 @@ const AdminShell = ({
     sub: "En vivo",
     path: "/admin/live"
   }, {
+    id: "caracterizacion",
+    label: "Visitantes",
+    sub: "Caracterización",
+    path: "/admin/caracterizacion"
+  }, {
     id: "correos",
     label: "Correos",
     sub: "Bitácora",
     path: "/admin/correos"
-  }];
+  }].concat(user && user.rol === "propietario" ? [{
+    id: "cuentas",
+    label: "Administradores",
+    sub: "Cuentas de acceso",
+    path: "/admin/cuentas"
+  }] : []);
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
     window.LMTRouter.go("/");
@@ -366,7 +619,13 @@ const AdminShell = ({
       color: "var(--ink-2)",
       wordBreak: "break-all"
     }
-  }, user ? user.email : "—"), React.createElement("button", {
+  }, user ? user.email : "—"), user && user.rol && React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 4,
+      color: "var(--ink-3)"
+    }
+  }, user.rol === "propietario" ? "Propietario" : "Organizador"), React.createElement("button", {
     onClick: logout,
     className: "btn btn-ghost",
     style: {
@@ -619,6 +878,16 @@ const AdminPage = ({
     active: "correos",
     user: user
   }, React.createElement(AdminCorreos, null));
+  if (section === "caracterizacion") return React.createElement(AdminShell, {
+    active: "caracterizacion",
+    user: user
+  }, React.createElement(AdminCaracterizacion, null));
+  if (section === "cuentas") return React.createElement(AdminShell, {
+    active: "cuentas",
+    user: user
+  }, React.createElement(AdminCuentas, {
+    user: user
+  }));
   return React.createElement(AdminShell, {
     active: "stands",
     user: user
@@ -814,6 +1083,11 @@ const StandEditor = ({
     direccion: "",
     correo: "",
     descripcion: "",
+    propietario: "",
+    propietario_documento: "",
+    nit: "",
+    sitio_web: "",
+    logo: "",
     votos: {
       bueno: 0,
       regular: 0,
@@ -844,6 +1118,11 @@ const StandEditor = ({
         direccion: form.direccion,
         correo: form.correo,
         descripcion: form.descripcion,
+        propietario: form.propietario,
+        propietario_documento: form.propietario_documento,
+        nit: form.nit,
+        sitio_web: form.sitio_web,
+        logo: form.logo || null,
         coords: form.coords,
         color: form.color
       };
@@ -856,6 +1135,10 @@ const StandEditor = ({
     } finally {
       setBusy(false);
     }
+  };
+  const subirLogo = async file => {
+    const res = await window.LMTApi.subirLogoStand(file);
+    update("logo", res.logo || "");
   };
   const remove = async () => {
     if (!confirmDelete || isNew) return;
@@ -956,7 +1239,50 @@ const StandEditor = ({
     onChange: e => update("descripcion", e.target.value),
     rows: 3,
     maxLength: 800
-  })), React.createElement("div", null, React.createElement("div", {
+  })), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 20
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Propietario"), React.createElement("input", {
+    value: form.propietario,
+    onChange: e => update("propietario", e.target.value),
+    maxLength: 120,
+    placeholder: "Nombre completo"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Documento del propietario"), React.createElement("input", {
+    value: form.propietario_documento,
+    onChange: e => update("propietario_documento", e.target.value),
+    maxLength: 32,
+    inputMode: "numeric"
+  }))), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 20
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "NIT o RUT"), React.createElement("input", {
+    value: form.nit,
+    onChange: e => update("nit", e.target.value),
+    maxLength: 32
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Sitio web o red social"), React.createElement("input", {
+    type: "url",
+    value: form.sitio_web,
+    onChange: e => update("sitio_web", e.target.value),
+    maxLength: 255,
+    placeholder: "https://\u2026"
+  }))), React.createElement(SubirImagen, {
+    actual: urlImagen(form.logo),
+    etiqueta: "Logo del producto",
+    cuadrada: true,
+    onSubir: subirLogo
+  }), React.createElement("div", null, React.createElement("div", {
     className: "mono",
     style: {
       marginBottom: 12
@@ -1121,7 +1447,8 @@ Object.assign(window, {
 (function () {
 const QRPoster = ({
   stand,
-  variant = "vertical"
+  variant = "vertical",
+  paraImprimir = false
 }) => {
   const url = standUrl(stand.id);
   return React.createElement("div", {
@@ -1231,7 +1558,8 @@ const QRPoster = ({
     data: url,
     size: 240,
     fg: "#111111",
-    bg: "#ffffff"
+    bg: "#ffffff",
+    ansioso: paraImprimir
   }), React.createElement("div", {
     className: "mono",
     style: {
@@ -1287,20 +1615,54 @@ const QRPoster = ({
     }
   }, React.createElement("span", null, "Pega en el frente del stand"), React.createElement("span", null, "\xB7 14\u201420 abr \xB7 Pasto"))));
 };
+const QRHojas = ({
+  stands
+}) => {
+  if (!stands || stands.length === 0) return null;
+  return ReactDOM.createPortal(React.createElement("div", {
+    className: "qr-imprimible"
+  }, stands.map(s => React.createElement("div", {
+    key: s.id,
+    className: "qr-hoja"
+  }, React.createElement(QRPoster, {
+    stand: s,
+    paraImprimir: true
+  })))), document.body);
+};
+const esperarImagenes = (raiz, msMax = 8000) => {
+  const imgs = Array.from((raiz || document).querySelectorAll("img"));
+  const pendientes = imgs.filter(i => !i.complete || i.naturalWidth === 0);
+  if (pendientes.length === 0) return Promise.resolve();
+  return Promise.race([Promise.all(pendientes.map(img => new Promise(listo => {
+    img.addEventListener("load", listo, {
+      once: true
+    });
+    img.addEventListener("error", listo, {
+      once: true
+    });
+  }))), new Promise(listo => setTimeout(listo, msMax))]);
+};
 const QRPrintView = ({
   stands
 }) => {
   const [selected, setSelected] = React.useState(stands[0] ? stands[0].id : null);
-  const [printAll, setPrintAll] = React.useState(false);
+  const [hojas, setHojas] = React.useState([]);
+  const [preparando, setPreparando] = React.useState("");
   const stand = stands.find(s => s.id === selected) || stands[0];
+  const imprimir = React.useCallback(async lista => {
+    if (!lista.length) return;
+    setPreparando(lista.length > 1 ? `Preparando ${lista.length} carteles…` : "Preparando el cartel…");
+    setHojas(lista);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await esperarImagenes(document.querySelector(".qr-imprimible"));
+    setPreparando("");
+    window.print();
+  }, []);
   React.useEffect(() => {
-    if (!printAll) return;
-    const t = setTimeout(() => {
-      window.print();
-      setPrintAll(false);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [printAll]);
+    const alTerminar = () => setHojas([]);
+    window.addEventListener("afterprint", alTerminar);
+    return () => window.removeEventListener("afterprint", alTerminar);
+  }, []);
   if (!stand) {
     return React.createElement("div", {
       className: "admin-page"
@@ -1322,17 +1684,9 @@ const QRPrintView = ({
   }
   return React.createElement("div", {
     className: "admin-page qr-print-screen"
-  }, React.createElement("style", null, `
-        @media print {
-          @page { size: A5; margin: 0; }
-          body { background: #fff !important; }
-          .qr-print-screen aside, .qr-print-screen .mono, .qr-print-screen h1, .qr-print-screen .qr-frame, .lmt-admin-aside { display: none !important; }
-          .qr-print-screen { padding: 0 !important; }
-          .qr-print-page { display: block !important; page-break-after: always; padding: 0; background: #fff; }
-          .qr-poster { box-shadow: none !important; border: none !important; transform: none !important; margin: 0 auto; }
-          aside, header { display: none !important; }
-        }
-      `), React.createElement("div", {
+  }, React.createElement(QRHojas, {
+    stands: hojas
+  }), React.createElement("div", {
     className: "mono"
   }, "C\xF3digos QR \xB7 Imprimir y pegar"), React.createElement("h1", {
     style: {
@@ -1411,7 +1765,8 @@ const QRPrintView = ({
     }
   }, "Acciones"), React.createElement("button", {
     className: "btn btn-primary",
-    onClick: () => window.print(),
+    disabled: !!preparando,
+    onClick: () => imprimir([stand]),
     style: {
       width: "100%",
       justifyContent: "center",
@@ -1419,7 +1774,8 @@ const QRPrintView = ({
     }
   }, "\uD83D\uDDA8 Imprimir este cartel"), React.createElement("button", {
     className: "btn btn-ghost",
-    onClick: () => setPrintAll(true),
+    disabled: !!preparando,
+    onClick: () => imprimir(stands),
     style: {
       width: "100%",
       justifyContent: "center",
@@ -1436,14 +1792,21 @@ const QRPrintView = ({
       marginBottom: 8,
       textDecoration: "none"
     }
-  }, "Probar URL del QR \u2197"), React.createElement("div", {
+  }, "Probar URL del QR \u2197"), preparando && React.createElement("div", {
+    className: "mono",
+    role: "status",
+    style: {
+      color: "var(--grano)",
+      marginTop: 4
+    }
+  }, preparando), React.createElement("div", {
     className: "nota-menor",
     style: {
       color: "var(--ink-3)",
       marginTop: 8,
       lineHeight: 1.5
     }
-  }, "Cartel A5 \xB7 148 \xD7 210 mm \xB7 Papel offset mate recomendado.", React.createElement("br", null), "Para PDF: imprimir \u2192 \"Guardar como PDF\"."))), React.createElement("div", {
+  }, "Un cartel A5 (148 \xD7 210 mm) por hoja. Papel offset mate recomendado.", React.createElement("br", null), "Si tu impresora tiene A4, marca \xABAjustar al papel\xBB en el di\xE1logo.", React.createElement("br", null), "Para PDF: imprimir \u2192 \xABGuardar como PDF\xBB."))), React.createElement("div", {
     className: "qr-frame",
     style: {
       background: "var(--paper-2)",
@@ -1456,12 +1819,7 @@ const QRPrintView = ({
       backgroundSize: "16px 16px",
       backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0"
     }
-  }, printAll ? stands.map(s => React.createElement("div", {
-    key: s.id,
-    className: "qr-print-page"
   }, React.createElement(QRPoster, {
-    stand: s
-  }))) : React.createElement(QRPoster, {
     stand: stand
   }))));
 };
@@ -1782,7 +2140,8 @@ const VoteForm = ({
         texto: data.texto
       };
       if (window.LMTApi && window.LMTApi.enabled) {
-        await window.LMTApi.submitVote(payload);
+        const res = await window.LMTApi.submitVote(payload);
+        if (res && res.perfil_token) window.LMTPerfil.guardar(correo, res.perfil_token);
       } else if (sec) {
         sec.buildVotePayload(payload);
       }
@@ -2148,7 +2507,35 @@ const VoteConfirm = ({
       justifyContent: "center",
       padding: 14
     }
-  }, "Ver ranking del festival")));
+  }, "Ver ranking del festival")), window.LMTPerfil && window.LMTPerfil.tieneTestigo() && React.createElement("div", {
+    style: {
+      marginTop: 22,
+      padding: "14px 16px",
+      border: "1px dashed var(--line-2)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper-2)"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 6
+    }
+  }, "Opcional"), React.createElement("p", {
+    style: {
+      fontSize: 13,
+      lineHeight: 1.6,
+      color: "var(--ink-2)",
+      margin: "0 0 12px"
+    }
+  }, "\xBFNos cuentas de d\xF3nde nos visitas? Nos ayuda a saber qui\xE9n viene al festival y a preparar mejor la pr\xF3xima edici\xF3n. Son dos minutos y ning\xFAn dato es obligatorio."), React.createElement("a", {
+    href: "/perfil",
+    "data-route": true,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      width: "100%"
+    }
+  }, "Completar mi perfil")));
 };
 const MobileVotePage = ({
   stand
@@ -2483,11 +2870,12 @@ const PassportBook = ({
   const actual = pages[Math.min(page, pages.length - 1)] || pages[0];
   const resumen = actual.type === "stamp" ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}` : actual.type === "cover" ? "Portada del pasaporte" : actual.type === "index" ? "Índice de la travesía" : "Fin del pasaporte";
   return React.createElement("div", {
+    className: "pasaporte-vista",
     style: {
       minHeight: "100dvh",
       background: "var(--ink)",
       color: "var(--paper)",
-      padding: "16px 16px 28px"
+      padding: "12px 10px 24px"
     }
   }, React.createElement("div", {
     className: "mobile-inner",
@@ -2625,7 +3013,21 @@ const PassportBook = ({
       marginTop: 14,
       lineHeight: 1.6
     }
-  }, visitados.length, " / ", stands.length, " stands sellados"))));
+  }, visitados.length, " / ", stands.length, " stands sellados"), window.LMTPerfil && window.LMTPerfil.tieneTestigo() && React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginTop: 16
+    }
+  }, React.createElement("a", {
+    href: "/perfil",
+    "data-route": true,
+    className: "mono",
+    style: {
+      color: "var(--paper-3)",
+      textDecoration: "underline",
+      lineHeight: 2
+    }
+  }, "Completar mi perfil de visitante")))));
 };
 const PassportPage_Page = ({
   pageData,
@@ -3825,66 +4227,6 @@ const EstadoPill = ({
     }
   }, e.texto);
 };
-const ERRORES = {
-  email_invalido: "El correo no es válido.",
-  nombre_invalido: "Escribe tu nombre completo.",
-  debe_aceptar_tratamiento_datos: "Debes autorizar el tratamiento de tus datos para continuar.",
-  invalid_credentials: "Usuario o contraseña incorrectos.",
-  cuenta_bloqueada: "Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.",
-  cuenta_suspendida: "Tu cuenta está suspendida. Comunícate con el equipo organizador.",
-  solicitud_rechazada: "Tu solicitud no fue aprobada.",
-  pendiente_de_verificacion: "Tu solicitud aún está en revisión.",
-  password_expirada: "La contraseña temporal caducó. Pide al organizador que te la reenvíe.",
-  password_actual_incorrecta: "La contraseña actual no coincide.",
-  password_corta: "La contraseña debe tener al menos 10 caracteres.",
-  password_larga: "La contraseña es demasiado larga.",
-  password_simple: "Combina mayúsculas, minúsculas, números y símbolos.",
-  password_predecible: "Evita tu nombre, tu correo o palabras del festival.",
-  password_repetida: "La nueva contraseña debe ser distinta de la actual.",
-  password_change_required: "Primero debes cambiar tu contraseña temporal.",
-  rate_limited: "Demasiadas solicitudes seguidas. Espera un momento.",
-  nombre_empresa_invalido: "El nombre de la empresa es obligatorio.",
-  nombre_producto_invalido: "El nombre del producto es obligatorio.",
-  altura_invalida: "La altura debe estar entre 0 y 6000 msnm.",
-  precio_invalido: "El precio no es válido.",
-  limite_productos: "Alcanzaste el máximo de 30 productos.",
-  registra_la_empresa_primero: "Guarda primero los datos de tu empresa.",
-  archivo_muy_grande: "La imagen supera el tamaño máximo (3 MB).",
-  no_es_imagen: "El archivo no es una imagen válida.",
-  formato_no_permitido: "Sólo se aceptan imágenes JPG, PNG o WEBP.",
-  imagen_muy_pequena: "La imagen es demasiado pequeña.",
-  archivo_ausente: "Selecciona un archivo.",
-  unauthorized: "Tu sesión expiró. Vuelve a entrar.",
-  not_found: "No encontrado.",
-  ya_verificado: "Este promotor ya estaba verificado.",
-  sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
-  stand_no_existe: "Ese stand no existe."
-};
-const mensajeError = (e, porDefecto) => {
-  const code = String(e && (e.code || e.message) || e || "");
-  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
-  return porDefecto || "Ocurrió un error. Inténtalo de nuevo.";
-};
-const Aviso = ({
-  tipo = "error",
-  children
-}) => {
-  if (!children) return null;
-  const color = tipo === "ok" ? "var(--good)" : tipo === "info" ? "var(--ink-2)" : "var(--bad)";
-  return React.createElement("div", {
-    role: tipo === "error" ? "alert" : "status",
-    style: {
-      marginTop: 14,
-      padding: "10px 12px",
-      fontSize: 13,
-      lineHeight: 1.5,
-      border: `1px solid ${color}`,
-      color,
-      borderRadius: "var(--r-sm)",
-      background: `color-mix(in oklch, ${color} 6%, var(--paper))`
-    }
-  }, children);
-};
 const PromotorRegistroPage = () => {
   const vacio = {
     nombre: "",
@@ -3893,9 +4235,16 @@ const PromotorRegistroPage = () => {
     documento: "",
     municipio: "",
     empresa: "",
-    mensaje: ""
+    mensaje: "",
+    stand_nombre: "",
+    stand_region: "",
+    stand_direccion: "",
+    stand_descripcion: "",
+    stand_nit: "",
+    stand_sitio_web: ""
   };
   const [form, setForm] = React.useState(vacio);
+  const [logo, setLogo] = React.useState("");
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
@@ -3904,6 +4253,10 @@ const PromotorRegistroPage = () => {
     ...f,
     [k]: v
   }));
+  const subirLogo = async file => {
+    const res = await window.LMTApi.subirLogoInscripcion(file);
+    setLogo(res.logo || "");
+  };
   const enviar = async e => {
     e.preventDefault();
     setError("");
@@ -3916,6 +4269,10 @@ const PromotorRegistroPage = () => {
       setError(ERRORES.email_invalido);
       return;
     }
+    if (!form.municipio.trim()) {
+      setError("Indica el municipio de tu stand.");
+      return;
+    }
     if (!acepta) {
       setError(ERRORES.debe_aceptar_tratamiento_datos);
       return;
@@ -3924,7 +4281,9 @@ const PromotorRegistroPage = () => {
     try {
       await window.LMTApi.promotorRegistro({
         ...form,
+        stand_nombre: form.stand_nombre.trim() || form.empresa.trim(),
         email: sec.normalizeEmail(form.email),
+        logo: logo || null,
         acepta_datos: true
       });
       setEnviado(true);
@@ -3960,7 +4319,7 @@ const PromotorRegistroPage = () => {
         lineHeight: 1.65,
         marginBottom: 24
       }
-    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " tu contrase\xF1a para entrar al portal y cargar la informaci\xF3n de tu empresa y tus productos."), React.createElement("a", {
+    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " tu contrase\xF1a para entrar al portal y el", React.createElement("strong", null, " c\xF3digo QR de tu stand"), ", listo para imprimir y pegar en tu puesto."), React.createElement("a", {
       href: "/",
       "data-route": true,
       className: "btn btn-ghost",
@@ -4001,24 +4360,58 @@ const PromotorRegistroPage = () => {
       lineHeight: 1.6,
       marginBottom: 26
     }
-  }, "Completa tus datos. Un organizador revisar\xE1 la solicitud y te enviar\xE1 por correo el acceso al portal, donde podr\xE1s registrar tu empresa y tus productos."), React.createElement("form", {
+  }, "Completa los datos de tu stand. Un organizador revisar\xE1 la solicitud y te enviar\xE1 por correo tu acceso al portal y el c\xF3digo QR de tu stand, ya listo para imprimir."), React.createElement("form", {
     onSubmit: enviar,
     style: {
       display: "flex",
       flexDirection: "column",
       gap: 20
     }
+  }, React.createElement(BloqueForm, {
+    titulo: "Qui\xE9n eres",
+    nota: "La persona responsable del stand."
   }, React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Nombre completo *"), React.createElement("input", {
+  }, React.createElement("label", {
+    htmlFor: "in-nombre"
+  }, "Nombre completo del propietario *"), React.createElement("input", {
+    id: "in-nombre",
     value: form.nombre,
     onChange: e => set("nombre", e.target.value),
     maxLength: 120,
     required: true,
     autoComplete: "name"
   })), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Correo electr\xF3nico *"), React.createElement("input", {
+  }, React.createElement("label", {
+    htmlFor: "in-doc"
+  }, "Documento de identidad"), React.createElement("input", {
+    id: "in-doc",
+    value: form.documento,
+    onChange: e => set("documento", e.target.value),
+    maxLength: 32,
+    inputMode: "numeric"
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "C\xE9dula del propietario, sin puntos.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-tel"
+  }, "Tel\xE9fono"), React.createElement("input", {
+    id: "in-tel",
+    value: form.telefono,
+    onChange: e => set("telefono", e.target.value),
+    maxLength: 32,
+    inputMode: "tel",
+    autoComplete: "tel"
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-email"
+  }, "Correo electr\xF3nico *"), React.createElement("input", {
+    id: "in-email",
     type: "email",
     value: form.email,
     onChange: e => set("email", e.target.value),
@@ -4026,48 +4419,120 @@ const PromotorRegistroPage = () => {
     required: true,
     autoComplete: "email"
   }), React.createElement("span", {
-    className: "mono",
-    style: {
-      textTransform: "none",
-      letterSpacing: 0,
-      color: "var(--ink-3)"
-    }
-  }, "Aqu\xED llegar\xE1 tu contrase\xF1a de acceso.")), React.createElement("div", {
-    className: "grid-2"
+    className: "ayuda"
+  }, "Aqu\xED llegar\xE1n tu contrase\xF1a de acceso y el QR de tu stand."))), React.createElement(BloqueForm, {
+    titulo: "Tu stand",
+    nota: "Es lo que ver\xE1n los visitantes del festival."
   }, React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Tel\xE9fono"), React.createElement("input", {
-    value: form.telefono,
-    onChange: e => set("telefono", e.target.value),
-    maxLength: 32,
-    inputMode: "tel",
-    autoComplete: "tel"
-  })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Documento"), React.createElement("input", {
-    value: form.documento,
-    onChange: e => set("documento", e.target.value),
-    maxLength: 32,
-    inputMode: "numeric"
-  }))), React.createElement("div", {
-    className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Municipio"), React.createElement("input", {
-    value: form.municipio,
-    onChange: e => set("municipio", e.target.value),
-    maxLength: 80,
-    placeholder: "Sandon\xE1"
-  })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Empresa o finca"), React.createElement("input", {
+  }, React.createElement("label", {
+    htmlFor: "in-empresa"
+  }, "Empresa, finca o marca *"), React.createElement("input", {
+    id: "in-empresa",
     value: form.empresa,
     onChange: e => set("empresa", e.target.value),
     maxLength: 120,
+    required: true,
     placeholder: "Finca El Tambo"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-stand-nombre"
+  }, "Nombre del stand"), React.createElement("input", {
+    id: "in-stand-nombre",
+    value: form.stand_nombre,
+    onChange: e => set("stand_nombre", e.target.value),
+    maxLength: 80,
+    placeholder: form.empresa || "Igual al de la empresa"
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "D\xE9jalo vac\xEDo para usar el nombre de la empresa.")), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-mun"
+  }, "Municipio *"), React.createElement("input", {
+    id: "in-mun",
+    value: form.municipio,
+    onChange: e => set("municipio", e.target.value),
+    maxLength: 80,
+    required: true,
+    placeholder: "Sandon\xE1"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-region"
+  }, "Regi\xF3n"), React.createElement("input", {
+    id: "in-region",
+    value: form.stand_region,
+    onChange: e => set("stand_region", e.target.value),
+    maxLength: 80,
+    placeholder: "Occidente"
   }))), React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Cu\xE9ntanos de tu caf\xE9 (opcional)"), React.createElement("textarea", {
+  }, React.createElement("label", {
+    htmlFor: "in-dir"
+  }, "Direcci\xF3n"), React.createElement("input", {
+    id: "in-dir",
+    value: form.stand_direccion,
+    onChange: e => set("stand_direccion", e.target.value),
+    maxLength: 255,
+    placeholder: "Vereda El Ingenio"
+  })), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-nit"
+  }, "NIT o RUT"), React.createElement("input", {
+    id: "in-nit",
+    value: form.stand_nit,
+    onChange: e => set("stand_nit", e.target.value),
+    maxLength: 32
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Si est\xE1s constituido como empresa.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-web"
+  }, "Sitio web o red social"), React.createElement("input", {
+    id: "in-web",
+    type: "url",
+    value: form.stand_sitio_web,
+    onChange: e => set("stand_sitio_web", e.target.value),
+    maxLength: 255,
+    placeholder: "https://\u2026",
+    inputMode: "url"
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-desc"
+  }, "Descripci\xF3n del stand"), React.createElement("textarea", {
+    id: "in-desc",
+    rows: 3,
+    value: form.stand_descripcion,
+    onChange: e => set("stand_descripcion", e.target.value),
+    maxLength: 800,
+    placeholder: "Variedad, proceso, altura, historia de la finca\u2026",
+    style: {
+      border: "1px solid var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 12
+    }
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Se muestra en la ficha p\xFAblica de tu stand.")), React.createElement(SubirImagen, {
+    actual: logo ? urlImagen(logo) : "",
+    etiqueta: "Logo de tu producto",
+    cuadrada: true,
+    onSubir: subirLogo
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-msg"
+  }, "Mensaje para el organizador (opcional)"), React.createElement("textarea", {
+    id: "in-msg",
     rows: 2,
     value: form.mensaje,
     onChange: e => set("mensaje", e.target.value),
@@ -4320,85 +4785,6 @@ const PromotorCambioClave = ({
     }
   }, busy ? "Guardando…" : "Guardar y continuar →"))));
 };
-const SubirImagen = ({
-  actual,
-  onSubir,
-  etiqueta,
-  alto = 120
-}) => {
-  const ref = React.useRef(null);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState("");
-  const elegir = async e => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    setError("");
-    setBusy(true);
-    try {
-      await onSubir(file);
-    } catch (err) {
-      setError(mensajeError(err, "No fue posible subir la imagen."));
-    } finally {
-      setBusy(false);
-      if (ref.current) ref.current.value = "";
-    }
-  };
-  return React.createElement("div", null, React.createElement("div", {
-    className: "mono",
-    style: {
-      marginBottom: 8
-    }
-  }, etiqueta), React.createElement("div", {
-    style: {
-      border: "1px dashed var(--line-2)",
-      borderRadius: "var(--r-md)",
-      padding: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      background: "var(--paper-2)"
-    }
-  }, actual ? React.createElement("img", {
-    src: actual,
-    alt: etiqueta,
-    style: {
-      height: alto,
-      width: alto,
-      objectFit: "cover",
-      borderRadius: "var(--r-sm)",
-      background: "var(--paper)"
-    }
-  }) : React.createElement(Placeholder, {
-    width: alto,
-    height: alto,
-    label: "sin imagen"
-  }), React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, React.createElement("button", {
-    type: "button",
-    className: "btn btn-ghost",
-    disabled: busy,
-    onClick: () => ref.current && ref.current.click()
-  }, busy ? "Subiendo…" : actual ? "Cambiar imagen" : "Subir imagen"), React.createElement("div", {
-    className: "mono",
-    style: {
-      marginTop: 8,
-      color: "var(--ink-3)",
-      textTransform: "none",
-      letterSpacing: 0
-    }
-  }, "JPG, PNG o WEBP \xB7 m\xE1x. 3 MB"), React.createElement("input", {
-    ref: ref,
-    type: "file",
-    accept: "image/jpeg,image/png,image/webp",
-    onChange: elegir,
-    style: {
-      display: "none"
-    }
-  }))), React.createElement(Aviso, null, error));
-};
 const ProductoEditor = ({
   producto,
   onGuardar,
@@ -4633,8 +5019,6 @@ const PromotorPortalPage = ({
     }, "Salir")));
   }
   const p = datos.promotor;
-  const base = (window.LMT_BASE_URL || "").replace(/\/$/, "");
-  const urlImagen = r => r ? base + "/" + r : null;
   const guardarEmpresa = async body => {
     setDatos(await window.LMTApi.guardarEmpresa(body));
   };
@@ -4909,7 +5293,8 @@ const EmpresaEditor = ({
     }
   })), empresa ? React.createElement(SubirImagen, {
     actual: logoUrl,
-    etiqueta: "Logo de la empresa",
+    etiqueta: "Logo del producto o de la empresa",
+    cuadrada: true,
     onSubir: onLogo
   }) : React.createElement(Aviso, {
     tipo: "info"
@@ -5430,6 +5815,1397 @@ Object.assign(window, {
 });
 })();
 
+/* components/Cuentas.jsx */
+(function () {
+const ROL_ETIQUETA = {
+  propietario: {
+    texto: "Propietario",
+    color: "var(--galeras)",
+    ayuda: "Administra el festival y las cuentas de acceso."
+  },
+  organizador: {
+    texto: "Organizador",
+    color: "var(--cafeto)",
+    ayuda: "Administra el festival: stands, votos, pasaportes y promotores."
+  }
+};
+const RolPill = ({
+  rol
+}) => {
+  const r = ROL_ETIQUETA[rol] || {
+    texto: rol,
+    color: "var(--ink-3)"
+  };
+  return React.createElement("span", {
+    className: "mono",
+    style: {
+      display: "inline-block",
+      padding: "3px 10px",
+      borderRadius: 999,
+      border: `1px solid ${r.color}`,
+      color: r.color,
+      fontSize: 10
+    }
+  }, r.texto);
+};
+const fechaCorta = iso => {
+  if (!iso) return "—";
+  const d = new Date(String(iso).replace(" ", "T") + (String(iso).endsWith("Z") ? "" : "Z"));
+  if (isNaN(d.getTime())) return String(iso).slice(0, 16);
+  return d.toLocaleDateString("es-CO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }) + " · " + d.toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
+const AdminCambioClave = ({
+  user
+}) => {
+  const [actual, setActual] = React.useState("");
+  const [nueva, setNueva] = React.useState("");
+  const [repetir, setRepetir] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const enviar = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    if (nueva.length < 10) {
+      setError("La nueva contraseña debe tener al menos 10 caracteres.");
+      return;
+    }
+    if (nueva !== repetir) {
+      setError("Las dos contraseñas nuevas no coinciden.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.LMTApi.cambiarClaveAdmin(actual, nueva);
+      window.LMTRouter.go("/admin");
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible cambiar la contraseña."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const salir = async () => {
+    if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
+    window.LMTRouter.go("/");
+  };
+  return React.createElement("div", {
+    style: {
+      minHeight: "100dvh",
+      display: "grid",
+      placeItems: "center",
+      padding: "24px 16px",
+      background: "var(--paper-2)"
+    }
+  }, React.createElement("form", {
+    onSubmit: enviar,
+    style: {
+      width: "100%",
+      maxWidth: 460,
+      background: "var(--paper)",
+      padding: "28px 24px",
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)"
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Primer acceso"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontWeight: 400,
+      fontSize: 32,
+      margin: "6px 0 12px",
+      lineHeight: 1.1
+    }
+  }, "Cambia tu contrase\xF1a"), React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: "var(--ink-2)",
+      lineHeight: 1.6,
+      margin: "0 0 22px"
+    }
+  }, "La contrase\xF1a que usaste lleg\xF3 por correo, as\xED que la damos por conocida. Elige una nueva para entrar al panel", user && user.email ? ` como ${user.email}` : "", "."), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 18
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "cc-actual"
+  }, "Contrase\xF1a que te enviamos"), React.createElement("input", {
+    id: "cc-actual",
+    type: "password",
+    autoComplete: "current-password",
+    value: actual,
+    onChange: e => setActual(e.target.value),
+    maxLength: 128,
+    required: true
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "cc-nueva"
+  }, "Contrase\xF1a nueva"), React.createElement("input", {
+    id: "cc-nueva",
+    type: "password",
+    autoComplete: "new-password",
+    value: nueva,
+    onChange: e => setNueva(e.target.value),
+    maxLength: 128,
+    required: true
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "M\xEDnimo 10 caracteres, con may\xFAsculas, min\xFAsculas y n\xFAmeros. Evita tu nombre, tu correo y palabras como \xABcaf\xE9\xBB o \xABfestival\xBB.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "cc-repetir"
+  }, "Repite la contrase\xF1a nueva"), React.createElement("input", {
+    id: "cc-repetir",
+    type: "password",
+    autoComplete: "new-password",
+    value: repetir,
+    onChange: e => setRepetir(e.target.value),
+    maxLength: 128,
+    required: true
+  })), React.createElement(Aviso, null, error), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: busy,
+    style: {
+      justifyContent: "center",
+      padding: 14,
+      opacity: busy ? 0.6 : 1
+    }
+  }, busy ? "Guardando…" : "Guardar y entrar →"), React.createElement("button", {
+    type: "button",
+    onClick: salir,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center"
+    }
+  }, "Cerrar sesi\xF3n"))));
+};
+const AdminCuentas = ({
+  user
+}) => {
+  const [datos, setDatos] = React.useState(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [error, setError] = React.useState("");
+  const [aviso, setAviso] = React.useState(null);
+  const [ocupado, setOcupado] = React.useState(0);
+  const [abierto, setAbierto] = React.useState(false);
+  const [nuevo, setNuevo] = React.useState({
+    nombre: "",
+    email: "",
+    rol: "organizador"
+  });
+  const [creando, setCreando] = React.useState(false);
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    try {
+      setDatos(await window.LMTApi.listarAdmins());
+      setError("");
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible cargar las cuentas."));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+  React.useEffect(() => {
+    cargar();
+  }, [cargar]);
+  const accion = async (id, fn, exito) => {
+    setOcupado(id);
+    setAviso(null);
+    try {
+      const res = await fn();
+      await cargar();
+      setAviso(exito(res));
+    } catch (err) {
+      setAviso({
+        tipo: "error",
+        texto: mensajeError(err, "No fue posible completar la acción.")
+      });
+    } finally {
+      setOcupado(0);
+    }
+  };
+  const crear = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setAviso(null);
+    if (!window.LMTSecurity || !window.LMTSecurity.isEmail(nuevo.email)) {
+      setAviso({
+        tipo: "error",
+        texto: "El correo no es válido."
+      });
+      return;
+    }
+    if (nuevo.nombre.trim().length < 3) {
+      setAviso({
+        tipo: "error",
+        texto: "Escribe el nombre completo de la persona."
+      });
+      return;
+    }
+    setCreando(true);
+    try {
+      const res = await window.LMTApi.crearAdmin({
+        nombre: nuevo.nombre.trim(),
+        email: nuevo.email.trim().toLowerCase(),
+        rol: nuevo.rol
+      });
+      setNuevo({
+        nombre: "",
+        email: "",
+        rol: "organizador"
+      });
+      setAbierto(false);
+      await cargar();
+      setAviso(res.correo_enviado ? {
+        tipo: "ok",
+        texto: `Cuenta creada. La contraseña temporal salió hacia ${res.email || nuevo.email}.`
+      } : {
+        tipo: "error",
+        texto: `Cuenta creada, pero el correo NO salió. Entrega esta contraseña en persona: ${res.clave_temporal}`
+      });
+    } catch (err) {
+      setAviso({
+        tipo: "error",
+        texto: mensajeError(err, "No fue posible crear la cuenta.")
+      });
+    } finally {
+      setCreando(false);
+    }
+  };
+  const cambiarRol = (a, rol) => accion(a.id, () => window.LMTApi.actualizarAdmin(a.id, {
+    nombre: a.nombre || a.email,
+    rol
+  }), () => ({
+    tipo: "ok",
+    texto: `${a.nombre || a.email} ahora es ${ROL_ETIQUETA[rol].texto.toLowerCase()}.`
+  }));
+  const alternarActivo = a => accion(a.id, () => window.LMTApi.actualizarAdmin(a.id, {
+    nombre: a.nombre || a.email,
+    activo: !a.activo
+  }), () => ({
+    tipo: "ok",
+    texto: a.activo ? "Cuenta desactivada: ya no puede entrar." : "Cuenta reactivada."
+  }));
+  const reponer = a => {
+    if (!window.confirm(`Se generará una contraseña nueva para ${a.email} y la actual dejará de funcionar. ¿Continuar?`)) return;
+    accion(a.id, () => window.LMTApi.reponerClaveAdmin(a.id), res => res.correo_enviado ? {
+      tipo: "ok",
+      texto: `Contraseña nueva enviada a ${a.email}.`
+    } : {
+      tipo: "error",
+      texto: `El correo no salió. Contraseña nueva para ${a.email}: ${res.clave_temporal}`
+    });
+  };
+  const eliminar = a => {
+    if (!window.confirm(`Eliminar la cuenta de ${a.email}. Esta acción no se puede deshacer. ¿Continuar?`)) return;
+    accion(a.id, () => window.LMTApi.borrarAdmin(a.id), () => ({
+      tipo: "ok",
+      texto: "Cuenta eliminada."
+    }));
+  };
+  const lista = datos && datos.lista || [];
+  const yoId = datos && datos.yo && datos.yo.id || user && user.id || 0;
+  const propietarios = lista.filter(a => a.rol === "propietario" && a.activo).length;
+  return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      gap: 12,
+      flexWrap: "wrap",
+      marginBottom: 24
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    className: "mono"
+  }, "Cuentas \xB7 ", lista.length, " registradas"), React.createElement("h1", {
+    className: "titulo-xl"
+  }, "Administradores")), React.createElement("button", {
+    className: "btn btn-primary",
+    onClick: () => setAbierto(v => !v)
+  }, abierto ? "Cancelar" : "+ Crear cuenta")), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.6,
+      margin: "0 0 20px",
+      maxWidth: 640
+    }
+  }, "Al crear una cuenta se genera una contrase\xF1a temporal y se env\xEDa al correo de la persona. El sistema le exige cambiarla la primera vez que entra: hasta entonces no puede ver ni exportar nada."), abierto && React.createElement("form", {
+    onSubmit: crear,
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: 20,
+      background: "var(--paper)",
+      marginBottom: 24
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 14
+    }
+  }, "Nueva cuenta"), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 16
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "ac-nombre"
+  }, "Nombre completo"), React.createElement("input", {
+    id: "ac-nombre",
+    value: nuevo.nombre,
+    maxLength: 120,
+    required: true,
+    onChange: e => setNuevo(n => ({
+      ...n,
+      nombre: e.target.value
+    }))
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "ac-email"
+  }, "Correo institucional"), React.createElement("input", {
+    id: "ac-email",
+    type: "email",
+    value: nuevo.email,
+    maxLength: 254,
+    required: true,
+    autoComplete: "off",
+    onChange: e => setNuevo(n => ({
+      ...n,
+      email: e.target.value
+    }))
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Ah\xED llegar\xE1 la contrase\xF1a temporal."))), React.createElement("div", {
+    className: "field",
+    style: {
+      marginTop: 16,
+      maxWidth: 420
+    }
+  }, React.createElement("label", {
+    htmlFor: "ac-rol"
+  }, "Perfil"), React.createElement("select", {
+    id: "ac-rol",
+    value: nuevo.rol,
+    onChange: e => setNuevo(n => ({
+      ...n,
+      rol: e.target.value
+    }))
+  }, React.createElement("option", {
+    value: "organizador"
+  }, "Organizador"), React.createElement("option", {
+    value: "propietario"
+  }, "Propietario")), React.createElement("span", {
+    className: "ayuda"
+  }, ROL_ETIQUETA[nuevo.rol].ayuda)), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: creando,
+    style: {
+      marginTop: 18
+    }
+  }, creando ? "Creando…" : "Crear y enviar contraseña")), aviso && React.createElement(Aviso, {
+    tipo: aviso.tipo
+  }, aviso.texto), React.createElement(Aviso, null, error), cargando ? React.createElement("div", {
+    className: "splash"
+  }, "Cargando\u2026") : React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 14,
+      marginTop: 18
+    }
+  }, lista.map(a => {
+    const soyYo = a.id === yoId;
+    const ultimoPropietario = a.rol === "propietario" && a.activo && propietarios <= 1;
+    const bloqueado = ocupado === a.id;
+    return React.createElement("div", {
+      key: a.id,
+      style: {
+        border: "1px solid var(--line)",
+        borderRadius: "var(--r-md)",
+        padding: 20,
+        background: "var(--paper)",
+        opacity: a.activo ? 1 : 0.62
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 16,
+        flexWrap: "wrap",
+        alignItems: "flex-start"
+      }
+    }, React.createElement("div", {
+      style: {
+        minWidth: 220,
+        flex: 1
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexWrap: "wrap"
+      }
+    }, React.createElement("strong", {
+      style: {
+        fontSize: 16,
+        fontWeight: 600
+      }
+    }, a.nombre || a.email), React.createElement(RolPill, {
+      rol: a.rol
+    }), soyYo && React.createElement("span", {
+      className: "mono",
+      style: {
+        color: "var(--ink-3)"
+      }
+    }, "t\xFA"), !a.activo && React.createElement("span", {
+      className: "mono",
+      style: {
+        color: "var(--bad)"
+      }
+    }, "desactivada"), a.clave_sin_usar && React.createElement("span", {
+      className: "mono",
+      style: {
+        color: "var(--meh)"
+      }
+    }, "clave sin estrenar")), React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: "var(--ink-2)",
+        marginTop: 6,
+        lineHeight: 1.7,
+        wordBreak: "break-word"
+      }
+    }, a.email), React.createElement("div", {
+      className: "mono",
+      style: {
+        marginTop: 6,
+        color: "var(--ink-3)"
+      }
+    }, "\xDAltimo acceso: ", fechaCorta(a.ultimo_acceso), " \xB7 Alta: ", fechaCorta(a.created_at))), React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        alignItems: "center"
+      }
+    }, React.createElement("select", {
+      value: a.rol,
+      disabled: bloqueado || ultimoPropietario,
+      title: ultimoPropietario ? "Debe quedar al menos un propietario activo." : "Perfil de la cuenta",
+      onChange: e => cambiarRol(a, e.target.value),
+      style: {
+        padding: "7px 10px",
+        fontSize: 13
+      }
+    }, React.createElement("option", {
+      value: "organizador"
+    }, "Organizador"), React.createElement("option", {
+      value: "propietario"
+    }, "Propietario")), React.createElement("button", {
+      className: "btn",
+      disabled: bloqueado,
+      onClick: () => reponer(a),
+      style: {
+        padding: "7px 14px",
+        fontSize: 13
+      }
+    }, "Reponer contrase\xF1a"), React.createElement("button", {
+      className: "btn",
+      disabled: bloqueado || ultimoPropietario,
+      onClick: () => alternarActivo(a),
+      style: {
+        padding: "7px 14px",
+        fontSize: 13
+      }
+    }, a.activo ? "Desactivar" : "Reactivar"), React.createElement("button", {
+      className: "btn",
+      disabled: bloqueado || soyYo || ultimoPropietario,
+      onClick: () => eliminar(a),
+      title: soyYo ? "No puedes eliminar tu propia cuenta." : "",
+      style: {
+        padding: "7px 14px",
+        fontSize: 13,
+        color: soyYo ? "var(--ink-3)" : "var(--bad)"
+      }
+    }, "Eliminar"))));
+  })));
+};
+Object.assign(window, {
+  AdminCuentas,
+  AdminCambioClave,
+  RolPill
+});
+})();
+
+/* components/Perfil.jsx */
+(function () {
+const PERFIL_ETIQUETAS = {
+  genero: {
+    hombre: "Hombre",
+    mujer: "Mujer",
+    otro: "Otro",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  rango_edad: {
+    menor_18: "Menor de 18",
+    "18_25": "18 a 25",
+    "26_35": "26 a 35",
+    "36_45": "36 a 45",
+    "46_60": "46 a 60",
+    mayor_60: "Mayor de 60",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  tipo_visitante: {
+    publica: "Entidad pública",
+    privada: "Empresa privada",
+    academica: "Institución académica",
+    gremio: "Gremio o asociación",
+    particular: "A título personal",
+    otro: "Otro",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  grupo_etnico: {
+    indigena: "Indígena",
+    afrodescendiente: "Negro, afrocolombiano o afrodescendiente",
+    raizal: "Raizal del archipiélago",
+    palenquero: "Palenquero de San Basilio",
+    rrom: "Rrom (gitano)",
+    ninguno: "Ninguno",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  discapacidad: {
+    fisica: "Física o motriz",
+    visual: "Visual",
+    auditiva: "Auditiva",
+    intelectual: "Intelectual",
+    psicosocial: "Psicosocial",
+    multiple: "Múltiple",
+    ninguna: "Ninguna",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  como_se_entero: {
+    redes: "Redes sociales",
+    radio: "Radio",
+    television: "Televisión",
+    prensa: "Prensa",
+    voz_a_voz: "Un amigo o familiar",
+    institucion: "Una institución",
+    otro: "Otro medio"
+  }
+};
+const PERFIL_VACIO = {
+  nombre: "",
+  telefono: "",
+  genero: "",
+  rango_edad: "",
+  pais: "Colombia",
+  departamento: "",
+  municipio: "",
+  tipo_visitante: "",
+  entidad: "",
+  grupo_etnico: "",
+  discapacidad: "",
+  expectativa: "",
+  como_se_entero: "",
+  primera_visita: null
+};
+const CampoOpcion = ({
+  id,
+  label,
+  valor,
+  opciones,
+  etiquetas,
+  ayuda,
+  onChange
+}) => React.createElement("div", {
+  className: "field"
+}, React.createElement("label", {
+  htmlFor: id
+}, label), React.createElement("select", {
+  id: id,
+  value: valor || "",
+  onChange: e => onChange(e.target.value)
+}, React.createElement("option", {
+  value: ""
+}, "Sin responder"), (opciones || []).map(o => React.createElement("option", {
+  key: o,
+  value: o
+}, etiquetas && etiquetas[o] || o))), ayuda && React.createElement("span", {
+  className: "ayuda"
+}, ayuda));
+const PerfilSinAcceso = () => {
+  const [correo, setCorreo] = React.useState("");
+  const [enviado, setEnviado] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const pedir = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    const sec = window.LMTSecurity;
+    if (!sec || !sec.isEmail(correo.trim())) {
+      setError("Escribe un correo válido.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.LMTApi.pedirEnlacePerfil(sec.normalizeEmail(correo));
+      setEnviado(true);
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible enviar el enlace."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return React.createElement("div", {
+    className: "mobile-page"
+  }, React.createElement("div", {
+    className: "mobile-inner"
+  }, React.createElement("a", {
+    href: "/festival",
+    "data-route": true,
+    style: {
+      color: "var(--ink-3)",
+      fontSize: 13
+    }
+  }, "\u2190 Volver"), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 22
+    }
+  }, "Perfil del visitante"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 34,
+      fontWeight: 400,
+      margin: "6px 0 12px",
+      lineHeight: 1.05
+    }
+  }, "Te enviamos el", React.createElement("br", null), "enlace por correo."), enviado ? React.createElement(React.Fragment, null, React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.65
+    }
+  }, "Si ese correo particip\xF3 en el festival, en unos minutos recibir\xE1s un enlace para abrir tu perfil. Revisa tambi\xE9n la carpeta de correo no deseado."), React.createElement("a", {
+    href: "/festival",
+    "data-route": true,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      marginTop: 22
+    }
+  }, "Volver al festival")) : React.createElement("form", {
+    onSubmit: pedir
+  }, React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.65,
+      marginBottom: 22
+    }
+  }, "Tu perfil se abre desde el tel\xE9fono con el que votaste. Si est\xE1s en otro dispositivo, escribe tu correo y te mandamos el enlace."), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-correo"
+  }, "Tu correo"), React.createElement("input", {
+    id: "pf-correo",
+    type: "email",
+    inputMode: "email",
+    autoComplete: "email",
+    value: correo,
+    onChange: e => setCorreo(e.target.value),
+    maxLength: 254,
+    required: true
+  })), React.createElement(Aviso, null, error), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: busy,
+    style: {
+      justifyContent: "center",
+      padding: 14,
+      width: "100%",
+      marginTop: 20
+    }
+  }, busy ? "Enviando…" : "Enviarme el enlace"))));
+};
+const PerfilVisitantePage = () => {
+  const params = new URLSearchParams(window.location.search);
+  const guardado = window.LMTPerfil && window.LMTPerfil.leer() || {
+    correo: "",
+    token: ""
+  };
+  const correo = (params.get("correo") || guardado.correo || "").toLowerCase();
+  const token = params.get("t") || guardado.token || "";
+  const [form, setForm] = React.useState(PERFIL_VACIO);
+  const [opciones, setOpciones] = React.useState(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [acepta, setAcepta] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [ok, setOk] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [existia, setExistia] = React.useState(false);
+  const set = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  React.useEffect(() => {
+    if (!correo || !token) {
+      setCargando(false);
+      return;
+    }
+    if (window.LMTPerfil) window.LMTPerfil.guardar(correo, token);
+    let vivo = true;
+    (async () => {
+      try {
+        const datos = await window.LMTApi.getPerfilVisitante(correo, token);
+        if (!vivo) return;
+        setOpciones(datos.opciones || null);
+        if (datos.perfil) {
+          setForm(Object.assign({}, PERFIL_VACIO, datos.perfil));
+          setExistia(true);
+          setAcepta(true);
+        }
+      } catch (err) {
+        if (vivo) setError(mensajeError(err, "No fue posible abrir tu perfil."));
+      } finally {
+        if (vivo) setCargando(false);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [correo, token]);
+  const guardar = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    setOk("");
+    if (!acepta) {
+      setError("Necesitamos tu autorización para guardar estos datos.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.LMTApi.guardarPerfilVisitante(correo, token, Object.assign({}, form, {
+        acepta_datos: true
+      }));
+      setExistia(true);
+      setOk("Tus datos quedaron guardados. Gracias por ayudarnos a conocer al público del festival.");
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible guardar tus datos."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const borrar = async () => {
+    if (!window.confirm("Se borrarán todos los datos de tu perfil. Tu voto y tu pasaporte no se tocan. ¿Continuar?")) return;
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      await window.LMTApi.borrarPerfilVisitante(correo, token);
+      setForm(PERFIL_VACIO);
+      setExistia(false);
+      setAcepta(false);
+      setOk("Tus datos fueron borrados.");
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible borrar tus datos."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!correo || !token) return React.createElement(PerfilSinAcceso, null);
+  if (cargando) return React.createElement(Splash, null);
+  const ops = opciones || {};
+  return React.createElement("div", {
+    className: "mobile-page"
+  }, React.createElement("div", {
+    className: "mobile-inner"
+  }, React.createElement("a", {
+    href: "/pasaporte",
+    "data-route": true,
+    style: {
+      color: "var(--ink-3)",
+      fontSize: 13
+    }
+  }, "\u2190 Mi pasaporte"), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 22
+    }
+  }, "Perfil del visitante"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 34,
+      fontWeight: 400,
+      margin: "6px 0 10px",
+      lineHeight: 1.05
+    }
+  }, existia ? "Tus datos." : "Cuéntanos\nquién nos visita."), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.65,
+      marginBottom: 8
+    }
+  }, "Con esto sabemos qui\xE9n viene al festival y podemos preparar mejor la pr\xF3xima edici\xF3n.", React.createElement("strong", null, " Ning\xFAn dato es obligatorio"), ": responde s\xF3lo lo que quieras."), React.createElement("p", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      marginBottom: 24,
+      wordBreak: "break-all"
+    }
+  }, correo), React.createElement(Aviso, {
+    tipo: "ok"
+  }, ok), React.createElement(Aviso, null, error), React.createElement("form", {
+    onSubmit: guardar,
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 20,
+      marginTop: 8
+    }
+  }, React.createElement(BloqueForm, {
+    titulo: "Sobre ti"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-nombre"
+  }, "Nombre"), React.createElement("input", {
+    id: "pf-nombre",
+    value: form.nombre,
+    onChange: e => set("nombre", e.target.value),
+    maxLength: 120,
+    autoComplete: "name"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-tel"
+  }, "Tel\xE9fono"), React.createElement("input", {
+    id: "pf-tel",
+    value: form.telefono,
+    onChange: e => set("telefono", e.target.value),
+    maxLength: 32,
+    inputMode: "tel",
+    autoComplete: "tel"
+  })), React.createElement(CampoOpcion, {
+    id: "pf-genero",
+    label: "G\xE9nero",
+    valor: form.genero,
+    opciones: ops.genero,
+    etiquetas: PERFIL_ETIQUETAS.genero,
+    onChange: v => set("genero", v)
+  }), React.createElement(CampoOpcion, {
+    id: "pf-edad",
+    label: "Rango de edad",
+    valor: form.rango_edad,
+    opciones: ops.rango_edad,
+    etiquetas: PERFIL_ETIQUETAS.rango_edad,
+    onChange: v => set("rango_edad", v)
+  })), React.createElement(BloqueForm, {
+    titulo: "De d\xF3nde nos visitas"
+  }, React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-pais"
+  }, "Pa\xEDs"), React.createElement("input", {
+    id: "pf-pais",
+    value: form.pais,
+    onChange: e => set("pais", e.target.value),
+    maxLength: 80
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-dep"
+  }, "Departamento"), React.createElement("input", {
+    id: "pf-dep",
+    value: form.departamento,
+    onChange: e => set("departamento", e.target.value),
+    maxLength: 80,
+    placeholder: "Nari\xF1o"
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-mun"
+  }, "Municipio"), React.createElement("input", {
+    id: "pf-mun",
+    value: form.municipio,
+    onChange: e => set("municipio", e.target.value),
+    maxLength: 80,
+    placeholder: "Pasto"
+  }))), React.createElement(BloqueForm, {
+    titulo: "Tu visita"
+  }, React.createElement(CampoOpcion, {
+    id: "pf-tipo",
+    label: "Vienes en representaci\xF3n de",
+    valor: form.tipo_visitante,
+    opciones: ops.tipo_visitante,
+    etiquetas: PERFIL_ETIQUETAS.tipo_visitante,
+    onChange: v => set("tipo_visitante", v)
+  }), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-entidad"
+  }, "Nombre de la entidad o empresa"), React.createElement("input", {
+    id: "pf-entidad",
+    value: form.entidad,
+    onChange: e => set("entidad", e.target.value),
+    maxLength: 120
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "S\xF3lo si vienes por una instituci\xF3n.")), React.createElement(CampoOpcion, {
+    id: "pf-medio",
+    label: "\xBFC\xF3mo te enteraste del festival?",
+    valor: form.como_se_entero,
+    opciones: ops.como_se_entero,
+    etiquetas: PERFIL_ETIQUETAS.como_se_entero,
+    onChange: v => set("como_se_entero", v)
+  }), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-primera"
+  }, "\xBFEs tu primera vez en el festival?"), React.createElement("select", {
+    id: "pf-primera",
+    value: form.primera_visita === null || form.primera_visita === undefined ? "" : form.primera_visita ? "si" : "no",
+    onChange: e => set("primera_visita", e.target.value === "" ? null : e.target.value === "si")
+  }, React.createElement("option", {
+    value: ""
+  }, "Sin responder"), React.createElement("option", {
+    value: "si"
+  }, "S\xED, es la primera"), React.createElement("option", {
+    value: "no"
+  }, "Ya hab\xEDa venido"))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-exp"
+  }, "\xBFQu\xE9 esperas del festival?"), React.createElement("textarea", {
+    id: "pf-exp",
+    rows: 3,
+    value: form.expectativa,
+    onChange: e => set("expectativa", e.target.value),
+    maxLength: 500,
+    style: {
+      border: "1px solid var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 12
+    }
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Lo leemos: nos sirve para armar la programaci\xF3n."))), React.createElement(BloqueForm, {
+    titulo: "Enfoque diferencial",
+    nota: "Estas dos preguntas son datos sensibles seg\xFAn la Ley 1581 de 2012. Las hacemos porque la Gobernaci\xF3n debe reportar con enfoque diferencial, y responderlas es siempre voluntario: puedes dejarlas sin responder o elegir \xABPrefiero no decir\xBB."
+  }, React.createElement(CampoOpcion, {
+    id: "pf-etnia",
+    label: "\xBFPerteneces a alg\xFAn grupo \xE9tnico?",
+    valor: form.grupo_etnico,
+    opciones: ops.grupo_etnico,
+    etiquetas: PERFIL_ETIQUETAS.grupo_etnico,
+    onChange: v => set("grupo_etnico", v)
+  }), React.createElement(CampoOpcion, {
+    id: "pf-discapacidad",
+    label: "\xBFTienes alguna discapacidad?",
+    valor: form.discapacidad,
+    opciones: ops.discapacidad,
+    etiquetas: PERFIL_ETIQUETAS.discapacidad,
+    ayuda: "Nos ayuda a preparar el recinto y la atenci\xF3n.",
+    onChange: v => set("discapacidad", v)
+  })), React.createElement("label", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+      fontSize: 13,
+      color: "var(--ink-2)",
+      lineHeight: 1.55
+    }
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: acepta,
+    onChange: e => setAcepta(e.target.checked),
+    style: {
+      marginTop: 3
+    }
+  }), React.createElement("span", null, "Autorizo a la Gobernaci\xF3n de Nari\xF1o a tratar estos datos con fines estad\xEDsticos y de caracterizaci\xF3n del p\xFAblico del festival, conforme a la Ley 1581 de 2012. Puedo consultarlos, corregirlos o borrarlos cuando quiera desde esta misma p\xE1gina.")), React.createElement(Aviso, null, error), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: busy,
+    style: {
+      justifyContent: "center",
+      padding: 14,
+      opacity: busy ? 0.6 : 1
+    }
+  }, busy ? "Guardando…" : existia ? "Guardar cambios" : "Guardar mis datos"), existia && React.createElement("button", {
+    type: "button",
+    onClick: borrar,
+    disabled: busy,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      color: "var(--bad)"
+    }
+  }, "Borrar mis datos"), React.createElement("a", {
+    href: "/pasaporte",
+    "data-route": true,
+    className: "mono",
+    style: {
+      textAlign: "center",
+      color: "var(--ink-3)",
+      marginBottom: 8
+    }
+  }, "Volver a mi pasaporte"))));
+};
+Object.assign(window, {
+  PerfilVisitantePage,
+  PerfilSinAcceso,
+  PERFIL_ETIQUETAS
+});
+})();
+
+/* components/Caracterizacion.jsx */
+(function () {
+const BarraDimension = ({
+  filas,
+  etiquetas,
+  total
+}) => {
+  if (!filas || filas.length === 0) {
+    return React.createElement("p", {
+      style: {
+        fontSize: 13,
+        color: "var(--ink-3)",
+        margin: 0
+      }
+    }, "Nadie ha respondido todav\xEDa.");
+  }
+  const max = Math.max(...filas.map(f => f.n), 1);
+  return React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, filas.map(f => {
+    const pct = total > 0 ? Math.round(f.n * 100 / total) : 0;
+    return React.createElement("div", {
+      key: f.valor
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 10,
+        fontSize: 13,
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      style: {
+        minWidth: 0
+      }
+    }, etiquetas && etiquetas[f.valor] || f.valor), React.createElement("span", {
+      className: "mono",
+      style: {
+        flex: "0 0 auto"
+      }
+    }, f.n, " \xB7 ", pct, "%")), React.createElement("div", {
+      style: {
+        height: 6,
+        borderRadius: 999,
+        background: "var(--paper-2)",
+        overflow: "hidden"
+      }
+    }, React.createElement("div", {
+      style: {
+        width: `${f.n * 100 / max}%`,
+        height: "100%",
+        background: "var(--grano)"
+      }
+    })));
+  }));
+};
+const TarjetaDimension = ({
+  titulo,
+  nota,
+  children
+}) => React.createElement("div", {
+  style: {
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-md)",
+    padding: 20,
+    background: "var(--paper)"
+  }
+}, React.createElement("div", {
+  className: "mono",
+  style: {
+    marginBottom: nota ? 4 : 14
+  }
+}, titulo), nota && React.createElement("p", {
+  style: {
+    fontSize: 12,
+    color: "var(--ink-3)",
+    lineHeight: 1.5,
+    margin: "0 0 14px"
+  }
+}, nota), children);
+const AdminCaracterizacion = () => {
+  const [datos, setDatos] = React.useState(null);
+  const [expectativas, setExpectativas] = React.useState([]);
+  const [error, setError] = React.useState("");
+  const [cargando, setCargando] = React.useState(true);
+  React.useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const [r, e] = await Promise.all([window.LMTApi.resumenVisitantes(), window.LMTApi.expectativasVisitantes()]);
+        if (!vivo) return;
+        setDatos(r);
+        setExpectativas(e || []);
+      } catch (err) {
+        if (vivo) setError(mensajeError(err, "No fue posible cargar la caracterización."));
+      } finally {
+        if (vivo) setCargando(false);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  if (cargando) return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    className: "splash"
+  }, "Cargando\u2026"));
+  const d = datos || {
+    total: 0,
+    votantes: 0,
+    dimensiones: {},
+    municipios: [],
+    primera_visita: [],
+    etiquetas: {}
+  };
+  const eti = d.etiquetas || {};
+  const total = d.total || 0;
+  const cobertura = d.votantes > 0 ? Math.round(total * 100 / d.votantes) : 0;
+  const csv = window.LMTApi.urlFor("/export/visitantes.csv");
+  const primera = (d.primera_visita || []).map(f => ({
+    valor: String(f.valor),
+    n: f.n
+  }));
+  return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      gap: 12,
+      flexWrap: "wrap",
+      marginBottom: 22
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    className: "mono"
+  }, "Visitantes \xB7 ", total, " perfiles"), React.createElement("h1", {
+    className: "titulo-xl"
+  }, "Caracterizaci\xF3n")), React.createElement("a", {
+    className: "btn btn-ghost",
+    href: csv
+  }, "Descargar CSV")), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.6,
+      margin: "0 0 24px",
+      maxWidth: 640
+    }
+  }, "Lo que los visitantes respondieron por su cuenta despu\xE9s de votar. Todo es voluntario, as\xED que las cifras describen a quien quiso contestar, no al total del p\xFAblico. El CSV lleva datos personales: gu\xE1rdalo donde corresponda y no lo reenv\xEDes por correo."), React.createElement(Aviso, null, error), React.createElement("div", {
+    className: "grid-3",
+    style: {
+      marginBottom: 24
+    }
+  }, [{
+    k: "Perfiles",
+    v: total,
+    sub: "completados"
+  }, {
+    k: "Votantes",
+    v: d.votantes || 0,
+    sub: "correos distintos"
+  }, {
+    k: "Cobertura",
+    v: cobertura + "%",
+    sub: "de los votantes"
+  }].map(m => React.createElement("div", {
+    key: m.k,
+    style: {
+      padding: 20,
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper)"
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, m.k), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontSize: 40,
+      fontStyle: "italic",
+      lineHeight: 1,
+      marginTop: 8
+    }
+  }, m.v), React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "var(--ink-3)",
+      marginTop: 4
+    }
+  }, m.sub)))), total === 0 ? React.createElement("div", {
+    style: {
+      padding: 50,
+      border: "1px dashed var(--line-2)",
+      borderRadius: "var(--r-md)",
+      textAlign: "center",
+      color: "var(--ink-3)"
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Sin perfiles"), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 26,
+      color: "var(--ink)",
+      margin: "8px 0 4px"
+    }
+  }, "Todav\xEDa nadie ha completado su perfil."), React.createElement("div", {
+    style: {
+      fontSize: 13
+    }
+  }, "Se les propone al terminar de votar, y es opcional.")) : React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 18,
+      alignItems: "start"
+    }
+  }, React.createElement(TarjetaDimension, {
+    titulo: "G\xE9nero"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.genero,
+    etiquetas: eti.genero,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Rango de edad"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.rango_edad,
+    etiquetas: eti.rango_edad,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Tipo de visitante"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.tipo_visitante,
+    etiquetas: eti.tipo_visitante,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "C\xF3mo se enteraron"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.como_se_entero,
+    etiquetas: eti.como_se_entero,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Grupo \xE9tnico",
+    nota: "Dato sensible, de respuesta voluntaria."
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.grupo_etnico,
+    etiquetas: eti.grupo_etnico,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Discapacidad",
+    nota: "Dato sensible, de respuesta voluntaria."
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.discapacidad,
+    etiquetas: eti.discapacidad,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Municipio de origen",
+    nota: "Los 25 m\xE1s frecuentes."
+  }, React.createElement(BarraDimension, {
+    filas: d.municipios,
+    etiquetas: null,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Primera visita"
+  }, React.createElement(BarraDimension, {
+    filas: primera,
+    etiquetas: {
+      "1": "Es su primera vez",
+      "0": "Ya había venido"
+    },
+    total: total
+  }))), expectativas.length > 0 && React.createElement("div", {
+    style: {
+      marginTop: 28
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 12
+    }
+  }, "Qu\xE9 esperan del festival \xB7 ", expectativas.length, " respuestas"), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, expectativas.map((e, i) => React.createElement("div", {
+    key: i,
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: "14px 16px",
+      background: "var(--paper)"
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 14,
+      lineHeight: 1.6
+    }
+  }, e.texto), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 6,
+      color: "var(--ink-3)"
+    }
+  }, e.municipio || "sin municipio", " \xB7 ", e.hora))))));
+};
+Object.assign(window, {
+  AdminCaracterizacion
+});
+})();
+
 /* components/App.jsx */
 (function () {
 const PALETTES = {
@@ -5486,6 +7262,9 @@ const App = () => {
       window.LMTRouter.go("/admin/login");
       return null;
     }
+    if (user.must_change) return React.createElement(AdminCambioClave, {
+      user: user
+    });
   }
   if (route.path === "/" || route.path === "") {
     return React.createElement(LoginAdmin, {
@@ -5537,6 +7316,9 @@ const App = () => {
   }
   if (route.path === "/promotor" || route.path === "/promotor/") {
     return React.createElement(PromotorPage, null);
+  }
+  if (route.path === "/perfil" || route.path === "/perfil/") {
+    return React.createElement(PerfilVisitantePage, null);
   }
   if (route.path === "/admin/login") {
     return React.createElement(LoginAdmin, {
@@ -5596,6 +7378,23 @@ const App = () => {
       stands: stands
     });
   }
+  if (route.path === "/admin/caracterizacion") {
+    return React.createElement(AdminPage, {
+      section: "caracterizacion",
+      user: user,
+      stands: stands
+    });
+  }
+  if (route.path === "/admin/cuentas") {
+    if (user.rol !== "propietario") return React.createElement(NotFound, {
+      back: "/admin"
+    });
+    return React.createElement(AdminPage, {
+      section: "cuentas",
+      user: user,
+      stands: stands
+    });
+  }
   return React.createElement(NotFound, {
     back: "/"
   });
@@ -5632,7 +7431,7 @@ const NotFound = ({
 window.NotFound = NotFound;
 window.Splash = Splash;
 const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores"];
+  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion"];
   if (needed.every(k => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
   } else {

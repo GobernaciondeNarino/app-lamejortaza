@@ -19,6 +19,22 @@ function register_routes_exports(\LMT\Router $r): void
             'SELECT id, nombre, municipio, region, direccion, correo, descripcion, votos_bueno, votos_regular, votos_malo, created_at FROM stands ORDER BY id');
     });
 
+    // Caracterización de visitantes. Lleva datos sensibles (grupo étnico,
+    // discapacidad), así que sólo lo descarga un administrador que ya cambió su
+    // contraseña temporal —lo exige Security::requireAdmin()— y el fichero es
+    // responsabilidad de quien lo guarda.
+    $r->get('/export/visitantes.csv', function () {
+        Security::requireAdmin();
+        export_csv_stream('visitantes.csv',
+            ['correo', 'nombre', 'telefono', 'genero', 'rango_edad', 'pais', 'departamento',
+             'municipio', 'tipo_visitante', 'entidad', 'grupo_etnico', 'discapacidad',
+             'expectativa', 'como_se_entero', 'primera_visita', 'created_at', 'updated_at'],
+            'SELECT correo, nombre, telefono, genero, rango_edad, pais, departamento,
+                    municipio, tipo_visitante, entidad, grupo_etnico, discapacidad,
+                    expectativa, como_se_entero, primera_visita, created_at, updated_at
+             FROM visitantes ORDER BY created_at DESC');
+    });
+
     $r->get('/export/pasaportes.csv', function () {
         Security::requireAdmin();
         export_csv_stream('pasaportes.csv', ['correo', 'nombre', 'inicio', 'visitados'],

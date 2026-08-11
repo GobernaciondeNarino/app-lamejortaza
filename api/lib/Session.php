@@ -61,7 +61,7 @@ final class Session
         }
     }
 
-    public static function login(int $userId, string $email, bool $admin): void
+    public static function login(int $userId, string $email, bool $admin, bool $debeCambiarClave = false, string $rol = 'organizador'): void
     {
         session_regenerate_id(true);
         // Una sesión sólo puede ser de un actor: entrar como administrador
@@ -70,6 +70,8 @@ final class Session
         $_SESSION['_uid']     = $userId;
         $_SESSION['_email']   = $email;
         $_SESSION['_admin']   = $admin;
+        $_SESSION['_must']    = $debeCambiarClave;
+        $_SESSION['_rol']     = $rol;
         $_SESSION['_login_at']= time();
         $_SESSION['_csrf']    = bin2hex(random_bytes(32));
     }
@@ -110,6 +112,7 @@ final class Session
     public static function marcarClaveCambiada(): void
     {
         if (!empty($_SESSION['_pid'])) $_SESSION['_pmust'] = false;
+        if (!empty($_SESSION['_uid'])) $_SESSION['_must'] = false;
     }
 
     public static function destroy(): void
@@ -129,9 +132,11 @@ final class Session
     {
         if (empty($_SESSION['_uid'])) return null;
         return [
-            'id'    => (int)$_SESSION['_uid'],
-            'email' => (string)$_SESSION['_email'],
-            'admin' => !empty($_SESSION['_admin']),
+            'id'          => (int)$_SESSION['_uid'],
+            'email'       => (string)$_SESSION['_email'],
+            'admin'       => !empty($_SESSION['_admin']),
+            'rol'         => (string)($_SESSION['_rol'] ?? 'organizador'),
+            'must_change' => !empty($_SESSION['_must']),
         ];
     }
 
@@ -153,12 +158,26 @@ final class Session
             return true;
         }
         try {
-            $stmt = Db::pdo()->prepare('SELECT is_admin FROM admins WHERE id = :id');
-            $stmt->execute([':id' => (int) $_SESSION['_uid']]);
+            try {
+                $stmt = Db::pdo()->prepare('SELECT is_admin, rol, must_change_password FROM admins WHERE id = :id');
+                $stmt->execute([':id' => (int) $_SESSION['_uid']]);
+            } catch (\Throwable $sinColumnas) {
+                // Instalación anterior a db/migrate.php.
+                $stmt = Db::pdo()->prepare('SELECT is_admin FROM admins WHERE id = :id');
+                $stmt->execute([':id' => (int) $_SESSION['_uid']]);
+            }
             $fila = $stmt->fetch();
             if (!$fila || empty($fila['is_admin'])) {
                 self::destroy();
                 return false;
+            }
+            // El rol y la bandera de clave temporal se refrescan aquí y no sólo
+            // al entrar: si el propietario te degrada o te repone la contraseña,
+            // la sesión abierta tiene que enterarse dentro del mismo minuto, no
+            // dentro de las ocho horas que dura la cookie.
+            if (array_key_exists('rol', $fila)) {
+                $_SESSION['_rol']  = (string) ($fila['rol'] ?: 'organizador');
+                $_SESSION['_must'] = !empty($fila['must_change_password']);
             }
         } catch (\Throwable $e) {
             // Si la base no responde no expulsamos a nadie (la petición fallará
@@ -168,6 +187,18 @@ final class Session
         }
         $_SESSION['_admin_check'] = $ahora;
         return true;
+    }
+
+    /**
+     * Administrador que además ya cambió la contraseña que le llegó por correo.
+     *
+     * Es el listón para enseñar datos de contacto de los caficultores: mientras
+     * la clave temporal siga siendo válida, la sesión vale lo que valga el buzón
+     * desde el que se abrió.
+     */
+    public static function isAdminPleno(): bool
+    {
+        return self::isAdmin() && empty($_SESSION['_must']);
     }
 
     public static function csrfToken(): string

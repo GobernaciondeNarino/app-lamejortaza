@@ -1,0 +1,335 @@
+<?php
+defined('LMT_GUARD') || exit('forbidden');
+
+use LMT\Db;
+use LMT\Response;
+use LMT\Validate;
+use LMT\Security;
+use LMT\Config;
+use LMT\RateLimit;
+use LMT\Mailer;
+use LMT\Correos;
+
+/**
+ * Perfil del visitante.
+ *
+ * Quien vota deja su correo y nada más. Este módulo le ofrece —siempre de
+ * forma voluntaria— completar unos datos que permiten caracterizar al público
+ * del festival: de dónde viene, si asiste por una entidad, grupo étnico, si
+ * tiene alguna discapacidad, qué espera del evento.
+ *
+ * Cómo se prueba que el perfil es tuyo
+ * ------------------------------------
+ * El visitante no tiene contraseña, así que el correo por sí solo no puede
+ * abrir un perfil: si bastara con escribirlo, cualquiera podría leer a qué
+ * grupo étnico pertenece un vecino. Al votar se emite un testigo
+ *
+ *     HMAC-SHA256(app_secret, 'perfil|' + correo)
+ *
+ * que viaja al navegador de quien acaba de demostrar que controla ese correo
+ * en el mismo acto de votar, y se guarda ahí. Sin el testigo no se lee ni se
+ * escribe nada. Quien lo pierda (otro teléfono, otro navegador) puede pedir el
+ * enlace por correo: llega al buzón, que es la prueba de propiedad de verdad.
+ *
+ * Ley 1581 de 2012
+ * ----------------
+ * El grupo étnico y la discapacidad son datos sensibles: su tratamiento exige
+ * autorización explícita y NUNCA puede ser obligatorio. Por eso todo campo
+ * admite 'prefiero_no_decir', nada es obligatorio, la casilla de autorización
+ * se pide aparte y el visitante puede borrar su perfil entero.
+ */
+
+/** Catálogos cerrados: lo que no esté aquí no entra en la base. */
+const VISITANTE_OPCIONES = [
+    'genero'         => ['hombre', 'mujer', 'otro', 'prefiero_no_decir'],
+    'rango_edad'     => ['menor_18', '18_25', '26_35', '36_45', '46_60', 'mayor_60', 'prefiero_no_decir'],
+    'tipo_visitante' => ['publica', 'privada', 'academica', 'gremio', 'particular', 'otro', 'prefiero_no_decir'],
+    'grupo_etnico'   => ['indigena', 'afrodescendiente', 'raizal', 'palenquero', 'rrom', 'ninguno', 'prefiero_no_decir'],
+    'discapacidad'   => ['fisica', 'visual', 'auditiva', 'intelectual', 'psicosocial', 'multiple', 'ninguna', 'prefiero_no_decir'],
+    'como_se_entero' => ['redes', 'radio', 'television', 'prensa', 'voz_a_voz', 'institucion', 'otro'],
+];
+
+function register_routes_visitantes(\LMT\Router $r): void
+{
+    /** Catálogos para pintar el formulario sin duplicar las listas en el JS. */
+    $r->get('/visitantes/opciones', function () {
+        Response::ok(['opciones' => VISITANTE_OPCIONES]);
+    });
+
+    $r->get('/visitantes/perfil', function () {
+        $correo = Validate::email($_GET['correo'] ?? null);
+        $token  = is_string($_GET['t'] ?? null) ? $_GET['t'] : '';
+        if (!$correo) Response::error(422, 'correo_invalido');
+        if (!RateLimit::hit('perfil_visitante', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!visitante_token_valido($correo, $token)) Response::error(403, 'token_invalido');
+
+        $stmt = Db::pdo()->prepare('SELECT * FROM visitantes WHERE correo = :c');
+        $stmt->execute([':c' => $correo]);
+        $row = $stmt->fetch();
+
+        Response::ok([
+            'correo'   => $correo,
+            'perfil'   => $row ? visitante_publico($row) : null,
+            'opciones' => VISITANTE_OPCIONES,
+        ]);
+    });
+
+    $r->put('/visitantes/perfil', function () {
+        $b = Security::jsonBody();
+        $correo = Validate::email($b['correo'] ?? null);
+        $token  = is_string($b['token'] ?? null) ? $b['token'] : '';
+        if (!$correo) Response::error(422, 'correo_invalido');
+        if (!RateLimit::hit('perfil_visitante', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!visitante_token_valido($correo, $token)) Response::error(403, 'token_invalido');
+
+        // Sin autorización no se guarda nada: es lo que exige la ley para los
+        // datos sensibles y no tiene sentido guardar el resto "a medias".
+        if (Validate::bool($b['acepta_datos'] ?? null) !== true) {
+            Response::error(422, 'debe_aceptar_tratamiento_datos');
+        }
+
+        $datos = [
+            ':c'   => $correo,
+            ':nom' => Validate::nombre($b['nombre'] ?? null, 120),
+            ':tel' => Validate::telefono($b['telefono'] ?? null),
+            ':gen' => visitante_opcion('genero', $b['genero'] ?? null),
+            ':edad'=> visitante_opcion('rango_edad', $b['rango_edad'] ?? null),
+            ':pais'=> visitante_texto($b['pais'] ?? null, 80),
+            ':dep' => visitante_texto($b['departamento'] ?? null, 80),
+            ':mun' => visitante_texto($b['municipio'] ?? null, 80),
+            ':tipo'=> visitante_opcion('tipo_visitante', $b['tipo_visitante'] ?? null),
+            ':ent' => visitante_texto($b['entidad'] ?? null, 120),
+            ':etn' => visitante_opcion('grupo_etnico', $b['grupo_etnico'] ?? null),
+            ':dis' => visitante_opcion('discapacidad', $b['discapacidad'] ?? null),
+            ':exp' => visitante_texto($b['expectativa'] ?? null, 500),
+            ':como'=> visitante_opcion('como_se_entero', $b['como_se_entero'] ?? null),
+            ':prim'=> ($p = Validate::bool($b['primera_visita'] ?? null)) === null ? null : ($p ? 1 : 0),
+        ];
+
+        $pdo = Db::pdo();
+        $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        $columnas = 'correo, nombre, telefono, genero, rango_edad, pais, departamento, municipio,
+                     tipo_visitante, entidad, grupo_etnico, discapacidad, expectativa,
+                     como_se_entero, primera_visita, acepta_datos, updated_at';
+        $valores  = ':c, :nom, :tel, :gen, :edad, :pais, :dep, :mun, :tipo, :ent, :etn, :dis,
+                     :exp, :como, :prim, 1, CURRENT_TIMESTAMP';
+        $asigna   = 'nombre=:nom, telefono=:tel, genero=:gen, rango_edad=:edad, pais=:pais,
+                     departamento=:dep, municipio=:mun, tipo_visitante=:tipo, entidad=:ent,
+                     grupo_etnico=:etn, discapacidad=:dis, expectativa=:exp,
+                     como_se_entero=:como, primera_visita=:prim, acepta_datos=1,
+                     updated_at=CURRENT_TIMESTAMP';
+
+        if ($driver === 'mysql') {
+            // Con la emulación de prepares desactivada un marcador con nombre no
+            // se puede repetir, así que el UPDATE de MySQL no vuelve a nombrarlos:
+            // reutiliza con VALUES() lo que traía el INSERT.
+            $sql = "INSERT INTO visitantes ($columnas) VALUES ($valores)
+                    ON DUPLICATE KEY UPDATE
+                      nombre=VALUES(nombre), telefono=VALUES(telefono), genero=VALUES(genero),
+                      rango_edad=VALUES(rango_edad), pais=VALUES(pais),
+                      departamento=VALUES(departamento), municipio=VALUES(municipio),
+                      tipo_visitante=VALUES(tipo_visitante), entidad=VALUES(entidad),
+                      grupo_etnico=VALUES(grupo_etnico), discapacidad=VALUES(discapacidad),
+                      expectativa=VALUES(expectativa), como_se_entero=VALUES(como_se_entero),
+                      primera_visita=VALUES(primera_visita), acepta_datos=1,
+                      updated_at=CURRENT_TIMESTAMP";
+        } else {
+            $sql = "INSERT INTO visitantes ($columnas) VALUES ($valores)
+                    ON CONFLICT(correo) DO UPDATE SET $asigna";
+        }
+        $pdo->prepare($sql)->execute($datos);
+
+        $stmt = $pdo->prepare('SELECT * FROM visitantes WHERE correo = :c');
+        $stmt->execute([':c' => $correo]);
+        Response::ok(['perfil' => visitante_publico($stmt->fetch() ?: [])]);
+    });
+
+    /** Derecho de supresión (Ley 1581/2012, art. 8). */
+    $r->delete('/visitantes/perfil', function () {
+        $b = Security::jsonBody();
+        $correo = Validate::email($b['correo'] ?? null);
+        $token  = is_string($b['token'] ?? null) ? $b['token'] : '';
+        if (!$correo) Response::error(422, 'correo_invalido');
+        if (!RateLimit::hit('perfil_visitante', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!visitante_token_valido($correo, $token)) Response::error(403, 'token_invalido');
+
+        Db::pdo()->prepare('DELETE FROM visitantes WHERE correo = :c')->execute([':c' => $correo]);
+        Response::ok(null);
+    });
+
+    /**
+     * Reenvío del enlace al propio buzón. Responde lo mismo haya o no votos con
+     * ese correo: si distinguiera, serviría para averiguar quién asistió.
+     */
+    $r->post('/visitantes/enlace', function () {
+        $b = Security::jsonBody();
+        $correo = Validate::email($b['correo'] ?? null);
+        if (!$correo) Response::error(422, 'correo_invalido');
+        if (!RateLimit::hit('perfil_enlace', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!RateLimit::hit('perfil_enlace_correo', hash('sha256', $correo))) Response::error(429, 'rate_limited');
+
+        $stmt = Db::pdo()->prepare('SELECT 1 FROM votos WHERE correo = :c LIMIT 1');
+        $stmt->execute([':c' => $correo]);
+        if ($stmt->fetchColumn()) {
+            $url = Security::baseUrlPublica() . '/perfil?correo=' . rawurlencode($correo)
+                 . '&t=' . rawurlencode(visitante_token($correo));
+            $pl = Correos::enlacePerfil($correo, $url);
+            Mailer::send($correo, '', $pl['asunto'], $pl['html'], $pl['texto'], 'enlace_perfil');
+        }
+        Response::ok(['enviado' => true]);
+    });
+
+    // ---------------------------------------------------------------------
+    // Administración
+    // ---------------------------------------------------------------------
+
+    /** Caracterización agregada. Nunca devuelve correos ni nombres. */
+    $r->get('/admin/visitantes/resumen', function () {
+        Security::requireAdmin();
+        $pdo = Db::pdo();
+
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM visitantes')->fetchColumn();
+        $votantes = (int) $pdo->query('SELECT COUNT(DISTINCT correo) FROM votos')->fetchColumn();
+
+        $dimensiones = [];
+        foreach (array_keys(VISITANTE_OPCIONES) as $campo) {
+            // $campo sale de una constante del propio código, no del cliente.
+            $filas = $pdo->query(
+                "SELECT $campo AS valor, COUNT(*) AS n FROM visitantes
+                 WHERE $campo IS NOT NULL AND $campo <> '' GROUP BY $campo ORDER BY n DESC"
+            )->fetchAll();
+            $dimensiones[$campo] = array_map(
+                fn($f) => ['valor' => (string) $f['valor'], 'n' => (int) $f['n']],
+                $filas
+            );
+        }
+
+        $municipios = $pdo->query(
+            "SELECT municipio AS valor, COUNT(*) AS n FROM visitantes
+             WHERE municipio IS NOT NULL AND municipio <> ''
+             GROUP BY municipio ORDER BY n DESC, municipio LIMIT 25"
+        )->fetchAll();
+
+        $primera = $pdo->query(
+            'SELECT primera_visita AS valor, COUNT(*) AS n FROM visitantes
+             WHERE primera_visita IS NOT NULL GROUP BY primera_visita'
+        )->fetchAll();
+
+        Response::ok([
+            'total'       => $total,
+            'votantes'    => $votantes,
+            'dimensiones' => $dimensiones,
+            'municipios'  => array_map(fn($f) => ['valor' => (string) $f['valor'], 'n' => (int) $f['n']], $municipios),
+            'primera_visita' => array_map(fn($f) => ['valor' => (int) $f['valor'], 'n' => (int) $f['n']], $primera),
+            'etiquetas'   => VISITANTE_ETIQUETAS,
+        ]);
+    });
+
+    /** Expectativas en texto libre: se leen a mano, así que van aparte. */
+    $r->get('/admin/visitantes/expectativas', function () {
+        Security::requireAdmin();
+        $stmt = Db::pdo()->query(
+            "SELECT expectativa, municipio, created_at FROM visitantes
+             WHERE expectativa IS NOT NULL AND expectativa <> ''
+             ORDER BY created_at DESC LIMIT 100"
+        );
+        Response::ok(array_map(fn($f) => [
+            'texto'     => (string) $f['expectativa'],
+            'municipio' => (string) ($f['municipio'] ?? ''),
+            'hora'      => relative_time($f['created_at']),
+        ], $stmt->fetchAll()));
+    });
+}
+
+// -------------------------------------------------------------------------
+
+/** Etiquetas legibles de cada código. Las usa el panel y el CSV. */
+const VISITANTE_ETIQUETAS = [
+    'genero' => [
+        'hombre' => 'Hombre', 'mujer' => 'Mujer', 'otro' => 'Otro',
+        'prefiero_no_decir' => 'Prefiere no decir',
+    ],
+    'rango_edad' => [
+        'menor_18' => 'Menor de 18', '18_25' => '18 a 25', '26_35' => '26 a 35',
+        '36_45' => '36 a 45', '46_60' => '46 a 60', 'mayor_60' => 'Mayor de 60',
+        'prefiero_no_decir' => 'Prefiere no decir',
+    ],
+    'tipo_visitante' => [
+        'publica' => 'Entidad pública', 'privada' => 'Empresa privada',
+        'academica' => 'Institución académica', 'gremio' => 'Gremio o asociación',
+        'particular' => 'A título personal', 'otro' => 'Otro',
+        'prefiero_no_decir' => 'Prefiere no decir',
+    ],
+    'grupo_etnico' => [
+        'indigena' => 'Indígena', 'afrodescendiente' => 'Negro, afrocolombiano',
+        'raizal' => 'Raizal', 'palenquero' => 'Palenquero', 'rrom' => 'Rrom (gitano)',
+        'ninguno' => 'Ninguno', 'prefiero_no_decir' => 'Prefiere no decir',
+    ],
+    'discapacidad' => [
+        'fisica' => 'Física o motriz', 'visual' => 'Visual', 'auditiva' => 'Auditiva',
+        'intelectual' => 'Intelectual', 'psicosocial' => 'Psicosocial',
+        'multiple' => 'Múltiple', 'ninguna' => 'Ninguna',
+        'prefiero_no_decir' => 'Prefiere no decir',
+    ],
+    'como_se_entero' => [
+        'redes' => 'Redes sociales', 'radio' => 'Radio', 'television' => 'Televisión',
+        'prensa' => 'Prensa', 'voz_a_voz' => 'Voz a voz', 'institucion' => 'Una institución',
+        'otro' => 'Otro medio',
+    ],
+];
+
+/**
+ * Testigo de propiedad del perfil.
+ *
+ * Va ligado al correo y al app_secret de la instalación: no se puede fabricar
+ * desde fuera ni sirve el de un correo para otro.
+ */
+function visitante_token(string $correo): string
+{
+    $secreto = (string) Config::get('app_secret', '');
+    return rtrim(strtr(base64_encode(
+        hash_hmac('sha256', 'perfil|' . strtolower($correo), $secreto, true)
+    ), '+/', '-_'), '=');
+}
+
+function visitante_token_valido(string $correo, string $token): bool
+{
+    if ($token === '') return false;
+    return Security::constantTimeEquals(visitante_token($correo), $token);
+}
+
+/** Valor de un catálogo cerrado, o null. */
+function visitante_opcion(string $campo, $valor): ?string
+{
+    if (!is_string($valor) || $valor === '') return null;
+    return in_array($valor, VISITANTE_OPCIONES[$campo] ?? [], true) ? $valor : null;
+}
+
+function visitante_texto($valor, int $max): ?string
+{
+    if (!is_string($valor)) return null;
+    $v = Validate::texto($valor, $max);
+    return $v === '' ? null : $v;
+}
+
+function visitante_publico(array $v): array
+{
+    return [
+        'nombre'         => (string) ($v['nombre'] ?? ''),
+        'telefono'       => (string) ($v['telefono'] ?? ''),
+        'genero'         => (string) ($v['genero'] ?? ''),
+        'rango_edad'     => (string) ($v['rango_edad'] ?? ''),
+        'pais'           => (string) ($v['pais'] ?? ''),
+        'departamento'   => (string) ($v['departamento'] ?? ''),
+        'municipio'      => (string) ($v['municipio'] ?? ''),
+        'tipo_visitante' => (string) ($v['tipo_visitante'] ?? ''),
+        'entidad'        => (string) ($v['entidad'] ?? ''),
+        'grupo_etnico'   => (string) ($v['grupo_etnico'] ?? ''),
+        'discapacidad'   => (string) ($v['discapacidad'] ?? ''),
+        'expectativa'    => (string) ($v['expectativa'] ?? ''),
+        'como_se_entero' => (string) ($v['como_se_entero'] ?? ''),
+        'primera_visita' => isset($v['primera_visita']) && $v['primera_visita'] !== null
+            ? (bool) $v['primera_visita'] : null,
+        'actualizado'    => (string) ($v['updated_at'] ?? ''),
+    ];
+}

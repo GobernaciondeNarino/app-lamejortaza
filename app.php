@@ -52,6 +52,13 @@ $bootstrap = [
     // mod_rewrite — el cliente añade `?path=...` con la ruta deseada.
     'apiBase' => $base . '/api/index.php',
     'siteName'=> 'La Mejor Taza',
+    // Límites reales de las imágenes, para que el formulario anuncie los del
+    // servidor y no una cifra escrita a mano que se queda desfasada cuando el
+    // operador cambia api/config.php.
+    'uploads' => [
+        'maxBytes' => max(65536, (int) ($cfg['uploads']['max_bytes'] ?? 3 * 1024 * 1024)),
+        'maxDim'   => max(320, min(4000, (int) ($cfg['uploads']['max_dim'] ?? 1600))),
+    ],
 ];
 
 // ---------------------------------------------------------------------------
@@ -69,7 +76,7 @@ $bundle      = __DIR__ . '/js/components.build.js';
 $usarBundle  = is_file($bundle);
 $bundleVersion = $usarBundle ? (string) filemtime($bundle) : '';
 
-$componentes = ['Shared', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'App'];
+$componentes = ['Shared', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'Cuentas', 'Perfil', 'Caracterizacion', 'App'];
 
 // ¿El bundle quedó viejo respecto a algún .jsx? Es el único fallo de este
 // esquema y es silencioso, así que lo detectamos explícitamente.
@@ -120,7 +127,12 @@ header('Content-Security-Policy: ' . $csp);
 <link rel="stylesheet" href="styles/fonts.css"/>
 <link rel="stylesheet" href="styles/tokens.css"/>
 <style>
-  html, body { height: 100%; }
+  /* min-height, NO height. Con `height: 100%` el elemento html quedaba fijado
+     a la altura de la ventana y, al llevar además overflow-x: hidden, recortaba
+     todo lo que sobrara en vertical: en un teléfono la página simplemente no se
+     desplazaba y el panel de administración se quedaba en la primera pantalla.
+     Con min-height el documento crece con su contenido y vuelve a haber scroll. */
+  html, body { min-height: 100%; }
   body { overflow-x: hidden; }
   #root { min-height: 100dvh; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }

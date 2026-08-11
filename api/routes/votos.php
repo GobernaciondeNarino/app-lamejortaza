@@ -129,7 +129,11 @@ function register_routes_votos(\LMT\Router $r): void
             throw $e;
         }
 
-        Response::ok(null);
+        // Testigo del perfil del visitante. Se emite aquí porque votar es el
+        // único momento en que alguien demuestra —dentro del propio acto— que
+        // ese correo es el suyo. Con él, y sólo con él, se puede abrir y editar
+        // la caracterización voluntaria en /perfil.
+        Response::ok(['perfil_token' => visitante_token($correo)]);
     });
 
     // Borrar voto (sólo admin) — se usa para moderar comentarios ofensivos.

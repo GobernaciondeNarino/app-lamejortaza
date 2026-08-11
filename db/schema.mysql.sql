@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS admins (
   email         VARCHAR(254) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   is_admin      TINYINT(1) NOT NULL DEFAULT 1,
+  nombre        VARCHAR(120) DEFAULT NULL,
+  rol           ENUM('propietario','organizador') NOT NULL DEFAULT 'organizador',
+  must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+  ultimo_acceso DATETIME DEFAULT NULL,
+  creado_por    INT UNSIGNED DEFAULT NULL,
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_admin_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -37,6 +42,13 @@ CREATE TABLE IF NOT EXISTS stands (
   coords_x      DECIMAL(6,5) DEFAULT 0.5,
   coords_y      DECIMAL(6,5) DEFAULT 0.5,
   color         VARCHAR(80) DEFAULT 'oklch(0.45 0.1 40)',
+  -- Un stand y su promotor son la misma cosa: estos campos vienen del
+  -- formulario de inscripción y se copian aquí al verificarlo.
+  propietario   VARCHAR(120) DEFAULT NULL,
+  propietario_documento VARCHAR(32) DEFAULT NULL,
+  nit           VARCHAR(32)  DEFAULT NULL,
+  sitio_web     VARCHAR(255) DEFAULT NULL,
+  logo_path     VARCHAR(255) DEFAULT NULL,
   votos_bueno   INT UNSIGNED NOT NULL DEFAULT 0,
   votos_regular INT UNSIGNED NOT NULL DEFAULT 0,
   votos_malo    INT UNSIGNED NOT NULL DEFAULT 0,
@@ -90,6 +102,16 @@ CREATE TABLE IF NOT EXISTS promotores (
   municipio            VARCHAR(80)  DEFAULT NULL,
   empresa_tentativa    VARCHAR(120) DEFAULT NULL,
   mensaje              VARCHAR(500) DEFAULT NULL,
+  -- Borrador del stand tal y como lo escribió el promotor al inscribirse. Se
+  -- copia a `stands` cuando el administrador verifica; a partir de ahí manda
+  -- la fila de `stands` y esto queda como registro de lo que pidió.
+  stand_nombre         VARCHAR(80)  DEFAULT NULL,
+  stand_region         VARCHAR(80)  DEFAULT NULL,
+  stand_direccion      VARCHAR(255) DEFAULT NULL,
+  stand_descripcion    VARCHAR(800) DEFAULT NULL,
+  stand_nit            VARCHAR(32)  DEFAULT NULL,
+  stand_sitio_web      VARCHAR(255) DEFAULT NULL,
+  logo_path            VARCHAR(255) DEFAULT NULL,
   estado               ENUM('pendiente','verificado','activo','rechazado','suspendido')
                        NOT NULL DEFAULT 'pendiente',
   password_hash        VARCHAR(255) DEFAULT NULL,
@@ -147,6 +169,33 @@ CREATE TABLE IF NOT EXISTS productos (
   updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_producto_promotor (promotor_id),
   CONSTRAINT fk_producto_promotor FOREIGN KEY (promotor_id) REFERENCES promotores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Caracterización de visitantes ---------------------------------------------
+-- Datos que el propio visitante aporta OPCIONALMENTE desde su perfil. Sirven
+-- para el informe de caracterización del evento; ninguno es obligatorio y
+-- todos admiten "prefiero no decir", como exige tratar datos sensibles
+-- (Ley 1581/2012, art. 6: etnia y discapacidad son categorías especiales).
+CREATE TABLE IF NOT EXISTS visitantes (
+  correo             VARCHAR(254) PRIMARY KEY,
+  nombre             VARCHAR(120) DEFAULT NULL,
+  telefono           VARCHAR(32)  DEFAULT NULL,
+  genero             ENUM('hombre','mujer','otro','prefiero_no_decir') DEFAULT NULL,
+  rango_edad         ENUM('menor_18','18_25','26_35','36_45','46_60','mayor_60','prefiero_no_decir') DEFAULT NULL,
+  pais               VARCHAR(80)  DEFAULT NULL,
+  departamento       VARCHAR(80)  DEFAULT NULL,
+  municipio          VARCHAR(80)  DEFAULT NULL,
+  tipo_visitante     ENUM('publica','privada','academica','gremio','particular','otro','prefiero_no_decir') DEFAULT NULL,
+  entidad            VARCHAR(120) DEFAULT NULL,
+  grupo_etnico       ENUM('indigena','afrodescendiente','raizal','palenquero','rrom','ninguno','prefiero_no_decir') DEFAULT NULL,
+  discapacidad       ENUM('fisica','visual','auditiva','intelectual','psicosocial','multiple','ninguna','prefiero_no_decir') DEFAULT NULL,
+  expectativa        VARCHAR(500) DEFAULT NULL,
+  como_se_entero     ENUM('redes','radio','television','prensa','voz_a_voz','institucion','otro') DEFAULT NULL,
+  primera_visita     TINYINT(1) DEFAULT NULL,
+  acepta_datos       TINYINT(1) NOT NULL DEFAULT 0,
+  created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_visitante_municipio (municipio)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bitácora de correos salientes ---------------------------------------------

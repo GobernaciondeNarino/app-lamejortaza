@@ -159,12 +159,39 @@ final class Security
         // El fallback anterior hacía stripos($referer, 'http://127.0.0.1:8080')
         // === 0, así que un Referer de http://127.0.0.1:8080.evil.com pasaba el
         // filtro: dominio ajeno, prefijo idéntico. Comprobado explotable.
+        // Origen de la propia petición. El navegador NUNCA deja que una página
+        // ajena falsifique Origin: si la petición sale de evil.com, Origin dice
+        // evil.com. Por eso comparar Origin con el Host de la petición es una
+        // comprobación anti-CSRF válida y es la que usan Django o Rails.
+        //
+        // Antes sólo valía la coincidencia exacta con `allowed_origins`, y eso
+        // convertía un detalle de configuración en una avería: si el sitio se
+        // instaló con una URL y se accede con otra (www frente a sin www, o el
+        // dominio real que nunca se añadió a la lista), TODAS las acciones
+        // fallaban con origin_not_allowed mientras las lecturas seguían
+        // funcionando — el síntoma exacto de "puedo ver la lista pero el botón
+        // no hace nada". La lista blanca se mantiene, pero para autorizar
+        // orígenes DISTINTOS del propio, que es para lo que sirve.
+        $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
+        $propio = preg_match('/^[A-Za-z0-9.\-]{1,253}(:[0-9]{1,5})?$/', $host)
+            ? (self::esHttps() ? 'https' : 'http') . '://' . strtolower($host)
+            : '';
+
+        $aceptable = function (string $url) use ($allowedOrigins, $propio): bool {
+            $o = self::originOf($url);
+            if ($propio !== '' && $o === $propio) return true;
+            // El esquema puede diferir del detectado (proxy TLS sin trust_proxy);
+            // el host es lo que de verdad decide si es el mismo sitio.
+            if ($propio !== '' && parse_url($o, PHP_URL_HOST) === parse_url($propio, PHP_URL_HOST)) return true;
+            return in_array($o, $allowedOrigins, true);
+        };
+
         $ok = false;
-        if ($origin !== '') {
-            $ok = in_array(self::originOf($origin), $allowedOrigins, true);
+        if ($origin !== '' && $origin !== 'null') {
+            $ok = $aceptable($origin);
         } elseif ($referer !== '') {
             // Referer sólo como suplente cuando el navegador no manda Origin.
-            $ok = in_array(self::originOf($referer), $allowedOrigins, true);
+            $ok = $aceptable($referer);
         }
         if (!$ok) Response::error(403, 'origin_not_allowed');
 
@@ -174,9 +201,23 @@ final class Security
         }
     }
 
-    public static function requireAdmin(): void
+    /**
+     * Exige una sesión de administrador vigente.
+     *
+     * Igual que con los promotores, quien entra con la contraseña temporal que
+     * le llegó por correo no puede hacer nada más que cambiarla: la clave viajó
+     * en claro por el correo institucional y hasta que se sustituya la cuenta se
+     * considera prestada. El endpoint del cambio pasa
+     * $permitirClaveTemporal = true; ocultarlo sólo en la interfaz dejaba la API
+     * abierta a cualquiera con la contraseña del correo.
+     */
+    public static function requireAdmin(bool $permitirClaveTemporal = false): void
     {
         if (!Session::isAdmin()) Response::error(401, 'unauthorized');
+        if (!$permitirClaveTemporal) {
+            $u = Session::user();
+            if (!empty($u['must_change'])) Response::error(403, 'password_change_required');
+        }
     }
 
     /**
@@ -201,14 +242,34 @@ final class Security
     {
         $pepper = (string) Config::get('pepper', '');
         $hmac = hash_hmac('sha256', $plain, $pepper, true);
+        $payload = base64_encode($hmac);
+
+        // Argon2id con 64 MiB puede fallar en un hosting compartido con el
+        // límite de memoria justo: PHP 8 lanza entonces una excepción y la
+        // petición muere con un 500 opaco. install.php ya tenía este respaldo;
+        // el código en caliente no, así que verificar un promotor reventaba
+        // justo en el servidor donde más falta hace que funcione.
         if (defined('PASSWORD_ARGON2ID')) {
-            return password_hash(base64_encode($hmac), PASSWORD_ARGON2ID, [
-                'memory_cost' => 65536,
-                'time_cost'   => 4,
-                'threads'     => 2,
-            ]);
+            try {
+                $h = @password_hash($payload, PASSWORD_ARGON2ID, [
+                    'memory_cost' => 65536,
+                    'time_cost'   => 4,
+                    'threads'     => 2,
+                ]);
+                if (is_string($h) && $h !== '') return $h;
+                error_log('[lmt][hash] Argon2id devolvió un valor vacío; se usa bcrypt.');
+            } catch (\Throwable $e) {
+                error_log('[lmt][hash] Argon2id no disponible (' . $e->getMessage() . '); se usa bcrypt.');
+            }
         }
-        return password_hash(base64_encode($hmac), PASSWORD_BCRYPT, ['cost' => 12]);
+
+        $h = password_hash($payload, PASSWORD_BCRYPT, ['cost' => 12]);
+        if (!is_string($h) || $h === '') {
+            // Sin hash no se puede guardar nada: mejor fallar aquí, con un
+            // código claro, que escribir una contraseña vacía en la base.
+            throw new \RuntimeException('no_se_pudo_generar_el_hash');
+        }
+        return $h;
     }
 
     public static function verifyPassword(string $plain, string $hash): bool

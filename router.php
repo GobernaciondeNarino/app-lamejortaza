@@ -45,7 +45,8 @@ $spaRoute = (
     preg_match('#^/festival(/[a-z0-9\-]+)?/?$#', $path) ||
     $path === '/pasaporte' || $path === '/pasaporte/' ||
     $path === '/inscripcion' || $path === '/inscripcion/' ||
-    $path === '/promotor' || $path === '/promotor/'
+    $path === '/promotor' || $path === '/promotor/' ||
+    $path === '/perfil' || $path === '/perfil/'
 );
 if ($spaRoute) {
     require __DIR__ . '/app.php';

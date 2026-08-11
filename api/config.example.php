@@ -100,6 +100,10 @@ return [
         'promotor_registro' => ['window' => 3600, 'max' => 5],  // 5 inscripciones / hora / IP
         'promotor_login'    => ['window' => 900, 'max' => 15],  // 15 intentos / 15 min / IP
         'promotor_upload'   => ['window' => 3600, 'max' => 60], // 60 imágenes / hora / promotor
+        'promotor_logo_publico' => ['window' => 3600, 'max' => 10], // logos en la inscripción (sin sesión)
+        'perfil_visitante'  => ['window' => 600, 'max' => 30],  // perfil del visitante / 10 min / IP
+        'perfil_enlace'     => ['window' => 3600, 'max' => 10], // enlaces de perfil / hora / IP
+        'perfil_enlace_correo' => ['window' => 3600, 'max' => 3], // por correo, para no usarlo de arma
         'global'            => ['window' => 60,  'max' => 120], // anti-flood
     ],
 
