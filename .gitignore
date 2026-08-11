@@ -8,10 +8,20 @@ db/*.sqlite-wal
 db/*.sqlite-shm
 db/*.db
 
-# Composer / Node (si en el futuro se añaden)
-vendor/
+# Composer / Node (si en el futuro se añaden).
+# OJO: la barra inicial es obligatoria. Sin ella, el patrón "vendor/" casa con
+# CUALQUIER directorio llamado vendor a cualquier profundidad — incluido
+# js/vendor/, que contiene three.js auto-hospedado y SÍ debe versionarse
+# (app.php lo carga; sin él la animación del pasaporte no arranca).
+/vendor/
 node_modules/
 composer.lock
+
+# Imágenes que suben los promotores: son datos de producción, no código.
+# El .htaccess sí se versiona porque es el que impide ejecutar scripts ahí
+# (Uploads.php también lo recrea si falta, pero mejor que llegue con el deploy).
+/uploads/*
+!/uploads/.htaccess
 
 # Logs
 *.log

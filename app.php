@@ -53,6 +53,55 @@ $bootstrap = [
     'apiBase' => $base . '/api/index.php',
     'siteName'=> 'La Mejor Taza',
 ];
+
+// ---------------------------------------------------------------------------
+// Cómo se cargan los componentes
+// ---------------------------------------------------------------------------
+// Si existe el bundle precompilado (js/components.build.js, generado por
+// tools/build-components.mjs y versionado en el repo) el navegador ejecuta
+// JavaScript normal: nada de Babel, nada de transpilar en el móvil del
+// visitante, y la CSP puede prohibir eval.
+//
+// Si no existe —desarrollo, o alguien tocó un .jsx y no regeneró— caemos al
+// modo Babel en el navegador. Funciona igual, pero descarga 3 MB y obliga a
+// permitir 'unsafe-eval', así que avisamos por consola.
+$bundle      = __DIR__ . '/js/components.build.js';
+$usarBundle  = is_file($bundle);
+$bundleVersion = $usarBundle ? (string) filemtime($bundle) : '';
+
+$componentes = ['Shared', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'App'];
+
+// ¿El bundle quedó viejo respecto a algún .jsx? Es el único fallo de este
+// esquema y es silencioso, así que lo detectamos explícitamente.
+$bundleObsoleto = false;
+if ($usarBundle) {
+    foreach ($componentes as $c) {
+        $jsx = __DIR__ . '/components/' . $c . '.jsx';
+        if (is_file($jsx) && filemtime($jsx) > filemtime($bundle)) { $bundleObsoleto = true; break; }
+    }
+}
+
+// Nonce por petición: con él la CSP puede autorizar exactamente los dos
+// scripts en línea de esta página y descartar 'unsafe-inline' (en CSP nivel 3
+// la presencia de un nonce hace que 'unsafe-inline' se ignore; lo dejamos sólo
+// como red de seguridad para navegadores antiguos).
+$nonce = base64_encode(random_bytes(16));
+
+$csp = "default-src 'self'; "
+     . "script-src 'self' 'nonce-" . $nonce . "' 'unsafe-inline'" . ($usarBundle ? '' : " 'unsafe-eval'") . '; '
+     // Los componentes usan estilos en línea de React de punta a punta: quitar
+     // 'unsafe-inline' aquí exigiría reescribir toda la interfaz a hojas de estilo.
+     . "style-src 'self' 'unsafe-inline'; "
+     . "font-src 'self' data:; "
+     . "img-src 'self' data: blob:; "
+     . "connect-src 'self'; "
+     . "frame-ancestors 'self'; "
+     . "base-uri 'self'; "
+     . "form-action 'self'; "
+     . "object-src 'none'";
+// La CSP va como cabecera HTTP: en <meta> el navegador ignora frame-ancestors
+// (y con ello la protección contra clickjacking que se creía tener).
+header('Content-Security-Policy: ' . $csp);
 ?>
 <!doctype html>
 <html lang="es">
@@ -62,22 +111,13 @@ $bootstrap = [
 <meta name="referrer" content="strict-origin-when-cross-origin"/>
 <meta name="color-scheme" content="light"/>
 <base href="<?= htmlspecialchars($baseHref, ENT_QUOTES) ?>"/>
-<meta http-equiv="Content-Security-Policy" content="
-  default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com;
-  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  font-src 'self' https://fonts.gstatic.com data:;
-  img-src 'self' data: blob:;
-  connect-src 'self';
-  frame-ancestors 'self';
-  base-uri 'self';
-  form-action 'self';
-  object-src 'none';
-"/>
 <title>La Mejor Taza — Pasaporte del Café de Nariño</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+<link rel="apple-touch-icon" href="favicon.svg"/>
+<meta name="theme-color" content="#38322c"/>
+<!-- Tipografías servidas desde este mismo dominio: ni la CDN de Google recibe
+     la IP de los visitantes, ni la interfaz depende de que sea alcanzable. -->
+<link rel="stylesheet" href="styles/fonts.css"/>
 <link rel="stylesheet" href="styles/tokens.css"/>
 <style>
   html, body { height: 100%; }
@@ -101,8 +141,8 @@ $bootstrap = [
 <body>
 <div id="root"><div class="splash">Cargando…</div></div>
 
-<script>
-window.LMT_BOOTSTRAP = <?= json_encode($bootstrap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+<script nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>">
+window.LMT_BOOTSTRAP = <?= json_encode($bootstrap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 window.LMT_BASE_URL  = window.LMT_BOOTSTRAP.base;
 window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 </script>
@@ -114,174 +154,50 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
      SVG; sin dependencias en runtime). Expone window.NARINO_MAPA. -->
 <script src="js/narino-municipios.js"></script>
 
-<!-- Three.js (animaciones) — auto-hospedado para no depender de CDNs externas. -->
-<script src="js/vendor/three.min.js"></script>
+<!-- three.js (animaciones) — auto-hospedado para no depender de CDNs externas.
+     Desde r160 el único build soportado es un módulo ES, y los módulos corren
+     después de los scripts clásicos: js/three-loader.js expone whenThree() para
+     que los consumidores esperen sin condiciones de carrera. -->
+<script src="js/three-loader.js"></script>
+<script type="module" nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>">
+  import * as THREE from "./js/vendor/three.module.min.js";
+  window.THREE = THREE;
+  window.dispatchEvent(new CustomEvent("lmt:three-ready"));
+</script>
 <script src="js/three-background.js"></script>
+<script src="js/passport-book.js"></script>
 
 <!-- Cliente del backend PHP + router del SPA -->
 <script src="js/router.js"></script>
 <script src="js/api.js"></script>
 
-<!-- React + Babel (CDN) -->
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<!-- React — builds de PRODUCCIÓN auto-hospedadas. Antes se cargaban las de
+     desarrollo desde unpkg.com: más pesadas, más lentas, y con la aplicación
+     entera dependiendo de que una CDN de terceros estuviera disponible. -->
+<script src="js/vendor/react.production.min.js"></script>
+<script src="js/vendor/react-dom.production.min.js"></script>
 
-<!-- Componentes -->
-<script type="text/babel" src="components/Shared.jsx"></script>
-<script type="text/babel" src="components/Admin.jsx"></script>
-<script type="text/babel" src="components/QRPrint.jsx"></script>
-<script type="text/babel" src="components/VoteFlow.jsx"></script>
-<script type="text/babel" src="components/Passport.jsx"></script>
-<script type="text/babel" src="components/Dashboard.jsx"></script>
-
-<script type="text/babel">
-const PALETTES = {
-  "nariño":  { grano: "oklch(0.42 0.09 50)", galeras: "oklch(0.55 0.13 30)", cafeto: "oklch(0.5 0.08 145)",  paper: "oklch(0.97 0.015 75)", ink: "oklch(0.22 0.02 60)" },
-  "mercado": { grano: "oklch(0.4 0.12 30)",  galeras: "oklch(0.6 0.17 45)",  cafeto: "oklch(0.55 0.11 130)", paper: "oklch(0.96 0.025 80)", ink: "oklch(0.22 0.03 50)" },
-};
-const applyPalette = (name) => {
-  const p = PALETTES[name] || PALETTES["mercado"];
-  const r = document.documentElement.style;
-  Object.entries(p).forEach(([k, v]) => r.setProperty("--" + k, v));
-};
-// Paleta del diseño aprobado (handoff Claude Design): "mercado".
-applyPalette("mercado");
-
-const App = () => {
-  const [route, setRoute] = React.useState(() => window.LMTRouter.current());
-  const [user, setUser]   = React.useState(() => (window.LMTApi && window.LMTApi.user()) || null);
-  const [ready, setReady] = React.useState(() => !!(window.LMTApi && window.LMTApi.bootstrapDone && window.LMTApi.bootstrapDone()));
-  const [, setTick]       = React.useState(0);
-
-  React.useEffect(() => {
-    const off1 = window.LMTRouter.subscribe(setRoute);
-    const onAuth = () => {
-      setUser((window.LMTApi && window.LMTApi.user()) || null);
-      setReady(true);
-    };
-    window.addEventListener("lmt:auth", onAuth);
-    const onData = () => setTick((t) => t + 1);
-    window.addEventListener("lmt:data", onData);
-    // Safety: si LMTApi nunca dispara auth (API caída), igualmente desbloquear UI tras 1.5s.
-    const t = setTimeout(() => setReady(true), 1500);
-    return () => {
-      off1();
-      window.removeEventListener("lmt:auth", onAuth);
-      window.removeEventListener("lmt:data", onData);
-      clearTimeout(t);
-    };
-  }, []);
-
-  const stands = window.STANDS_DATA || [];
-  const comentarios = window.COMENTARIOS_DEMO || [];
-
-  // Hasta que termine el bootstrap, no decidimos si redirigir a login (evita parpadeo).
-  if (!ready && route.path.startsWith("/admin") && route.path !== "/admin/login") {
-    return <Splash/>;
-  }
-
-  // Auth gate para /admin/*
-  if (route.path.startsWith("/admin") && route.path !== "/admin/login") {
-    if (!user || !user.admin) {
-      window.LMTRouter.go("/admin/login");
-      return null;
-    }
-  }
-
-  // 1. Pantalla de inicio (landing) — login de organizadores + entrada de visitante.
-  //    El QR de los stands lleva directo a /s/{id}, sin pasar por aquí.
-  if (route.path === "/" || route.path === "") {
-    return <LoginAdmin
-      onLogin={() => window.LMTRouter.go("/admin")}
-      onVisitor={() => window.LMTRouter.go("/festival")}/>;
-  }
-
-  // 1b. Dashboard público del festival
-  if (route.path === "/festival" || route.path === "/festival/") {
-    return <PublicDashboard
-      stands={stands}
-      comentarios={comentarios}
-      onDetail={(id) => window.LMTRouter.go("/festival/" + id)}/>;
-  }
-
-  // 2. Detalle público de stand
-  const festivalMatch = route.path.match(/^\/festival\/([a-z0-9\-]+)$/);
-  if (festivalMatch) {
-    const stand = stands.find((s) => s.id === festivalMatch[1]);
-    if (!stand) return <NotFound back="/festival"/>;
-    return <PublicDetail stand={stand} comentarios={comentarios} allStands={stands}
-      onBack={() => window.LMTRouter.go("/festival")}
-      onVote={() => window.LMTRouter.go("/s/" + stand.id)}/>;
-  }
-
-  // 3. Voto desde QR — mobile real
-  const voteMatch = route.path.match(/^\/s\/([a-z0-9\-]+)$/);
-  if (voteMatch) {
-    const stand = stands.find((s) => s.id === voteMatch[1]);
-    if (!stand) {
-      // Stand puede no estar aún si la primera carga aún no llegó
-      if (!stands.length) return <Splash/>;
-      return <NotFound back="/"/>;
-    }
-    return <MobileVotePage stand={stand}/>;
-  }
-
-  // 4. Pasaporte del usuario (real)
-  if (route.path === "/pasaporte") {
-    return <PassportPage stands={stands}/>;
-  }
-
-  // 5. Admin login
-  if (route.path === "/admin/login") {
-    return <LoginAdmin onLogin={() => window.LMTRouter.go("/admin")}/>;
-  }
-
-  // 6. Admin home → stands
-  if (route.path === "/admin" || route.path === "/admin/stands") {
-    return <AdminPage section="stands" user={user} stands={stands}/>;
-  }
-  if (route.path === "/admin/stands/new") {
-    return <AdminPage section="editor" user={user} stands={stands} editingId={null}/>;
-  }
-  const editMatch = route.path.match(/^\/admin\/stands\/([a-z0-9\-]+)\/edit$/);
-  if (editMatch) {
-    return <AdminPage section="editor" user={user} stands={stands} editingId={editMatch[1]}/>;
-  }
-  if (route.path === "/admin/qr") {
-    return <AdminPage section="qr" user={user} stands={stands}/>;
-  }
-  if (route.path === "/admin/live") {
-    return <AdminPage section="live" user={user} stands={stands} comentarios={comentarios}/>;
-  }
-
-  return <NotFound back="/"/>;
-};
-
-const Splash = () => (<div className="splash">Cargando…</div>);
-
-const NotFound = ({ back }) => (
-  <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24, textAlign: "center", background: "var(--paper)" }}>
-    <div>
-      <div className="mono">404</div>
-      <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 56, margin: "12px 0", lineHeight: 1 }}>Página no encontrada.</h1>
-      <a href={back} data-route className="btn btn-primary">← Volver al inicio</a>
-    </div>
-  </div>
-);
-
-window.NotFound = NotFound;
-window.Splash = Splash;
-
-const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail"];
-  if (needed.every((k) => window[k])) {
-    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-  } else {
-    setTimeout(waitForGlobals, 40);
-  }
-};
-waitForGlobals();
+<?php if ($usarBundle): ?>
+<!-- Componentes precompilados (tools/build-components.mjs). -->
+<script src="js/components.build.js?v=<?= htmlspecialchars($bundleVersion, ENT_QUOTES) ?>"></script>
+<?php if ($bundleObsoleto): ?>
+<script nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>">
+console.warn("[lmt] js/components.build.js es más antiguo que algún .jsx. " +
+            "Regenera el bundle con: node tools/build-components.mjs");
 </script>
+<?php endif; ?>
+<?php else: ?>
+<!-- Sin bundle: Babel transpila en el navegador. Sirve para desarrollo, pero
+     descarga ~3 MB y obliga a permitir 'unsafe-eval' en la CSP. Antes de
+     desplegar ejecuta: node tools/build-components.mjs -->
+<script src="js/vendor/babel.min.js"></script>
+<?php foreach ($componentes as $c): ?>
+<script type="text/babel" src="components/<?= $c ?>.jsx"></script>
+<?php endforeach; ?>
+<script nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>">
+console.warn("[lmt] Falta js/components.build.js: se está transpilando JSX en el navegador. " +
+            "Genera el bundle con: node tools/build-components.mjs");
+</script>
+<?php endif; ?>
 </body>
 </html>
