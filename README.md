@@ -13,6 +13,9 @@ Gobernación de Nariño.
 ## Tabla de contenido
 
 1. [Funcionalidades](#1-funcionalidades)
+   - [Promotores de stands](#1bis-promotores-de-stands)
+   - [Cuentas de administración](#1ter-cuentas-de-administración)
+   - [Perfil del visitante](#1quater-perfil-del-visitante)
 2. [Arquitectura](#2-arquitectura)
 3. [Requisitos](#3-requisitos)
 4. [Instalación local](#4-instalación-local)
@@ -90,13 +93,19 @@ Módulo completo de inscripción para quienes exhiben en el festival.
 
 **Flujo:**
 
-1. El caficultor entra a `/inscripcion` y envía sus datos. Queda `pendiente`.
-   Recibe un acuse por correo; los administradores reciben un aviso.
+1. El caficultor entra a `/inscripcion` y envía **todos los datos de su stand**
+   —él y su stand son la misma cosa—: nombre y documento del propietario,
+   empresa, nombre del stand, municipio, región, dirección, NIT, sitio web,
+   descripción y el **logo de su producto** (cuadrado, máx. 1600×1600 px y
+   3 MB). Queda `pendiente`. Recibe un acuse por correo; los administradores
+   reciben un aviso.
 2. Un organizador la revisa en `/admin/promotores` y pulsa
    **«Verificar y enviar clave»**. En ese momento —y sólo entonces— el sistema
-   genera una contraseña temporal fuerte, guarda su hash (Argon2id + pepper) y
-   envía el texto plano al correo del promotor. El servidor no vuelve a
-   conocerla.
+   genera una contraseña temporal fuerte, guarda su hash (Argon2id + pepper),
+   **crea el stand** con los datos de la inscripción y envía un correo de
+   bienvenida con el usuario, la contraseña en claro y **el QR del stand
+   incrustado** como imagen, listo para imprimir. El servidor no vuelve a
+   conocer la contraseña.
 3. El promotor entra en `/promotor` con su correo y esa clave. El sistema le
    **obliga a cambiarla** antes de dejarle hacer nada más; ahí pasa a `activo`.
    La clave temporal caduca a las 72 horas.
@@ -116,6 +125,65 @@ es el primer sitio donde mirar si un promotor dice que no le llegó nada.
 hostings compartidos marcan el mensaje como spam o directamente no lo envían.
 Lo recomendado es `transport = 'smtp'` con las credenciales del dominio
 institucional (ver `api/config.example.php`).
+
+---
+
+## 1.ter. Cuentas de administración
+
+`/admin/cuentas` — sólo visible para el perfil **propietario**.
+
+Dos perfiles:
+
+| Perfil | Puede |
+|---|---|
+| `propietario` | Todo el panel **y** crear, cambiar de perfil, reponer contraseñas y dar de baja cuentas. |
+| `organizador` | El panel del festival: stands, votos, pasaportes, promotores, visitantes. No toca las cuentas. |
+
+Al crear una cuenta se genera una contraseña temporal, se guarda sólo su hash y
+el texto plano viaja por correo. **El sistema obliga a cambiarla en el primer
+acceso**: hasta que no se cambie, la API rechaza cualquier otra ruta con
+`password_change_required`. El perfil y esa bandera se revalidan contra la base
+como mucho una vez por minuto, así que degradar a alguien o reponerle la clave
+surte efecto sin esperar a que caduque su cookie.
+
+Dos reglas impiden quedarse fuera del propio sistema: nadie puede eliminarse a
+sí mismo y siempre debe quedar al menos un propietario activo.
+
+El primer propietario es el administrador que crea el asistente de instalación.
+En instalaciones anteriores lo asigna `db/migrate.php` a la cuenta más antigua.
+
+---
+
+## 1.quater. Perfil del visitante
+
+`/perfil` — caracterización **voluntaria** del público, que se ofrece al
+terminar de votar y desde el pasaporte.
+
+Recoge: nombre y teléfono, género, rango de edad, país / departamento /
+municipio de origen, si visita en representación de una entidad pública,
+privada, académica, un gremio o a título personal, cómo se enteró del festival,
+si es su primera vez, qué espera del evento y —en un bloque aparte— grupo
+étnico y situación de discapacidad.
+
+**Cómo se prueba que un perfil es tuyo.** El visitante no tiene contraseña, así
+que el correo por sí solo no abre nada: si bastara con escribirlo, cualquiera
+podría leer a qué grupo étnico pertenece un vecino. Al votar, el servidor emite
+un `HMAC-SHA256(app_secret, 'perfil|' + correo)` que viaja al navegador de quien
+acaba de demostrar —en el mismo acto de votar— que controla ese correo, y se
+guarda ahí. Sin ese testigo no se lee ni se escribe nada. Quien cambie de
+teléfono pide el enlace desde `/perfil`: llega a su buzón, que es la prueba de
+propiedad de verdad. Ese envío responde igual exista o no el correo, para que no
+sirva de censo de asistentes.
+
+**Ley 1581 de 2012.** El grupo étnico y la discapacidad son datos sensibles: van
+en un bloque que explica por qué se preguntan, todas las listas admiten
+«Prefiero no decir» y ninguna respuesta es obligatoria. Sin la casilla de
+autorización no se guarda nada, y el visitante puede **borrar su perfil entero**
+desde la misma página sin perder su voto ni su pasaporte.
+
+El panel lo resume en `/admin/caracterización` — sólo agregados, nunca correos
+ni nombres— y lo exporta completo en `api/export/visitantes.csv`, que sí lleva
+datos personales y es responsabilidad de quien lo descarga.
 
 ---
 
@@ -306,14 +374,36 @@ php -r "echo bin2hex(random_bytes(32)) . PHP_EOL;"   # ejecuta dos veces
 
 | Tabla         | Función                                                   |
 | ------------- | --------------------------------------------------------- |
-| `admins`      | Cuentas de organizadores (Argon2id + pepper).             |
-| `stands`      | Stands del festival y agregados de votos por emoji.       |
+| `admins`      | Cuentas de organizadores (Argon2id + pepper) y su perfil (`propietario` / `organizador`). |
+| `stands`      | Stands del festival, datos del propietario y agregados de votos por emoji. |
 | `votos`       | Un voto por (stand, correo). FK a stands. Índice único.   |
 | `pasaportes`  | Stands visitados por correo. JSON de ids.                 |
+| `promotores`  | Inscripciones, credenciales y borrador de los datos del stand. |
+| `empresas`    | Empresa de cada promotor.                                  |
+| `productos`   | Cafés que expone cada promotor.                            |
+| `visitantes`  | Caracterización voluntaria del público (Ley 1581/2012).    |
+| `emails_log`  | Bitácora de correos salientes.                             |
 | `rate_limits` | Ventanas fijas por (bucket, hash) para limitar requests.  |
 
 Esquema completo en [`db/schema.mysql.sql`](db/schema.mysql.sql) y
 [`db/schema.sqlite.sql`](db/schema.sqlite.sql).
+
+### 6.1.bis. Actualizar una instalación existente
+
+`CREATE TABLE IF NOT EXISTS` no toca una tabla que ya existe, así que volver a
+pasar el esquema **no** añade las columnas nuevas. Para eso está el migrador,
+que es idempotente y se puede ejecutar tantas veces como haga falta:
+
+```bash
+php db/migrate.php --dry-run   # enseña lo que haría, sin tocar nada
+php db/migrate.php             # lo aplica
+```
+
+Añade las columnas nuevas de `admins`, `stands` y `promotores`, crea la tabla
+`visitantes` y asigna el perfil `propietario` a la cuenta de administración más
+antigua. Ejecútalo **antes** de subir el código nuevo o justo después; mientras
+tanto el login sigue funcionando (cae a un `SELECT` reducido), pero el módulo de
+cuentas y el de visitantes no.
 
 ### 6.2. Seed
 
@@ -433,8 +523,33 @@ Todas las respuestas usan `application/json` y la forma:
 | `GET`   | `/api/export/votos.csv`       | admin        | CSV con BOM UTF-8 (Excel).         |
 | `GET`   | `/api/export/stands.csv`      | admin        | CSV con BOM UTF-8.                 |
 | `GET`   | `/api/export/pasaportes.csv`  | admin        | CSV con BOM UTF-8.                 |
+| `GET`   | `/api/export/visitantes.csv`  | admin        | Caracterización con datos personales. |
+| **Promotores** | | | |
+| `POST`  | `/api/promotores/registro`    | público*     | Inscripción con todos los datos del stand. |
+| `POST`  | `/api/promotores/logo-inscripcion` | público* | Logo antes de tener cuenta. Límite propio por IP. |
+| `POST`  | `/api/promotores/login`       | público*     | |
+| `POST`  | `/api/promotores/password`    | promotor     | Cambio obligatorio de la clave temporal. |
+| `GET/PUT` | `/api/promotores/perfil`, `/empresa`, `/productos` | promotor | |
+| `GET`   | `/api/admin/promotores`       | admin        | Listado y detalle de inscripciones. |
+| `POST`  | `/api/admin/promotores/:id/verificar` | admin | Crea el stand y envía clave + QR. |
+| **Cuentas** | | | |
+| `GET/POST` | `/api/admin/administradores` | propietario | Listar y crear cuentas.           |
+| `PUT/DELETE` | `/api/admin/administradores/:id` | propietario | Perfil, alta/baja, borrado.  |
+| `POST`  | `/api/admin/administradores/:id/clave` | propietario | Repone la contraseña.       |
+| `POST`  | `/api/auth/password`          | admin        | Cambio de la propia contraseña.    |
+| **Visitantes** | | | |
+| `GET`   | `/api/visitantes/opciones`    | público      | Catálogos del formulario.          |
+| `GET/PUT/DELETE` | `/api/visitantes/perfil` | testigo   | `correo` + `t` (HMAC emitido al votar). |
+| `POST`  | `/api/visitantes/enlace`      | público*     | Manda el enlace del perfil al buzón. |
+| `GET`   | `/api/admin/visitantes/resumen` | admin      | Sólo agregados, sin correos.       |
+| `GET`   | `/api/admin/visitantes/expectativas` | admin | Texto libre, últimas 100.          |
+| **QR** | | | |
+| `GET`   | `/api/qr/{id}.png`            | público      | PNG del QR de un stand.            |
 
 > \* No requiere usuario, pero **sí** CSRF + Origin permitido.
+
+`POST /api/votos` devuelve `{ "perfil_token": "..." }`: es el testigo con el que
+ese correo puede abrir y editar su perfil de visitante.
 
 ### Ejemplo: emitir voto
 
@@ -573,13 +688,17 @@ la-mejor-taza/
 ├── index.html                 # redirección a app.php
 ├── router.php                 # router para `php -S` en desarrollo
 ├── .htaccess                  # cabeceras globales + rewrites
-├── components/                # JSX in-browser (React via Babel)
-│   ├── Shared.jsx             # Logo, sello, QR, barras
+├── components/                # JSX precompilado a js/components.build.js
+│   ├── Shared.jsx             # Logo, sello, QR, avisos, SubirImagen, BloqueForm
 │   ├── Admin.jsx              # login + AdminShell + StandsList + StandEditor
-│   ├── QRPrint.jsx            # poster A5 + lista
+│   ├── QRPrint.jsx            # cartel A5 + hojas de impresión + actividad
 │   ├── VoteFlow.jsx           # MobileVotePage real (full-screen)
 │   ├── Passport.jsx           # PassportPage real (libreta del usuario)
-│   └── Dashboard.jsx          # PublicDashboard + MapaNarino + PublicDetail
+│   ├── Dashboard.jsx          # PublicDashboard + MapaNarino + PublicDetail
+│   ├── Promotores.jsx         # inscripción, portal del promotor, revisión
+│   ├── Cuentas.jsx            # cuentas de administración + cambio de clave
+│   ├── Perfil.jsx             # perfil del visitante (/perfil)
+│   └── Caracterizacion.jsx    # resumen del público en el panel
 ├── js/
 │   ├── router.js              # router cliente (pushState + popstate)
 │   ├── api.js                 # cliente del backend PHP (fetch + CSRF)
@@ -599,17 +718,27 @@ la-mejor-taza/
 │   │   ├── Validate.php       # email, standId, comentario, etc.
 │   │   ├── RateLimit.php      # ventanas fijas en DB
 │   │   ├── Security.php       # cabeceras, hash, CSRF/Origin
+│   │   ├── QrCode.php         # QR en PHP puro (sin dependencias)
+│   │   ├── Mailer.php         # SMTP / mail() / log, con adjuntos incrustados
+│   │   ├── Correos.php        # plantillas HTML+texto de cada correo
+│   │   ├── Uploads.php        # imágenes: valida, recodifica y guarda
 │   │   └── Router.php
 │   └── routes/
 │       ├── auth.php
 │       ├── stands.php
 │       ├── votos.php
 │       ├── pasaportes.php
-│       └── dashboard.php
+│       ├── dashboard.php
+│       ├── exports.php
+│       ├── qr.php
+│       ├── promotores.php
+│       ├── administradores.php
+│       └── visitantes.php
 ├── db/
 │   ├── schema.mysql.sql
 │   ├── schema.sqlite.sql
 │   ├── seed.sql
+│   ├── migrate.php            # actualiza una instalación ya existente
 │   └── create-admin.php       # CLI para crear/actualizar admins
 └── README.md
 ```
