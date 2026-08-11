@@ -16,6 +16,7 @@ require __DIR__ . '/lib/Response.php';
 require __DIR__ . '/lib/Db.php';
 require __DIR__ . '/lib/Session.php';
 require __DIR__ . '/lib/Validate.php';
+require __DIR__ . '/lib/Territorio.php';
 require __DIR__ . '/lib/RateLimit.php';
 require __DIR__ . '/lib/Security.php';
 require __DIR__ . '/lib/QrCode.php';

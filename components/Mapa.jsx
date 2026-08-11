@@ -207,4 +207,105 @@ const SelectorUbicacion = ({ lat, lng, municipio, onCambio, alto = 380, soloLect
 const normMuniSimple = (s) =>
   String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
-Object.assign(window, { SelectorUbicacion, geoAPunto, puntoAGeo, normMuniSimple });
+// ---------------------------------------------------------------------------
+// Municipio y subregión: listas cerradas
+//
+// Antes eran campos de texto y en la base acabaron conviviendo «Centro» y
+// «Centro de Nariño» como si fueran zonas distintas, con lo que ninguna
+// estadística por zona valía nada. Ahora los 64 municipios y las 13 subregiones
+// salen del mismo catálogo que dibuja el mapa, y la región se deduce del
+// municipio: no se pueden contradecir.
+// ---------------------------------------------------------------------------
+
+const MUNICIPIOS = () => (MAPA_NARINO() || {}).municipios || [];
+const SUBREGIONES = () => (MAPA_NARINO() || {}).subregiones || [];
+
+/** Subregión del municipio, o "" si no lo reconoce. */
+const subregionDe = (municipio) => {
+  const clave = normMuniSimple(municipio);
+  if (!clave) return "";
+  const m = MUNICIPIOS().find((x) => normMuniSimple(x.nombre) === clave);
+  return m ? m.subregion : "";
+};
+
+const OTRO_MUNICIPIO = "__otro__";
+
+/**
+ * Desplegable de municipios, agrupados por subregión.
+ *
+ * `permitirOtro` añade una salida para quien no es de Nariño —un visitante
+ * puede venir de Cali o de Ecuador— y revela un campo de texto sólo entonces.
+ * En los formularios de stands NO se usa: el festival es del departamento.
+ */
+const SelectorMunicipio = ({ id, valor, onCambio, permitirOtro = false, requerido = false, etiqueta = "Municipio" }) => {
+  const munis = MUNICIPIOS();
+  const enCatalogo = !!valor && munis.some((m) => normMuniSimple(m.nombre) === normMuniSimple(valor));
+  const [otro, setOtro] = React.useState(!!valor && !enCatalogo);
+
+  // Agrupados por subregión: 64 opciones en una lista plana son inmanejables
+  // en un teléfono, y así se ve además a qué zona pertenece cada uno.
+  const grupos = {};
+  munis.forEach((m) => { (grupos[m.subregion] = grupos[m.subregion] || []).push(m); });
+
+  const elegir = (v) => {
+    if (v === OTRO_MUNICIPIO) { setOtro(true); onCambio("", ""); return; }
+    setOtro(false);
+    onCambio(v, subregionDe(v));
+  };
+
+  return (
+    <div className="field">
+      <label htmlFor={id}>{etiqueta}{requerido ? " *" : ""}</label>
+      <select id={id} required={requerido && !otro}
+        value={otro ? OTRO_MUNICIPIO : (enCatalogo ? valor : "")}
+        onChange={(e) => elegir(e.target.value)}>
+        <option value="">Selecciona un municipio</option>
+        {SUBREGIONES().map((sub) => (
+          <optgroup key={sub} label={sub}>
+            {(grupos[sub] || []).map((m) => (
+              <option key={m.divipola} value={m.nombre}>{m.nombre}</option>
+            ))}
+          </optgroup>
+        ))}
+        {permitirOtro && <option value={OTRO_MUNICIPIO}>Otro municipio (fuera de Nariño)</option>}
+      </select>
+      {otro && (
+        <input
+          id={id + "-otro"}
+          value={enCatalogo ? "" : (valor || "")}
+          onChange={(e) => onCambio(e.target.value, "")}
+          maxLength={80}
+          placeholder="Escribe el municipio"
+          style={{ marginTop: 8 }}/>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Desplegable de subregión. Se rellena solo al elegir municipio; sigue siendo
+ * un desplegable para que, si alguien lo toca, el valor siga siendo uno de los
+ * trece y no una invención.
+ */
+const SelectorSubregion = ({ id, valor, municipio, onCambio, etiqueta = "Región" }) => {
+  const derivada = subregionDe(municipio);
+  return (
+    <div className="field">
+      <label htmlFor={id}>{etiqueta}</label>
+      <select id={id} value={valor || ""} onChange={(e) => onCambio(e.target.value)}>
+        <option value="">Sin especificar</option>
+        {SUBREGIONES().map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <span className="ayuda">
+        {derivada
+          ? `Se completa sola con el municipio: ${municipio} está en ${derivada}.`
+          : "Las 13 subregiones en que se agrupa el departamento."}
+      </span>
+    </div>
+  );
+};
+
+Object.assign(window, {
+  SelectorUbicacion, geoAPunto, puntoAGeo, normMuniSimple,
+  SelectorMunicipio, SelectorSubregion, subregionDe, MUNICIPIOS, SUBREGIONES,
+});

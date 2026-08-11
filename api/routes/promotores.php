@@ -57,7 +57,10 @@ function register_routes_promotores(\LMT\Router $r): void
         $nombre    = Validate::nombre($b['nombre'] ?? null, 120);
         $telefono  = Validate::telefono($b['telefono'] ?? null);
         $documento = Validate::documento($b['documento'] ?? null);
-        $municipio = Validate::nombre($b['municipio'] ?? null, 80);
+        // El municipio se resuelve contra el catálogo del DANE: lo que no sea
+        // uno de los 64 de Nariño no entra. Antes era texto libre y en la base
+        // acabaron «Pasto» y «San Juan de Pasto» como municipios distintos.
+        $municipio = \LMT\Territorio::municipio($b['municipio'] ?? null);
         $empresa   = Validate::nombre($b['empresa'] ?? null, 120);
         $mensaje   = Validate::texto($b['mensaje'] ?? null, 500);
         $acepta    = Validate::bool($b['acepta_datos'] ?? null) === true;
@@ -66,7 +69,9 @@ function register_routes_promotores(\LMT\Router $r): void
         // formulario público pide ya todo lo que el stand necesita y al
         // verificar no hay que volver a escribirlo.
         $standNombre  = Validate::nombre($b['stand_nombre'] ?? null, 80) ?? $empresa;
-        $standRegion  = Validate::nombre($b['stand_region'] ?? null, 80);
+        // La región NO se acepta del cliente: se deduce del municipio. Es la
+        // única forma de que las dos no puedan contradecirse.
+        $standRegion  = $municipio !== null ? \LMT\Territorio::subregion($municipio) : null;
         $standDir     = Validate::texto($b['stand_direccion'] ?? null, 255);
         $standDesc    = Validate::texto($b['stand_descripcion'] ?? null, 800);
         $standNit     = Validate::documento($b['stand_nit'] ?? null);
@@ -79,6 +84,7 @@ function register_routes_promotores(\LMT\Router $r): void
 
         if (!$email)  Response::error(422, 'email_invalido');
         if (!$nombre) Response::error(422, 'nombre_invalido');
+        if (!$municipio) Response::error(422, 'municipio_invalido');
         if (!$acepta) Response::error(422, 'debe_aceptar_tratamiento_datos');
 
         $pdo = Db::pdo();
@@ -324,15 +330,22 @@ function register_routes_promotores(\LMT\Router $r): void
         $nombre = Validate::nombre($b['nombre'] ?? null, 120);
         if (!$nombre) Response::error(422, 'nombre_invalido');
 
+        // Mismo catálogo que en la inscripción: el municipio sólo puede ser uno
+        // de los 64 de Nariño, escrito como lo escribe el DANE.
+        $municipio = \LMT\Territorio::municipio($b['municipio'] ?? null);
+        if ($municipio === null) Response::error(422, 'municipio_invalido');
+
         Db::pdo()->prepare(
             'UPDATE promotores SET nombre = :n, telefono = :tel, documento = :doc,
-                                   municipio = :mun, updated_at = CURRENT_TIMESTAMP
+                                   municipio = :mun, stand_region = :reg,
+                                   updated_at = CURRENT_TIMESTAMP
              WHERE id = :id'
         )->execute([
             ':n'   => $nombre,
             ':tel' => Validate::telefono($b['telefono'] ?? null),
             ':doc' => Validate::documento($b['documento'] ?? null),
-            ':mun' => Validate::nombre($b['municipio'] ?? null, 80),
+            ':mun' => $municipio,
+            ':reg' => \LMT\Territorio::subregion($municipio),
             ':id'  => $id,
         ]);
         Response::ok(promotor_perfil_completo($id));
@@ -346,11 +359,14 @@ function register_routes_promotores(\LMT\Router $r): void
         $nombre = Validate::nombre($b['nombre'] ?? null, 120);
         if (!$nombre) Response::error(422, 'nombre_empresa_invalido');
 
+        $municipio = \LMT\Territorio::municipio($b['municipio'] ?? null);
+        if ($municipio === null) Response::error(422, 'municipio_invalido');
+
         $datos = [
             ':n'    => $nombre,
             ':nit'  => Validate::documento($b['nit'] ?? null),
             ':desc' => Validate::texto($b['descripcion'] ?? null, 1500) ?: null,
-            ':mun'  => Validate::nombre($b['municipio'] ?? null, 80),
+            ':mun'  => $municipio,
             ':dir'  => Validate::texto($b['direccion'] ?? null, 255) ?: null,
             ':tel'  => Validate::telefono($b['telefono'] ?? null),
             ':web'  => Validate::url($b['sitio_web'] ?? null, 255),
@@ -798,12 +814,15 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
     if (!$p) return [];
 
     $nombreStand = (string) ($p['stand_nombre'] ?: $p['empresa_tentativa'] ?: $p['nombre']);
-    $municipio   = (string) ($p['municipio'] ?: 'Nariño');
+    // La región se vuelve a deducir aquí, no se copia: si el promotor corrige su
+    // municipio más tarde, el stand queda coherente sin tocar nada más.
+    $municipio   = \LMT\Territorio::municipio($p['municipio'] ?? null) ?? (string) ($p['municipio'] ?: 'Nariño');
+    $region      = \LMT\Territorio::subregion($municipio) ?? ($p['stand_region'] ?: null);
 
     $datos = [
         ':nombre' => mb_substr($nombreStand, 0, 80, 'UTF-8'),
         ':mun'    => mb_substr($municipio, 0, 80, 'UTF-8'),
-        ':reg'    => $p['stand_region'] ?: null,
+        ':reg'    => $region,
         ':dir'    => $p['stand_direccion'] ?: null,
         ':correo' => $p['email'],
         ':desc'   => $p['stand_descripcion'] ?: null,

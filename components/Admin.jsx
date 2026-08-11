@@ -339,14 +339,12 @@ const StandEditor = ({ stand }) => {
             <input value={form.nombre} onChange={e => update("nombre", e.target.value)} placeholder="Ej: Finca El Tambo" maxLength={80} required/>
           </div>
           <div className="grid-2" style={{ gap: 20 }}>
-            <div className="field">
-              <label>Municipio</label>
-              <input value={form.municipio} onChange={e => update("municipio", e.target.value)} placeholder="La Unión" maxLength={80} required/>
-            </div>
-            <div className="field">
-              <label>Región</label>
-              <input value={form.region} onChange={e => update("region", e.target.value)} placeholder="Norte de Nariño" maxLength={80}/>
-            </div>
+            <SelectorMunicipio id="st-municipio" valor={form.municipio} requerido
+              onCambio={(municipio, region) => setForm((f) => ({
+                ...f, municipio, region: region || f.region,
+              }))}/>
+            <SelectorSubregion id="st-region" valor={form.region} municipio={form.municipio}
+              onCambio={(v) => update("region", v)}/>
           </div>
           <div className="field">
             <label>Dirección</label>
@@ -418,6 +416,7 @@ const StandEditor = ({ stand }) => {
               onCambio={(u) => setForm((f) => ({
                 ...f, lat: u.lat, lng: u.lng,
                 municipio: u.municipio || f.municipio,
+                region: (u.municipio && subregionDe(u.municipio)) || f.region,
               }))}/>
           </div>
 

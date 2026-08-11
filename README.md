@@ -77,8 +77,29 @@ Gobernación de Nariño.
 ### Pasaporte (`/pasaporte`)
 - Si hay correo guardado, carga la libreta directamente.
 - Si no, pide el correo y consulta `/api/pasaportes/{correo}`.
-- Renderiza una página por sello visitado, con índice y portada.
+- Portada, **hoja de datos** y una página por sello visitado.
 - Botón "Cerrar" limpia el correo del dispositivo.
+
+**La hoja de datos** es la primera página interior, y está hecha a imagen de la
+página del titular de un pasaporte de verdad: recuadro con la inicial y el
+número de sellos, ficha con portador, sexo, edad, procedencia y número de
+pasaporte, autoridad expedidora y la banda de lectura mecánica abajo. Antes ahí
+había un índice de casillas vacías que no decía nada del visitante.
+
+Los datos salen de su perfil, y **sólo se piden si este navegador guarda el
+testigo del perfil** (ver más abajo): sin él la hoja se dibuja igual pero con lo
+que ya es público —nombre en iniciales y correo enmascarado— e invita a
+completarlo. **El grupo étnico y la discapacidad no aparecen nunca en esta
+hoja**: se preguntan para caracterizar al público, son datos sensibles y esta
+página se enseña y se fotografía.
+
+El número de pasaporte (`NAR-XXXX-XXXX`) es un hash del correo: estable para la
+misma persona y no reversible.
+
+Lo pintan dos vistas —el render en CSS y el libro 3D, que dibuja en canvas— a
+partir de **un único `datosPagina()`**, para que no puedan acabar diciendo cosas
+distintas de la misma persona. El perfil llega después de montar el libro, así
+que la hoja se repinta con `setPaginas` sin tirar el contexto WebGL.
 
 ### Público
 - Hero animado con un campo 3D de granos de café (Three.js, respeta
@@ -114,6 +135,26 @@ Módulo completo de inscripción para quienes exhiben en el festival.
    mapa se rellena solo el municipio (el navegador resuelve qué polígono
    contiene el punto), y desde un teléfono en la finca el botón «usar mi
    ubicación» lo hace en un toque.
+
+   **Municipio y región no se escriben: se eligen.** Cuando eran texto libre, en
+   la base acabaron conviviendo «Pasto» y «San Juan de Pasto» como municipios
+   distintos, y regiones inventadas que no cuadraban con su municipio. Ahora el
+   municipio es un desplegable con los 64 del DANE agrupados por subregión, y
+   **la región no se acepta del cliente en ningún endpoint**: el servidor la
+   deduce del municipio, así que las dos no pueden contradecirse. Lo que ya
+   estaba mal se arregla solo al migrar (`db/migrate.php`), que normaliza los
+   municipios reconocidos y recalcula su región.
+
+   El catálogo vive en un único sitio y se genera:
+
+   ```
+   php tools/build-subregiones.php --escribir
+   ```
+
+   escribe `js/narino-municipios.js` (para el navegador) y `api/lib/Territorio.php`
+   (para el servidor). **Los dos se versionan** —el hosting compartido no ejecuta
+   build— y el generador se niega a escribir si el cruce entre los 64 municipios
+   y las 13 subregiones oficiales no es perfecto en los dos sentidos.
 2. Un organizador la revisa en `/admin/promotores` y pulsa
    **«Verificar y enviar clave»**. En ese momento —y sólo entonces— el sistema
    genera una contraseña temporal fuerte, guarda su hash (Argon2id + pepper),
@@ -222,6 +263,18 @@ no está autorizada a enviar en nombre del dominio del remitente, así que el
 servidor de destino lo descarta o lo manda a spam. El panel avisa de las dos
 cosas en rojo, deja mandarse una prueba de verdad y enseña el diálogo completo
 con el servidor SMTP cuando falla, con la contraseña tapada.
+
+**El remitente del festival es `hosting@narino.gov.co`, un buzón sobre Gmail**
+(Google Workspace). Eso impone tres cosas, y el panel las comprueba y las avisa:
+
+- Servidor `smtp.gmail.com`, puerto `587` con STARTTLS (o `465` con SSL directo).
+  El botón «Rellenar para Gmail» del panel pone los tres de una vez.
+- **Contraseña de aplicación**, no la del correo. Con la cuenta normal Google
+  rechaza la autenticación aunque la clave sea correcta; hay que generar una de
+  16 caracteres en la configuración de seguridad de la cuenta.
+- El remitente **tiene que ser el mismo buzón autenticado**. Si `from` y `user`
+  no coinciden, Gmail reescribe el remitente o rechaza el envío; el diagnóstico
+  lo señala antes de que alguien se pase la tarde buscando el fallo.
 
 La configuración se guarda en la tabla `ajustes` y **pisa a la de
 `api/config.php`** clave a clave, así que se cambia desde el navegador sin FTP.
@@ -466,9 +519,18 @@ php db/migrate.php --dry-run   # enseña lo que haría, sin tocar nada
 php db/migrate.php             # lo aplica
 ```
 
-Añade las columnas nuevas de `admins`, `stands` (incluidas `telefono`, `lat` y
-`lng`) y `promotores`, crea las tablas `visitantes` y `ajustes`, y asigna el
-perfil `propietario` a la cuenta de administración más antigua. Ejecútalo **antes** de subir el código nuevo o justo después; mientras
+**Las columnas que faltan las deduce del propio `db/schema.<motor>.sql`**, no de
+una lista escrita a mano. Antes había esa lista y había que acordarse de
+ampliarla cada vez que el esquema crecía; no nos acordamos, y una instalación
+sobre la base del año pasado moría con `table admins has no column named
+is_admin`. Ahora la fuente de verdad es una sola: cualquier columna que se añada
+al esquema se migra sin tocar el migrador. Salta lo que no se puede añadir con
+`ALTER TABLE` (claves primarias, `UNIQUE`, autoincrementales) y afloja el
+`NOT NULL` sin valor por defecto, que no se puede aplicar a una tabla con filas.
+
+Además crea las tablas que falten (`visitantes`, `ajustes`, `emails_log`…),
+asigna el perfil `propietario` a la cuenta de administración más antigua y
+**normaliza municipio y región** de los stands contra el catálogo del DANE. Ejecútalo **antes** de subir el código nuevo o justo después; mientras
 tanto el login sigue funcionando (cae a un `SELECT` reducido), pero el módulo de
 cuentas y el de visitantes no.
 
@@ -797,6 +859,7 @@ la-mejor-taza/
 │   │   ├── Correos.php        # plantillas HTML+texto de cada correo
 │   │   ├── Uploads.php        # imágenes: valida, recodifica y guarda
 │   │   ├── Ajustes.php        # config editable desde el panel, con secretos cifrados
+│   │   ├── Territorio.php     # GENERADO: los 64 municipios y sus 13 subregiones
 │   │   └── Router.php
 │   └── routes/
 │       ├── auth.php
@@ -814,8 +877,12 @@ la-mejor-taza/
 │   ├── schema.mysql.sql
 │   ├── schema.sqlite.sql
 │   ├── seed.sql
+│   ├── migraciones.php        # columnas que faltan, deducidas del esquema
 │   ├── migrate.php            # actualiza una instalación ya existente
 │   └── create-admin.php       # CLI para crear/actualizar admins
+├── tools/
+│   ├── build-components.mjs   # JSX → js/components.build.js
+│   └── build-subregiones.php  # catálogo → Territorio.php + narino-municipios.js
 └── README.md
 ```
 
@@ -841,6 +908,9 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 ### Antes de abrir al público
 
 - [ ] `node tools/build-components.mjs` ejecutado y `js/components.build.js` subido.
+- [ ] `api/lib/Territorio.php` y `js/narino-municipios.js` presentes en el
+      servidor. Se generan, pero **se versionan**: sin el primero, `api/index.php`
+      hace un `require` que no existe y toda la API responde con un 500.
 - [ ] `api/config.php` con permisos `600` y `debug => false`.
 - [ ] `mail.transport` en `smtp` y probado: verifica un promotor de prueba y
       confirma en `/admin/correos` que el envío sale como `enviado`.

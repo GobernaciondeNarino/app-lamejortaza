@@ -42,6 +42,7 @@ function register_routes_pasaportes(\LMT\Router $r): void
             Response::ok([
                 'correo'    => Validate::maskEmail($correo),
                 'nombre'    => '',
+                'numero'    => pasaporte_numero($correo),
                 'inicio'    => null,
                 'visitados' => [],
             ]);
@@ -56,8 +57,25 @@ function register_routes_pasaportes(\LMT\Router $r): void
             // El nombre en claro identifica a la persona; se enmascara igual
             // que el correo salvo su inicial, suficiente para que se reconozca.
             'nombre'    => Validate::iniciales((string) ($row['nombre'] ?? '')),
+            'numero'    => pasaporte_numero((string) $row['correo']),
             'inicio'    => $row['inicio'] ?? null,
             'visitados' => array_values(array_filter($visitados, [Validate::class, 'standId'])),
         ]);
     });
+}
+
+/**
+ * Número de pasaporte: un código estable y legible para la página de datos.
+ *
+ * Sale de un hash del correo, así que la misma persona ve siempre el mismo
+ * número y de él no se puede volver al correo. No identifica a nadie por sí
+ * solo —es decoración con la forma de un documento real—, pero tiene que ser
+ * estable o el pasaporte parecería otro cada vez que se abre.
+ */
+function pasaporte_numero(string $correo): string
+{
+    $h = strtoupper(substr(hash('sha256', 'pasaporte|' . strtolower($correo)), 0, 8));
+    // Sin caracteres que se confundan al leerlos en voz alta o en una foto.
+    $h = strtr($h, ['0' => 'H', 'O' => 'K', '1' => 'J', 'I' => 'L']);
+    return 'NAR-' . substr($h, 0, 4) . '-' . substr($h, 4, 4);
 }

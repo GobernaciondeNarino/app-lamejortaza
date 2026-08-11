@@ -122,6 +122,7 @@ const AdminCorreoConfig = () => {
   if (cargando || !form) return <div className="admin-page"><div className="splash">Cargando…</div></div>;
 
   const diag = (datos && datos.diagnostico) || { avisos: [], historico: [] };
+  const esGmail = /(^|\.)(gmail|googlemail)\.com$/i.test((form.smtp && form.smtp.host) || "");
   const sobrescrito = (datos && datos.sobrescrito) || [];
 
   return (
@@ -222,6 +223,18 @@ const AdminCorreoConfig = () => {
 
         {form.transport === "smtp" && (
           <BloqueForm titulo="Servidor SMTP" nota="Pídeselos a quien administra el correo institucional.">
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: 13, padding: "8px 14px" }}
+                onClick={() => setForm((f) => ({
+                  ...f,
+                  smtp: { ...f.smtp, host: "smtp.gmail.com", port: 587, secure: "tls", user: f.from || f.smtp.user },
+                }))}>
+                Rellenar para Gmail
+              </button>
+              <span className="ayuda" style={{ flex: 1, minWidth: 200 }}>
+                El buzón institucional funciona sobre Gmail: esto pone servidor, puerto y cifrado.
+              </span>
+            </div>
             <div className="grid-2">
               <div className="field">
                 <label htmlFor="co-host">Servidor</label>
@@ -246,6 +259,11 @@ const AdminCorreoConfig = () => {
               <div className="field">
                 <label htmlFor="co-user">Usuario del buzón</label>
                 <input id="co-user" value={form.smtp.user} onChange={(e) => setSmtp("user", e.target.value)} maxLength={254} autoComplete="off"/>
+                {esGmail && form.smtp.user && form.from && form.smtp.user.toLowerCase() !== form.from.toLowerCase() && (
+                  <span className="ayuda" style={{ color: "var(--bad)" }}>
+                    Debe ser la misma dirección que el remitente, o Gmail reescribirá el correo a nombre de este buzón.
+                  </span>
+                )}
               </div>
               <div className="field">
                 <label htmlFor="co-pass">Contraseña del buzón</label>
@@ -254,7 +272,14 @@ const AdminCorreoConfig = () => {
                   placeholder={form.smtp.password === CLAVE_OCULTA ? "Guardada — escribe sólo si la cambias" : ""}
                   onChange={(e) => setSmtp("password", e.target.value === "" ? CLAVE_OCULTA : e.target.value)}
                   maxLength={200}/>
-                <span className="ayuda">Se guarda cifrada y no vuelve a mostrarse.</span>
+                <span className="ayuda">
+                  Se guarda cifrada y no vuelve a mostrarse.
+                  {esGmail && (
+                    <> <strong>En Gmail no sirve la contraseña de la cuenta</strong>: crea una
+                    «contraseña de aplicación» de 16 caracteres en cuenta de Google → Seguridad →
+                    Verificación en dos pasos → Contraseñas de aplicaciones.</>
+                  )}
+                </span>
               </div>
             </div>
           </BloqueForm>

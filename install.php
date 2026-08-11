@@ -238,12 +238,18 @@ function write_config(array $db, string $pepper, string $appSecret, string $rein
     $allowed .= "        'http://127.0.0.1:8000',\n";
     $allowed .= "    ]";
 
-    // Remitente por defecto: no-reply@<dominio del sitio>. Casi ningún MTA
-    // acepta un From de otro dominio, así que adivinarlo bien evita que el
-    // primer correo con credenciales se pierda sin explicación.
+    // Remitente por defecto: no-reply@<dominio del sitio>. Casi ningún servidor
+    // de correo acepta un remitente de otro dominio, así que adivinarlo bien
+    // evita que el primer correo con credenciales se pierda sin explicación.
+    // En narino.gov.co el buzón que existe de verdad es hosting@, y funciona
+    // sobre Gmail: se propone ése, que es el que podrá autenticarse.
     $hostSitio = parse_url($siteUrl !== '' ? $siteUrl : ('http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')), PHP_URL_HOST);
     if (!is_string($hostSitio) || $hostSitio === '') $hostSitio = 'localhost';
-    $mailFrom = var_export('no-reply@' . preg_replace('/^www\./i', '', $hostSitio), true);
+    $dominioSitio = (string) preg_replace('/^www\./i', '', $hostSitio);
+    $buzon = str_ends_with($dominioSitio, 'narino.gov.co') ? 'hosting@narino.gov.co' : 'no-reply@' . $dominioSitio;
+    $mailFrom = var_export($buzon, true);
+    $mailUser = var_export(str_ends_with($dominioSitio, 'narino.gov.co') ? $buzon : '', true);
+    $mailHost = var_export(str_ends_with($dominioSitio, 'narino.gov.co') ? 'smtp.gmail.com' : '', true);
 
     $php = <<<PHP
 <?php
@@ -304,11 +310,17 @@ return [
         'from_name' => 'La Mejor Taza — Festival',
         'reply_to'  => '',
         'log_file'  => '',   // vacío = fuera del document root (recomendado)
+        // Si el buzón es de Gmail (Google Workspace, como hosting@narino.gov.co),
+        // 'password' NO es la contraseña de la cuenta: es una «contraseña de
+        // aplicación» de 16 caracteres que se genera en la cuenta de Google
+        // (Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones).
+        // Con la normal, Gmail responde 535. Y 'user' debe ser la MISMA
+        // dirección que 'from', o Gmail reescribe el remitente.
         'smtp' => [
-            'host'     => '',
+            'host'     => {$mailHost},
             'port'     => 587,
             'secure'   => 'tls',
-            'user'     => '',
+            'user'     => {$mailUser},
             'password' => '',
             'timeout'  => 15,
         ],
@@ -1035,7 +1047,15 @@ if ($step === 5) {
             'transport' => 'smtp',
             'from'      => (string) ($m['from'] ?? ''),
             'from_name' => (string) ($m['from_name'] ?? 'La Mejor Taza — Festival'),
-            'smtp' => ['host' => (string) ($m['smtp']['host'] ?? ''), 'port' => 587, 'secure' => 'tls', 'user' => '', 'password' => ''],
+            'smtp' => [
+                'host'     => (string) ($m['smtp']['host'] ?? ''),
+                'port'     => 587,
+                'secure'   => 'tls',
+                // Con Gmail el usuario ES el remitente; proponerlo ahorra el
+                // error más común, que es autenticarse con otro buzón.
+                'user'     => (string) ($m['smtp']['user'] ?? ($m['from'] ?? '')),
+                'password' => '',
+            ],
         ];
     }
     $emailAdmin = (string) ($_SESSION['done']['email'] ?? '');
@@ -1099,10 +1119,17 @@ if ($step === 5) {
 
       <fieldset style="border:1px solid var(--line);border-radius:10px;padding:16px;margin:18px 0;">
         <legend class="mono" style="padding:0 8px;">Servidor SMTP</legend>
+        <div class="alert alert-info" style="margin-bottom:16px;">
+          <strong>Si el buzón es de Gmail</strong> (como hosting@narino.gov.co):
+          servidor <code>smtp.gmail.com</code>, puerto <code>587</code>, STARTTLS, y como usuario
+          la misma dirección del remitente. La contraseña <strong>no</strong> es la de la cuenta:
+          hay que crear una «contraseña de aplicación» de 16 caracteres en
+          cuenta de Google → Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones.
+        </div>
         <div class="grid-2">
           <div class="field">
             <label>Servidor</label>
-            <input type="text" name="host" value="<?= h((string) $f['smtp']['host']) ?>" placeholder="smtp.narino.gov.co">
+            <input type="text" name="host" value="<?= h((string) $f['smtp']['host']) ?>" placeholder="smtp.gmail.com">
           </div>
           <div class="field">
             <label>Puerto</label>

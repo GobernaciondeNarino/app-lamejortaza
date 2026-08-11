@@ -130,6 +130,15 @@
     return w - espaciado;
   }
 
+  // Una línea que no puede desbordar su hueco: los campos de la hoja de datos
+  // van uno al lado del otro y un nombre largo se comería el de al lado.
+  function recortar(ctx, txt, ancho) {
+    var s = String(txt == null ? "" : txt);
+    if (ctx.measureText(s).width <= ancho) return s;
+    while (s.length > 1 && ctx.measureText(s + "…").width > ancho) s = s.slice(0, -1);
+    return s + "…";
+  }
+
   function parrafo(ctx, txt, x, y, ancho, alturaLinea, maxLineas) {
     var palabras = String(txt || "").split(/\s+/).filter(Boolean);
     var linea = "", lineas = [];
@@ -356,38 +365,76 @@
     // Todas las demás páginas comparten el papel.
     ctx.fillStyle = pal["--paper"]; ctx.fillRect(0, 0, W, H);
     grano(ctx, W, H);
-    if (tipo !== "contraportada") renglones(ctx, W, H, pal["--line"], k);
+    // La hoja de datos no lleva renglones: es una ficha, no una página para
+    // escribir. Con ellos parecía un cuaderno y no el documento que imita.
+    if (tipo !== "contraportada" && tipo !== "indice") renglones(ctx, W, H, pal["--line"], k);
 
     if (tipo === "indice") {
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
-      textoEspaciado(ctx, "ÍNDICE", W * 0.09, H * 0.09, 1.6 * k);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 34 * k);
-      ctx.fillText("Tu travesía.", W * 0.085, H * 0.135);
-      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("sans", 14 * k);
-      parrafo(ctx, "Cada stand visitado sella una página. Colecciónalos todos.",
-              W * 0.09, H * 0.175, W * 0.82, 19 * k, 2);
-
-      var slots = Math.max(1, pagina.totalSlots | 0);
-      var yy = H * 0.235, paso = Math.min(30 * k, (H * 0.66) / slots);
-      for (var i = 0; i < slots; i++) {
-        var hecho = i < (pagina.visitados | 0);
-        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-        ctx.fillText(("0" + (i + 1)).slice(-2), W * 0.09, yy);
-        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
-        if (ctx.setLineDash) ctx.setLineDash([1.5 * k, 3.5 * k]);
-        ctx.beginPath(); ctx.moveTo(W * 0.20, yy - 3 * k); ctx.lineTo(W * 0.84, yy - 3 * k); ctx.stroke();
-        if (ctx.setLineDash) ctx.setLineDash([]);
-        ctx.fillStyle = hecho ? pal["--grano"] : pal["--line-2"];
-        ctx.beginPath(); ctx.arc(W * 0.89, yy - 4 * k, 5 * k, 0, Math.PI * 2);
-        if (hecho) ctx.fill(); else ctx.stroke();
-        yy += paso;
-      }
+      // Hoja de datos, como la página del titular en un pasaporte de verdad:
+      // recuadro de la foto a la izquierda, ficha a la derecha y banda de
+      // lectura mecánica abajo. Antes era un índice de casillas vacías.
+      var sellados = pagina.visitados | 0;
 
       ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-      textoEspaciado(ctx, (pagina.visitados | 0) + " SELLADOS", W * 0.09, H * 0.955, 1.4 * k);
+      textoEspaciado(ctx, "REPÚBLICA DE COLOMBIA · NARIÑO", W * 0.09, H * 0.075, 1.4 * k);
       ctx.textAlign = "right";
-      ctx.fillText(Math.max(0, (pagina.totalStands | 0) - (pagina.visitados | 0)) + " FALTANTES", W * 0.91, H * 0.955);
+      textoEspaciado(ctx, "P·CAFÉ", W * 0.91, H * 0.075, 1.4 * k);
       ctx.textAlign = "left";
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
+      ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.095); ctx.lineTo(W * 0.91, H * 0.095); ctx.stroke();
+
+      // Recuadro de la foto: inicial y número de sellos.
+      var fx = W * 0.09, fy = H * 0.115, fw = W * 0.24, fh = H * 0.20;
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1.5 * k;
+      ctx.strokeRect(fx, fy, fw, fh);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 46 * k);
+      ctx.textAlign = "center";
+      ctx.fillText(String(pagina.nombre || "V").trim().charAt(0).toUpperCase(), fx + fw / 2, fy + fh * 0.46);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 11 * k);
+      textoCentradoEspaciado(ctx, "SELLOS", fx + fw / 2, fy + fh * 0.72, 1.4 * k);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("mono", 18 * k);
+      ctx.fillText(("0" + sellados).slice(-2), fx + fw / 2, fy + fh * 0.92);
+      ctx.textAlign = "left";
+
+      // Ficha: etiqueta pequeña arriba, valor debajo.
+      var cx = W * 0.38;
+      function campo(etiqueta, valor, x, y, maxAncho) {
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * k);
+        textoEspaciado(ctx, etiqueta, x, y, 1.2 * k);
+        ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 16 * k);
+        ctx.fillText(recortar(ctx, String(valor == null || valor === "" ? "——" : valor), maxAncho), x, y + 21 * k);
+      }
+      campo("PORTADOR / BEARER", pagina.nombre, cx, H * 0.135, W * 0.53);
+      campo("SEXO", pagina.sexo, cx, H * 0.195, W * 0.20);
+      campo("EDAD", pagina.edad, W * 0.60, H * 0.195, W * 0.31);
+      campo("PROCEDENCIA", pagina.procedencia, cx, H * 0.255, W * 0.53);
+      campo("Nº DE PASAPORTE", pagina.numero, cx, H * 0.315, W * 0.53);
+
+      campo("EXPEDIDO", pagina.expedido, W * 0.09, H * 0.395, W * 0.30);
+      campo("VISITANTE", pagina.visitante, W * 0.44, H * 0.395, W * 0.47);
+      campo("CONTACTO", pagina.correo, W * 0.09, H * 0.465, W * 0.55);
+      campo("AVANCE", sellados + " / " + (pagina.totalStands | 0), W * 0.70, H * 0.465, W * 0.21);
+
+      if (!pagina.conPerfil) {
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * k);
+        parrafo(ctx, "Completa tu perfil de visitante y esta hoja se llena con tus datos.",
+                W * 0.09, H * 0.545, W * 0.82, 18 * k, 2);
+      }
+
+      campo("AUTORIDAD EXPEDIDORA", "Gobernación de Nariño", W * 0.09, H * 0.700, W * 0.50);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * k);
+      textoEspaciado(ctx, "FIRMA", W * 0.66, H * 0.700, 1.2 * k);
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
+      if (ctx.setLineDash) ctx.setLineDash([1.5 * k, 3.5 * k]);
+      ctx.beginPath(); ctx.moveTo(W * 0.66, H * 0.725); ctx.lineTo(W * 0.91, H * 0.725); ctx.stroke();
+      if (ctx.setLineDash) ctx.setLineDash([]);
+
+      // Banda de lectura mecánica.
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
+      ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.875); ctx.lineTo(W * 0.91, H * 0.875); ctx.stroke();
+      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("mono", 15 * k);
+      ctx.fillText(String(pagina.mrz1 || ""), W * 0.09, H * 0.915);
+      ctx.fillText(String(pagina.mrz2 || ""), W * 0.09, H * 0.950);
     } else if (tipo === "sello") {
       var s = pagina.stand || {};
       ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
