@@ -15,6 +15,7 @@
 // No necesita npm: usa el propio js/vendor/babel.min.js que ya se auto-hospeda.
 
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -69,10 +70,19 @@ for (const rel of ARCHIVOS) {
   lineas += code.split('\n').length;
 }
 
+// Huella del CONTENIDO de las fuentes, no de sus fechas: un clon nuevo cambia
+// las mtime de todos los ficheros, y con ellas cambiaba el bundle sin que el
+// código lo hiciera. Eso producía diffs espurios y hacía imposible comprobar en
+// CI si el bundle está al día. El hash sí es reproducible.
+const huella = createHash('sha256')
+  .update(ARCHIVOS.map((f) => readFileSync(join(RAIZ, f), 'utf8')).join('\0'))
+  .digest('hex')
+  .slice(0, 16);
+
 const cabecera = `// GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: ${ARCHIVOS.join(', ')}
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Marca de tiempo de las fuentes: ${ARCHIVOS.map((f) => statSync(join(RAIZ, f)).mtimeMs.toFixed(0)).join(',')}
+// Huella de las fuentes: ${huella}
 `;
 
 writeFileSync(join(RAIZ, SALIDA), cabecera + partes.join('\n\n') + '\n', 'utf8');

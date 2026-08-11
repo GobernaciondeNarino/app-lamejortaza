@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Marca de tiempo de las fuentes: 1786406277194,1786405717638,1786405750439,1786401948826,1786404678590,1786405905917,1786405739838,1786403923838
+// Huella de las fuentes: 700fe993b9bfb4b0
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
