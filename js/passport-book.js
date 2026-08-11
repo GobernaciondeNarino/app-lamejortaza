@@ -486,6 +486,12 @@
     // Posición del lomo dentro del lienzo (0..1). La calcula colocarCamara() y
     // la usa el gesto de toque para saber qué mitad es "avanzar".
     var lomoEnLienzo = 0.5;
+    // Encuadre de la cámara. En reposo se ajusta al libro para que se lea lo
+    // más grande posible; sólo se abre mientras una hoja está en el aire, que
+    // es cuando hace falta ver el arco. Antes estaba fijo en el valor ancho y
+    // el libro desperdiciaba un tercio de la pantalla del móvil todo el rato.
+    var ENCUADRE_REPOSO = 1.08, ENCUADRE_VUELO = 1.42;
+    var encuadre = ENCUADRE_REPOSO, encuadreObjetivo = ENCUADRE_REPOSO;
     var arrastre = null;
     var selloAnimado = {}; // páginas cuyo sello ya aterrizó
 
@@ -951,7 +957,13 @@
       cantoIzq.visible = grosorIzq > T * 1.5;
     }
 
-    function colocarCamara() {
+    /** Sólo recalcula distancia y centro; no toca el tamaño del renderer. */
+    function ajustarEncuadre() {
+      if (!camera) return;
+      colocarCamara(true);
+    }
+
+    function colocarCamara(soloCamara) {
       var rect = contenedor.getBoundingClientRect();
       var ancho = Math.max(1, rect.width), alto = Math.max(1, rect.height);
       camera.aspect = ancho / alto;
@@ -966,10 +978,13 @@
       // justo donde se usa. Con 1.38 de ancho y el centro desplazado a 0.42W
       // se ve el arco de la hoja y la pila ya volteada sin que la página
       // activa deje de dominar la pantalla.
-      var anchoEncuadre = modo === "pliego" ? W * 2.1 : W * 1.38;
+      var anchoEncuadre = modo === "pliego" ? W * 2.1 : W * encuadre;
       var distV = (H / 2) / Math.tan(fovRad / 2);
       var distH = (anchoEncuadre / 2) / (Math.tan(fovRad / 2) * camera.aspect);
-      var cx = modo === "pliego" ? 0 : W * 0.42;
+      // El centro sigue al encuadre: cuanto más aire se deja, más se desplaza
+      // hacia el lomo para que el arco de la hoja quepa por la izquierda.
+      var aire = (encuadre - ENCUADRE_REPOSO) / Math.max(0.0001, ENCUADRE_VUELO - ENCUADRE_REPOSO);
+      var cx = modo === "pliego" ? 0 : W * (0.5 - 0.10 * aire);
 
       // El umbral del toque tiene que caer en el LOMO, no en el centro
       // geométrico del lienzo. En modo "hoja" el lomo está al 20% del ancho:
@@ -981,7 +996,7 @@
       camera.position.set(cx, H * 0.045, Math.max(distV, distH) * 1.06);
       camera.lookAt(cx, 0, 0);
       camera.updateProjectionMatrix();
-      renderer.setSize(ancho, alto, false);
+      if (!soloCamara) renderer.setSize(ancho, alto, false);
     }
 
     // -------------------------------------------------------------------
@@ -1103,6 +1118,16 @@
       if (destruido || pausado) return;
 
       var sigueAnimando = false;
+
+      encuadreObjetivo = vuelo ? ENCUADRE_VUELO : ENCUADRE_REPOSO;
+      if (Math.abs(encuadre - encuadreObjetivo) > 0.002) {
+        encuadre += (encuadreObjetivo - encuadre) * 0.18;
+        ajustarEncuadre();
+        sigueAnimando = true;
+      } else if (encuadre !== encuadreObjetivo) {
+        encuadre = encuadreObjetivo;
+        ajustarEncuadre();
+      }
 
       if (vuelo) {
         if (!vuelo.inicio) vuelo.inicio = ahora;

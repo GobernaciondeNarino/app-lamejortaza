@@ -209,6 +209,12 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .seccion { padding-left: 32px; padding-right: 32px; }
 @media (max-width: 760px) { .seccion { padding-left: 16px; padding-right: 16px; } }
 
+/* El pasaporte aprovecha todo el ancho del teléfono: .mobile-inner limita a
+   460px, que en un móvil grande deja franjas muertas a los lados. */
+@media (max-width: 719px) {
+  .pasaporte-vista .mobile-inner { max-width: none; padding-left: 12px; padding-right: 12px; }
+}
+
 /* El libro del pasaporte.
    La proporción 0.72 derivaba el alto del ancho, así que en horizontal el
    lienzo salía de 708x983 px dentro de una ventana de 360 px de alto: se veía
@@ -217,7 +223,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
    y el libro entero cabe siempre en pantalla junto a sus controles. */
 .libro-marco {
   aspect-ratio: 0.72;
-  max-width: min(100%, calc(64dvh * 0.72));
+  /* 78dvh: el libro manda en la pantalla. Con 64 quedaba legible pero
+     pequeño, y es el contenido principal de esta vista, no un adorno. El tope
+     sigue existiendo para que los controles ←/→ nunca queden fuera. */
+  max-width: min(100%, calc(78dvh * 0.72));
   margin-inline: auto;
   perspective: 1400px;
 }
@@ -238,7 +247,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
      como contenido — y su único hijo está posicionado en absoluto, o sea 0. */
   .pasaporte-horizontal .libro-marco {
     margin-top: 0 !important;
-    width: calc(76dvh * 0.72);
+    width: calc(82dvh * 0.72);
     max-width: none;
   }
   /* Los controles no deben repartirse a lo ancho de media pantalla: se

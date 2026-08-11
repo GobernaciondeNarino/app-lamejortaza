@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 171d649d49f3319a
+// Huella de las fuentes: 2b30554b1d5576c8
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -2483,11 +2483,12 @@ const PassportBook = ({
   const actual = pages[Math.min(page, pages.length - 1)] || pages[0];
   const resumen = actual.type === "stamp" ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}` : actual.type === "cover" ? "Portada del pasaporte" : actual.type === "index" ? "Índice de la travesía" : "Fin del pasaporte";
   return React.createElement("div", {
+    className: "pasaporte-vista",
     style: {
       minHeight: "100dvh",
       background: "var(--ink)",
       color: "var(--paper)",
-      padding: "16px 16px 28px"
+      padding: "12px 10px 24px"
     }
   }, React.createElement("div", {
     className: "mobile-inner",
@@ -3858,12 +3859,22 @@ const ERRORES = {
   not_found: "No encontrado.",
   ya_verificado: "Este promotor ya estaba verificado.",
   sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
-  stand_no_existe: "Ese stand no existe."
+  stand_no_existe: "Ese stand no existe.",
+  estado_invalido: "Ese cambio de estado no es válido.",
+  estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
+  bad_id: "El identificador no es válido. Recarga la página.",
+  bad_json: "Los datos enviados no son válidos. Recarga la página.",
+  password_invalida: "La contraseña no es válida.",
+  payload_too_large: "El contenido es demasiado grande.",
+  origin_not_allowed: "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
+  csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
+  internal_error: "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado."
 };
 const mensajeError = (e, porDefecto) => {
   const code = String(e && (e.code || e.message) || e || "");
   for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
-  return porDefecto || "Ocurrió un error. Inténtalo de nuevo.";
+  const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
+  return (porDefecto || "Ocurrió un error.") + (limpio ? ` (código: ${limpio})` : "");
 };
 const Aviso = ({
   tipo = "error",

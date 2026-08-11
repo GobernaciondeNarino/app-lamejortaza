@@ -213,7 +213,7 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
     : "Fin del pasaporte";
 
   return (
-    <div style={{ minHeight: "100dvh", background: "var(--ink)", color: "var(--paper)", padding: "16px 16px 28px" }}>
+    <div className="pasaporte-vista" style={{ minHeight: "100dvh", background: "var(--ink)", color: "var(--paper)", padding: "12px 10px 24px" }}>
       <div className="mobile-inner" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", color: "var(--paper-3)" }}>
           <a href="/festival" data-route style={{ color: "var(--paper-3)", fontSize: 13 }}>← Salir</a>

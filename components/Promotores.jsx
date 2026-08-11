@@ -61,11 +61,28 @@ const ERRORES = {
   ya_verificado: "Este promotor ya estaba verificado.",
   sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
   stand_no_existe: "Ese stand no existe.",
+  estado_invalido: "Ese cambio de estado no es válido.",
+  estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
+  bad_id: "El identificador no es válido. Recarga la página.",
+  bad_json: "Los datos enviados no son válidos. Recarga la página.",
+  password_invalida: "La contraseña no es válida.",
+  payload_too_large: "El contenido es demasiado grande.",
+  // Estos tres no son errores del usuario sino del despliegue, y antes caían
+  // todos en un "No fue posible completar la acción" que no decía nada. El
+  // administrador necesita saber dónde mirar.
+  origin_not_allowed:
+    "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
+  csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
+  internal_error:
+    "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado.",
 };
 const mensajeError = (e, porDefecto) => {
   const code = String((e && (e.code || e.message)) || e || "");
   for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
-  return porDefecto || "Ocurrió un error. Inténtalo de nuevo.";
+  // Si el código es desconocido, mostrarlo: un mensaje genérico obliga a
+  // adivinar, y quien administra el festival no tiene acceso a los logs.
+  const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
+  return (porDefecto || "Ocurrió un error.") + (limpio ? ` (código: ${limpio})` : "");
 };
 
 const Aviso = ({ tipo = "error", children }) => {
