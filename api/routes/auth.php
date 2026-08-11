@@ -9,12 +9,14 @@ use LMT\RateLimit;
 
 function register_routes_auth(\LMT\Router $r): void
 {
-    // Datos del usuario actual + token CSRF (lo necesita el frontend antes de hacer POST).
+    // Datos de la sesión actual + token CSRF (lo necesita el frontend antes de
+    // hacer POST). Una sesión es de administrador O de promotor, nunca de los
+    // dos: `promotor` viene con null cuando quien está dentro es un admin.
     $r->get('/auth/me', function () {
-        $user = Session::user();
         Response::ok([
-            'user' => $user,
-            'csrf' => Session::csrfToken(),
+            'user'     => Session::user(),
+            'promotor' => Session::promotor(),
+            'csrf'     => Session::csrfToken(),
         ]);
     });
 

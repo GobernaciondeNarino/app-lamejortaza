@@ -92,7 +92,9 @@ const QRCode = ({ data = "st-01", size = 140, bg = "#ffffff" }) => {
   const m = raw.match(/\/s\/([a-z0-9\-]{2,32})/i);
   const standId = m ? m[1] : raw;
 
-  const path = "/qr/" + encodeURIComponent(standId) + ".png";
+  // urlFor() ya codifica la ruta; el id del stand además está
+  // restringido a [a-z0-9-], donde codificar es un no-op.
+  const path = "/qr/" + standId + ".png";
   const base = (window.LMTApi && window.LMTApi.urlFor)
     ? window.LMTApi.urlFor(path)
     : ("/api/index.php?path=qr/" + encodeURIComponent(standId) + ".png");

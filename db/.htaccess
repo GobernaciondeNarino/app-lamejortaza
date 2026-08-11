@@ -1,0 +1,31 @@
+# =========================================================================
+# db/.htaccess — NADA de esta carpeta puede servirse por HTTP.
+# -------------------------------------------------------------------------
+# Aquí viven la base SQLite (correos de ciudadanos, hashes de administrador,
+# documentos de promotores) y, si el correo está en modo 'log', los mensajes
+# salientes con contraseñas temporales en claro. Un GET a
+# /db/la-mejor-taza.sqlite o /db/correo-salida.log entregaba todo eso a
+# cualquiera que supiera el nombre del fichero — y está publicado en el README.
+#
+# Cada directiva va envuelta en <IfModule> porque en hosting con AllowOverride
+# restrictivo una directiva desconocida devuelve 500 y tumba el sitio entero.
+# La defensa NO depende sólo de este fichero: Config::rutaLog() coloca el log
+# fuera del document root cuando puede, y el instalador avisa si esta carpeta
+# resulta ser accesible.
+# =========================================================================
+
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+  <IfModule mod_access_compat.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^ - [F,L]
+</IfModule>

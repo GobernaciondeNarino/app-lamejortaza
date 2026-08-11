@@ -36,13 +36,17 @@ Gobernación de Nariño.
 | `/`                                  | Público   | Dashboard: podio, mapa, ranking, votos en vivo.           |
 | `/festival/{standId}`                | Público   | Detalle del stand + botón "Votar este stand →".           |
 | `/s/{standId}`                       | Móvil     | **Página real de votación** que abre el QR del stand.     |
-| `/pasaporte`                         | Móvil     | Libreta del usuario con sus sellos reales (por correo).   |
+| `/pasaporte`                         | Móvil     | Libreta del usuario con sus sellos reales, como libro 3D. |
+| `/inscripcion`                       | Público   | **Inscripción de promotores de stand** (solicitud).       |
+| `/promotor`                          | Promotor  | Portal: acceso, cambio de clave, empresa y productos.     |
 | `/admin/login`                       | Admin     | Login del organizador.                                    |
 | `/admin` · `/admin/stands`           | Admin     | Lista y métricas (gating real).                           |
 | `/admin/stands/new`                  | Admin     | Crear stand (POST `/api/stands`).                         |
 | `/admin/stands/{id}/edit`            | Admin     | Editar / borrar (PUT/DELETE `/api/stands/{id}`).          |
 | `/admin/qr`                          | Admin     | Carteles A5 imprimibles con el QR del stand.              |
 | `/admin/live`                        | Admin     | Actividad y ranking en tiempo real.                       |
+| `/admin/promotores`                  | Admin     | **Verificar inscripciones** y enviar la clave por correo. |
+| `/admin/correos`                     | Admin     | Bitácora de correo saliente (¿salió la clave?).           |
 | `/install.php`                       | One-shot  | Asistente de instalación (auto-bloquea al terminar).      |
 | `/api/...`                           | Backend   | Front controller PHP (auth, stands, votos, pasaportes).   |
 
@@ -80,6 +84,41 @@ Gobernación de Nariño.
 
 ---
 
+## 1.bis. Promotores de stands
+
+Módulo completo de inscripción para quienes exhiben en el festival.
+
+**Flujo:**
+
+1. El caficultor entra a `/inscripcion` y envía sus datos. Queda `pendiente`.
+   Recibe un acuse por correo; los administradores reciben un aviso.
+2. Un organizador la revisa en `/admin/promotores` y pulsa
+   **«Verificar y enviar clave»**. En ese momento —y sólo entonces— el sistema
+   genera una contraseña temporal fuerte, guarda su hash (Argon2id + pepper) y
+   envía el texto plano al correo del promotor. El servidor no vuelve a
+   conocerla.
+3. El promotor entra en `/promotor` con su correo y esa clave. El sistema le
+   **obliga a cambiarla** antes de dejarle hacer nada más; ahí pasa a `activo`.
+   La clave temporal caduca a las 72 horas.
+4. Ya dentro, completa su perfil, los datos de su **empresa** y sus
+   **productos**, con logo y fotos.
+5. El administrador puede vincularlo a un stand, suspenderlo, rechazarlo o
+   reenviarle una clave nueva (que invalida la anterior).
+
+**Estados:** `pendiente → verificado → activo`, y `rechazado` / `suspendido`.
+
+**Si el correo no sale** (hosting sin MTA, SMTP mal configurado), la respuesta
+de «verificar» devuelve la clave al administrador para que la entregue por otro
+medio, y lo avisa en pantalla. `/admin/correos` muestra la bitácora de envíos:
+es el primer sitio donde mirar si un promotor dice que no le llegó nada.
+
+**Configura el correo antes del evento.** Con `transport = 'mail'` muchos
+hostings compartidos marcan el mensaje como spam o directamente no lo envían.
+Lo recomendado es `transport = 'smtp'` con las credenciales del dominio
+institucional (ver `api/config.example.php`).
+
+---
+
 ## 2. Arquitectura
 
 ```
@@ -108,6 +147,25 @@ Gobernación de Nariño.
    ├─ votos       ─ pasaportes
    └─ rate_limits
 ```
+
+---
+
+## 2.bis. Compilar los componentes
+
+El proyecto no usa `npm` en producción, pero el JSX se precompila una vez:
+
+```bash
+node tools/build-components.mjs      # genera js/components.build.js
+```
+
+Ese archivo **se versiona**: el hosting compartido no ejecuta ningún build, así
+que tiene que llegar hecho en el despliegue. Si falta, `app.php` cae al modo
+Babel-en-el-navegador (funciona, pero descarga 3 MB y obliga a permitir
+`unsafe-eval`) y avisa por consola. Si tocas un `.jsx` y no regeneras, `app.php`
+también lo detecta comparando fechas y lo dice por consola.
+
+El compilador usa el propio `js/vendor/babel.min.js` del repositorio: no hace
+falta instalar nada con npm.
 
 ---
 
@@ -290,7 +348,8 @@ php -r "(new PDO('sqlite:db/la-mejor-taza.sqlite'))->exec(file_get_contents('db/
 | SQLi                              | PDO + sentencias preparadas + `ATTR_EMULATE_PREPARES = false`. |
 | XSS persistido                    | `Validate::comment()` quita HTML/control chars; CSP estricta. |
 | CSRF                              | Sesión + `X-CSRF-Token` + lista blanca de Origin/Referer.     |
-| Session fixation / robo de cookie | Cookie `HttpOnly; Secure; SameSite=Strict`, `regenerate_id`, fingerprint UA + prefijo IP. |
+| Session fixation / robo de cookie | Cookie `HttpOnly; Secure; SameSite=Strict` con `path` acotado al subdirectorio, `regenerate_id`, huella por User-Agent. |
+| Revocación de administradores     | `Session::isAdmin()` revalida `is_admin` contra la base cada 60 s: quitar el permiso expulsa de verdad. |
 | Brute force login                 | 5 intentos / 10 min por IP, hashing constante incluso en fallo. |
 | Spam de votos                     | 1 voto / min / IP / stand, 12 / 10 min / correo, índice único en DB. |
 | Robo de hashes                    | Argon2id (`memory_cost=65536, time_cost=4, threads=2`) + pepper HMAC-SHA256 separado. |
@@ -298,15 +357,45 @@ php -r "(new PDO('sqlite:db/la-mejor-taza.sqlite'))->exec(file_get_contents('db/
 | Accesos directos a `config.php`   | `.htaccess` con `Require all denied` + ruta privada.          |
 | Sniffing / MITM                   | HSTS (1 año), `force_https`, cabeceras `X-Content-Type-Options`. |
 | Clickjacking                      | `X-Frame-Options: SAMEORIGIN`, CSP `frame-ancestors 'self'`.  |
-| PII en logs / dashboard           | Correo enmascarado (`te**@correo.co`) en respuestas públicas. |
+| PII en logs / dashboard           | Correo enmascarado en usuario **y dominio** (`ju****@a****.gov.co`); nombre reducido a inicial. |
+| Datos de contacto de los stands   | `correo` y `direccion` sólo viajan si la sesión es de administrador. |
+| Enumeración de participantes      | `/pasaportes/{correo}` responde igual exista o no (sin 404 delator) + límite por IP y por correo. |
+| Inyección de fórmulas en CSV      | Serialización CSV propia (RFC 4180, sin el `escape` de `fputcsv`) + prefijo `'` en celdas peligrosas. |
+| Cabecera `Host` manipulada        | Los enlaces de correos y QR salen de `Security::baseUrlPublica()`, que sólo acepta hosts de `allowed_origins`. |
+| Webshell vía subida de imágenes   | Tipo real por `getimagesize` + `finfo`, extensión derivada del tipo, nombre aleatorio, **re-codificación con GD** (destruye polyglots y EXIF) y `.htaccess` que apaga el motor de scripts. |
+| Fuerza bruta contra promotores    | 8 intentos → bloqueo de 15 min por cuenta, además del límite por IP. |
+| Contraseñas débiles de promotor   | Mínimo 10 caracteres, 3 clases, y rechazo de su propio nombre/correo **comparando sin tildes y palabra por palabra**. |
+| Carrera en el rate limit          | Incremento atómico (`ON DUPLICATE KEY` / `ON CONFLICT`) y decisión sobre el valor ya escrito. |
+| Ficheros sensibles servibles      | `db/.htaccess` niega la carpeta entera (base SQLite y bitácora de correo); `api/config.php` se escribe con permisos `0600`. |
+| Reinstalación no autorizada       | `install_incomplete()` **falla cerrado**: ante un fallo de base de datos NO reabre el asistente. La recuperación exige crear `api/.permitir-reinstalacion` por FTP/SSH. |
 
 ### Capas en el navegador
 
-- **CSP** estricta en `La Mejor Taza.html` (`connect-src 'self'`,
-  `object-src 'none'`, etc.).
+- **CSP como cabecera HTTP** (no en `<meta>`, donde el navegador ignora
+  `frame-ancestors` y la protección contra clickjacking sería ficticia), con
+  **nonce por petición** para los dos scripts en línea.
+- **Cero dependencias externas en tiempo de ejecución.** React, three.js y las
+  tipografías se sirven desde el propio dominio. Antes venían de `unpkg.com` y
+  `fonts.googleapis.com`: si esa CDN no era alcanzable —una red institucional
+  filtrada basta— la aplicación entera se quedaba en «Cargando…», y Google
+  recibía la IP de cada visitante del festival (dato personal, Ley 1581/2012).
+- **JSX precompilado** (`js/components.build.js`, generado por
+  `tools/build-components.mjs`). Con ello la CSP puede prohibir `eval` y el
+  visitante deja de descargar 3 MB de Babel en su móvil.
+  **Tras tocar cualquier `.jsx` hay que regenerarlo**; `app.php` avisa por
+  consola si el bundle quedó viejo.
 - `js/security.js`: validación cliente espejo del servidor + rate limit
   local de 60 s por stand.
 - React escapa por defecto los textos.
+
+### Riesgo residual conocido
+
+`/pasaportes/{correo}` es de autoservicio por diseño: quien conozca el correo
+exacto de una persona puede confirmar en una petición que participó y qué
+stands visitó. La respuesta ya es idéntica para correos inexistentes y hay
+límite por IP y por correo, pero eliminarlo del todo exigiría verificar la
+propiedad del buzón (enlace mágico), lo que cambia el flujo del visitante.
+Queda documentado como decisión de producto, no como olvido.
 
 ### Origen permitido
 
@@ -364,6 +453,36 @@ curl -b c.txt -H "Content-Type: application/json" \
 ---
 
 ## 9. Animaciones con Three.js
+
+### El pasaporte como libro (`js/passport-book.js`)
+
+`/pasaporte` ya no inclina una tarjeta con CSS: monta un libro real en three.js.
+Cada hoja es un plano segmentado anclado al lomo cuyos vértices se recolocan por
+frame siguiendo una curva de **longitud constante** — el papel se dobla, no se
+estira— con normales analíticas para que la luz corra por el pliegue. Hay lomo
+redondeado, bloques de canto que dan grosor, sombra proyectada de la hoja en
+vuelo y arrastre con el dedo para pasar página a medio camino.
+
+Detalles que importan en el móvil de un visitante:
+
+- **Render por demanda**: no hay `requestAnimationFrame` permanente. En reposo
+  el consumo es cero.
+- **Ventana LRU de texturas** (6, o 4 en calidad baja): con 20 sellos el
+  consumo de memoria de GPU no crece.
+- **Sin shadow maps**: las sombras son geometría barata y gradientes horneados
+  en la textura.
+- **Degradación**: sin WebGL, sin three.js o si se pierde el contexto, React
+  vuelve al render en CSS de siempre y los botones ←/→ siguen funcionando. El
+  3D es una capa de presentación, nunca el mecanismo de navegación.
+- `prefers-reduced-motion` mantiene el libro pero quita el barrido.
+
+three.js se auto-hospeda como **módulo ES** (`js/vendor/three.module.min.js`,
+r167) porque desde r160 ya no se publica el build UMD. Como los módulos se
+ejecutan después de los scripts clásicos, `js/three-loader.js` expone
+`window.whenThree(cb)` y `window.threeSoportado()`: ningún consumidor puede
+asumir que `THREE` exista al evaluarse.
+
+### Fondo de granos (`js/three-background.js`)
 
 `js/three-background.js` monta una escena WebGL detrás del hero del
 dashboard usando los tokens CSS (`--grano`, `--galeras`, `--cafeto`).
@@ -513,6 +632,19 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
   `403 origin_not_allowed`.
 - En `api/config.php`, deja `'session' => ['secure' => true]` cuando
   el sitio se sirve por HTTPS (cookies sólo viajan por TLS).
+
+### Antes de abrir al público
+
+- [ ] `node tools/build-components.mjs` ejecutado y `js/components.build.js` subido.
+- [ ] `api/config.php` con permisos `600` y `debug => false`.
+- [ ] `mail.transport` en `smtp` y probado: verifica un promotor de prueba y
+      confirma en `/admin/correos` que el envío sale como `enviado`.
+- [ ] `allowed_origins` con el dominio real (y **sin** `localhost`).
+- [ ] `trust_proxy => true` sólo si hay un balanceador TLS delante.
+- [ ] **Borrar `install.php`, `api/check.php` y `api/diag.php`** del servidor.
+- [ ] Comprobar que `curl https://tu-sitio/db/la-mejor-taza.sqlite` devuelve 403
+      y que `curl https://tu-sitio/api/config.php` no muestra nada.
+- [ ] `uploads/` escribible por PHP y con su `.htaccess` presente.
 
 ### Verificación rápida tras instalar
 

@@ -86,9 +86,22 @@ function reinstall_token_ok(): bool {
  * es true, pero la tabla `admins` quedó vacía. En ese caso permitimos
  * re-ejecutar el wizard sin pedir el reinstall_token (porque sería absurdo
  * exigir un token cuando ni siquiera hay un admin que lo conozca).
+ *
+ * OJO — FALLA CERRADO. La versión anterior devolvía true desde el catch: con
+ * eso, CUALQUIER fallo de base de datos (corte transitorio, contraseña rotada
+ * por el proveedor, timeout bajo la carga de la feria) reabría el asistente
+ * completo a un anónimo, que podía recorrerlo, insertar su propio
+ * administrador y reescribir api/config.php apuntando a una base suya. Toma de
+ * control total del sistema sin ninguna credencial previa.
+ *
+ * Ahora "no puedo comprobarlo" significa "no abro". La recuperación legítima
+ * de una instalación realmente a medias sigue siendo posible, pero exige
+ * demostrar acceso al servidor creando el fichero centinela por FTP/SSH:
+ *     api/.permitir-reinstalacion
  */
 function install_incomplete(): bool {
     if (!is_file(LMT_CONFIG_PATH)) return false;
+    if (!is_file(LMT_ROOT . '/api/.permitir-reinstalacion')) return false;
     try {
         $cfg = @include LMT_CONFIG_PATH;
         if (!is_array($cfg) || empty($cfg['db']['dsn'])) return false;
@@ -99,9 +112,8 @@ function install_incomplete(): bool {
         $count = (int) $pdo->query("SELECT COUNT(*) FROM admins WHERE password_hash IS NOT NULL AND LENGTH(password_hash) >= 20")->fetchColumn();
         return $count === 0;
     } catch (\Throwable $e) {
-        // Si no podemos leer admins (tabla no existe, conexión falla),
-        // tratar como "instalación incompleta" para que el usuario pueda recuperar.
-        return true;
+        // No se pudo verificar => NO se abre el instalador.
+        return false;
     }
 }
 
@@ -225,11 +237,20 @@ function write_config(array $db, string $pepper, string $appSecret, string $rein
     $allowed .= "        'http://127.0.0.1:8000',\n";
     $allowed .= "    ]";
 
+    // Remitente por defecto: no-reply@<dominio del sitio>. Casi ningún MTA
+    // acepta un From de otro dominio, así que adivinarlo bien evita que el
+    // primer correo con credenciales se pierda sin explicación.
+    $hostSitio = parse_url($siteUrl !== '' ? $siteUrl : ('http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')), PHP_URL_HOST);
+    if (!is_string($hostSitio) || $hostSitio === '') $hostSitio = 'localhost';
+    $mailFrom = var_export('no-reply@' . preg_replace('/^www\./i', '', $hostSitio), true);
+
     $php = <<<PHP
 <?php
 // api/config.php — generado por install.php. NO COMMITEAR.
-// Para reinstalar: borra este archivo y ejecuta install.php otra vez,
-// o usa ?reinstall={$reinstallToken} en la URL del instalador.
+// Para reinstalar: borra este archivo y ejecuta install.php otra vez, o pasa
+// el valor de 'reinstall_token' (más abajo) como ?reinstall=... en la URL del
+// instalador. Ese token NO se repite aquí en claro a propósito: este archivo
+// se ha servido por HTTP en más de un hosting mal configurado.
 defined('LMT_GUARD') || exit('forbidden');
 return [
     'installed'        => true,
@@ -247,19 +268,55 @@ return [
         'lifetime' => 28800,
         'secure'   => {$secureCookie},
         'samesite' => 'Strict',
-        'path'     => '/',
+        // Vacío = se deriva del subdirectorio donde vive la app, para no
+        // enviar la cookie a las demás aplicaciones del mismo dominio.
+        'path'     => '',
         'domain'   => '',
     ],
 
     'allowed_origins' => %s,
 
     'rate_limits' => [
-        'login'      => ['window' => 600, 'max' => 5],
-        'vote'       => ['window' => 60,  'max' => 1],
-        'vote_email' => ['window' => 600, 'max' => 12],
-        'global'     => ['window' => 60,  'max' => 120],
+        'login'             => ['window' => 600,  'max' => 5],
+        'vote'              => ['window' => 60,   'max' => 1],
+        'vote_email'        => ['window' => 600,  'max' => 12],
+        'pasaporte'         => ['window' => 60,   'max' => 20],
+        'pasaporte_correo'  => ['window' => 3600, 'max' => 10],
+        'promotor_registro' => ['window' => 3600, 'max' => 5],
+        'promotor_login'    => ['window' => 900,  'max' => 15],
+        'promotor_upload'   => ['window' => 3600, 'max' => 60],
+        'global'            => ['window' => 60,   'max' => 120],
     ],
 
+    // Correo saliente: lo usa el módulo de promotores para entregar la
+    // contraseña temporal cuando el administrador verifica una inscripción.
+    // En hosting compartido la función mail() suele acabar en spam o estar
+    // capada; para producción cambia 'transport' a 'smtp' y rellena el bloque.
+    'mail' => [
+        'transport' => 'mail',
+        'from'      => {$mailFrom},
+        'from_name' => 'La Mejor Taza — Festival',
+        'reply_to'  => '',
+        'log_file'  => '',   // vacío = fuera del document root (recomendado)
+        'smtp' => [
+            'host'     => '',
+            'port'     => 587,
+            'secure'   => 'tls',
+            'user'     => '',
+            'password' => '',
+            'timeout'  => 15,
+        ],
+    ],
+
+    // Imágenes que suben los promotores (logo de empresa, fotos de producto).
+    'uploads' => [
+        'dir'       => __DIR__ . '/../uploads',
+        'max_bytes' => 3145728,
+        'max_dim'   => 1600,
+    ],
+
+    'diag_token'  => '',
+    'trust_proxy' => {$forceHttps},
     'force_https' => {$forceHttps},
     'debug'       => false,
 ];
@@ -275,7 +332,12 @@ PHP;
     );
 
     @mkdir(dirname(LMT_CONFIG_PATH), 0775, true);
-    return (bool) @file_put_contents(LMT_CONFIG_PATH, $rendered, LOCK_EX);
+    $ok = (bool) @file_put_contents(LMT_CONFIG_PATH, $rendered, LOCK_EX);
+    // Contiene pepper, app_secret, el DSN y la contraseña de la base. En
+    // hosting compartido 0644 significa que los demás inquilinos del servidor
+    // pueden leerlo; con app_secret se falsifican sesiones y rate limits.
+    if ($ok) @chmod(LMT_CONFIG_PATH, 0600);
+    return $ok;
 }
 
 // ---------------------------------------------------------------------------
@@ -443,7 +505,10 @@ if ($method === 'POST') {
                     pdo_for($db);
                 }
             } catch (\Throwable $e) {
-                $errors[] = 'No se pudo conectar: ' . h($e->getMessage());
+                // El mensaje crudo de PDO revela puertos y hosts internos a quien pruebe
+                // DSNs a ciegas. Al operador le basta con el motivo y el log del servidor.
+                error_log('[lmt][install] ' . $e->getMessage());
+                $errors[] = 'No se pudo conectar a la base de datos. Revisa host, puerto, usuario y contraseña. El detalle quedó en el log de errores del servidor.';
             }
         }
 

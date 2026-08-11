@@ -95,6 +95,253 @@ input, textarea, select { font-family: inherit; color: inherit; }
   content: ''; flex: 1; height: 1px; background: var(--line);
 }
 
+/* =========================================================================
+   Capa responsive
+   -------------------------------------------------------------------------
+   El proyecto no tenía ni una media query: el panel de administración vivía
+   con una barra lateral de 240px fija y la portada partía la pantalla en dos
+   columnas iguales. En un teléfono eso significa scroll horizontal y texto
+   ilegible — y este festival se vive desde el móvil: el visitante escanea un
+   QR, y el organizador revisa inscripciones de pie en el recinto.
+
+   Las rejillas viven aquí y NO en estilos en línea, porque un style inline
+   gana siempre a una media query. Los componentes usan estas clases.
+   ========================================================================= */
+
+/* Rejillas que se pliegan solas. minmax(0,1fr) evita que un hijo con texto
+   largo desborde la celda, que es el fallo clásico de grid. */
+.grid-2, .grid-3, .grid-4 { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+@media (max-width: 900px) {
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Panel de administración: barra lateral que pasa a cabecera en móvil. */
+.admin-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100dvh; background: var(--paper); }
+.admin-aside { border-right: 1px solid var(--line); padding: 26px 18px; display: flex; flex-direction: column; gap: 28px; background: var(--paper); }
+.admin-main  { overflow: auto; min-width: 0; }
+.admin-nav   { display: flex; flex-direction: column; gap: 2px; }
+.admin-sesion { margin-top: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); }
+
+@media (max-width: 860px) {
+  .admin-shell { grid-template-columns: minmax(0, 1fr); }
+  .admin-aside {
+    border-right: none; border-bottom: 1px solid var(--line);
+    padding: 14px 16px; gap: 14px;
+    position: sticky; top: 0; z-index: 20;
+  }
+  /* La navegación pasa a una fila desplazable: en un teléfono es el patrón
+     que no obliga a plegar/desplegar nada para cambiar de sección. */
+  .admin-nav {
+    flex-direction: row; overflow-x: auto; gap: 6px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    margin: 0 -16px; padding: 0 16px 2px;
+  }
+  .admin-nav::-webkit-scrollbar { display: none; }
+  .admin-nav > a { white-space: nowrap; flex: 0 0 auto; min-height: 44px; justify-content: center; }
+  .admin-nav > .mono { display: none; }
+  .admin-sesion { margin-top: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+  .admin-sesion > .mono { display: none; }
+  .admin-sesion > div { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-sesion > .btn { width: auto !important; margin-top: 0 !important; }
+}
+
+/* Relleno de página que encoge en vez de empujar el contenido fuera. */
+.admin-page { padding: 40px 48px; }
+@media (max-width: 860px) { .admin-page { padding: 24px 18px 48px; } }
+@media (max-width: 420px) { .admin-page { padding: 20px 14px 48px; } }
+
+/* Portada: dos mitades en escritorio, apiladas en móvil. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100dvh; background: var(--paper); }
+.split-hero { background: var(--ink); color: var(--paper); padding: 60px; display: flex; flex-direction: column; justify-content: space-between; gap: 40px; position: relative; overflow: hidden; }
+.split-form { padding: 70px 60px; display: flex; flex-direction: column; justify-content: center; max-width: 520px; width: 100%; }
+
+@media (max-width: 900px) {
+  .split { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .split-hero { padding: 32px 22px; gap: 26px; min-height: auto; }
+  .split-hero h1 { font-size: clamp(38px, 11vw, 56px) !important; }
+  .split-form { padding: 32px 22px 48px; max-width: none; }
+}
+
+/* Editor con panel lateral de vista previa. */
+.editor-2col { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; }
+@media (max-width: 900px) {
+  .editor-2col { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .editor-2col > aside { position: static !important; }
+}
+
+/* Fila del ranking público: tabla de 6 columnas en escritorio, tarjeta en
+   móvil. Es la vista que abre el visitante del festival desde el teléfono, así
+   que no puede depender de scroll horizontal. */
+.rank-fila {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 2.5fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  padding: 16px 22px;
+  text-decoration: none;
+  color: inherit;
+}
+@media (max-width: 760px) {
+  .rank-fila {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "pos nombre puntaje"
+      ".   meta   meta"
+      ".   barra  barra";
+    gap: 4px 12px;
+    padding: 14px 16px;
+  }
+  .rank-fila > .rank-pos     { grid-area: pos; align-self: start; padding-top: 4px; }
+  .rank-fila > .rank-nombre  { grid-area: nombre; }
+  .rank-fila > .rank-puntaje { grid-area: puntaje; align-self: start; text-align: right; }
+  .rank-fila > .rank-meta    { grid-area: meta; display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
+  .rank-fila > .rank-barra   { grid-area: barra; margin-top: 6px; }
+}
+
+/* Secciones con relleno lateral que encoge. */
+.seccion { padding-left: 32px; padding-right: 32px; }
+@media (max-width: 760px) { .seccion { padding-left: 16px; padding-right: 16px; } }
+
+/* El libro del pasaporte.
+   La proporción 0.72 derivaba el alto del ancho, así que en horizontal el
+   lienzo salía de 708x983 px dentro de una ventana de 360 px de alto: se veía
+   una franja del libro y los botones ←/→ quedaban tres pantallas más abajo.
+   Limitando el ANCHO en función del alto disponible, la proporción se mantiene
+   y el libro entero cabe siempre en pantalla junto a sus controles. */
+.libro-marco {
+  aspect-ratio: 0.72;
+  max-width: min(100%, calc(64dvh * 0.72));
+  margin-inline: auto;
+  perspective: 1400px;
+}
+
+/* Móvil en horizontal: en vez de encoger el libro hasta lo ridículo, se pone
+   la navegación al lado. Es la única orientación donde sobra ancho y falta alto. */
+@media (orientation: landscape) and (max-height: 520px) {
+  /* La columna del libro necesita una medida EXPLÍCITA: con `auto` la rejilla
+     la colapsa a cero, porque el libro sólo tiene proporción y máximo, no un
+     ancho intrínseco del que partir. */
+  .pasaporte-horizontal {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 22px; align-items: center;
+  }
+  /* Ancho EXPLÍCITO, no heredado de la rejilla: el marco sólo tiene proporción
+     y máximo, así que sin un ancho del que partir el navegador lo resuelve
+     como contenido — y su único hijo está posicionado en absoluto, o sea 0. */
+  .pasaporte-horizontal .libro-marco {
+    margin-top: 0 !important;
+    width: calc(76dvh * 0.72);
+    max-width: none;
+  }
+  /* Los controles no deben repartirse a lo ancho de media pantalla: se
+     agrupan a un tamaño cómodo y se centran junto al libro. */
+  /* `space-between` no sirve aquí: reparte los botones a lo ancho de la
+     columna y el contador queda debajo de ellos. Se agrupan con gap. */
+  .pasaporte-horizontal .libro-controles {
+    margin-top: 0 !important;
+    justify-content: center !important;
+    gap: 18px;
+  }
+  .pasaporte-horizontal > .mono { grid-column: 2; margin-top: 10px !important; }
+}
+
+/* Tablas anchas: en vez de romper la página, se desplazan dentro de su caja. */
+.tabla-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tabla-scroll > * { min-width: 640px; }
+@media (max-width: 560px) { .tabla-scroll > * { min-width: 520px; } }
+
+/* Títulos que escalan con el ancho en lugar de desbordar. */
+.titulo-xl { font-family: var(--font-display); font-style: italic; font-weight: 400; letter-spacing: -0.01em; line-height: 1.02; font-size: clamp(30px, 6.5vw, 44px); margin: 4px 0 0; }
+.titulo-l  { font-family: var(--font-display); font-style: italic; font-weight: 400; line-height: 1.05; font-size: clamp(26px, 5.5vw, 34px); margin: 0; }
+
+/* Botonera que se apila cuando no cabe. */
+.acciones { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .acciones > .btn, .acciones > a.btn { flex: 1 1 100%; justify-content: center; }
+}
+
+/* Suelo tipográfico en móvil.
+   La clase .mono es de 11px, y los subtítulos del panel bajaban a 9px. Con
+   mayúsculas y letter-spacing, a esos tamaños no se lee con el teléfono en la
+   mano — y buena parte de la información de estado del panel vive justo ahí. */
+/* Subtítulo de las tarjetas de métrica ("/ 100", "totales"). */
+.sub-metrica, .nota-menor { font-size: 11px; }
+
+@media (max-width: 860px) {
+  /* El !important es deliberado: los componentes fijan estos tamaños con
+     estilos en línea (fontSize: 9/10/11) y un style inline gana siempre a una
+     clase. Es el único sitio donde una media query puede corregirlos sin
+     tocar cada componente uno a uno. */
+  .mono { font-size: 12px !important; }
+  .admin-nav .mono { font-size: 11px !important; }
+  .field label { font-size: 12px; }
+  .sub-metrica, .nota-menor { font-size: 12px; }
+  /* En la fila horizontal de navegación, el subtítulo de cada sección
+     ("REGISTRO", "INSCRIPCIONES") es ruido: la etiqueta principal ya dice
+     dónde estás y ocupa la mitad de ancho. */
+  .admin-nav a > .mono { display: none; }
+}
+
+/* Correos enmascarados, identificadores y URLs: cadenas largas sin espacios
+   que desbordaban su caja en las tarjetas de actividad. */
+.mono, code { overflow-wrap: anywhere; }
+
+/* Carteles QR. El cartel mide 420x594 px porque ES un A5 real que se va a
+   imprimir: no puede "hacerse responsive" sin dejar de ser lo que se imprime.
+   Se escala visualmente y se reserva el alto correspondiente, para que el
+   organizador pueda revisarlo desde el móvil antes de mandarlo a la impresora. */
+.qr-layout { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 36px; align-items: flex-start; }
+@media (max-width: 860px) {
+  .qr-layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+}
+@media (max-width: 560px) {
+  /* transform: scale() sólo escala lo que se VE: la caja de maquetación sigue
+     midiendo 420x594 y el marco seguía desbordando. Los márgenes negativos
+     recuperan exactamente el espacio que la escala deja libre
+     (420 x 0.34 = 143 px, 594 x 0.34 = 202 px), así que el marco encoge de
+     verdad y no hace falta fijarle un alto a mano. */
+  .qr-frame { padding: 10px !important; overflow: hidden; }
+  .qr-frame .qr-poster {
+    transform: scale(0.66); transform-origin: top left;
+    margin-right: -143px; margin-bottom: -202px;
+  }
+}
+@media (max-width: 400px) {
+  .qr-frame .qr-poster {
+    transform: scale(0.58);
+    margin-right: -176px; margin-bottom: -249px;
+  }
+}
+/* Al imprimir, ni escalado ni recorte: vuelve a ser un A5 exacto. */
+@media print {
+  .qr-frame { height: auto !important; overflow: visible !important; padding: 0 !important; }
+  .qr-frame .qr-poster { transform: none !important; }
+}
+
+/* Objetivos táctiles: 44px es el mínimo cómodo con el dedo. */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  button, a.btn { touch-action: manipulation; }
+}
+
+/* iOS hace zoom automático al enfocar un input de menos de 16px. Ese zoom
+   descoloca el layout y el usuario tiene que volver a encuadrar a mano. */
+@media (max-width: 860px) {
+  .field input, .field textarea, .field select { font-size: 16px; }
+}
+
+/* Nunca scroll horizontal en el documento: si algo se pasa de ancho, que se
+   note dentro de su contenedor y no arrastrando la página entera. */
+html, body { max-width: 100%; overflow-x: hidden; }
+
 /* Animaciones */
 @keyframes stamp-land {
   0% { transform: translate(-50%, -50%) scale(2.5) rotate(var(--stamp-rot, -12deg)); opacity: 0; }

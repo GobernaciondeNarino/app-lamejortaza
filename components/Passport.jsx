@@ -45,8 +45,22 @@ const PassportPage = ({ stands }) => {
     }
   }, []);
 
+  // Ojo con la condición: `LMTApi.enabled` es false hasta que termina el
+  // bootstrap. Si el componente monta antes (lo normal en una recarga directa
+  // de /pasaporte) y sólo dependiéramos de [email, load], la carga no volvería
+  // a intentarse nunca y el usuario vería "No fue posible cargar tu pasaporte"
+  // teniendo uno perfectamente válido. Por eso también escuchamos lmt:auth,
+  // que es el evento que dispara js/api.js al acabar el arranque.
   React.useEffect(() => {
-    if (email && window.LMTApi && window.LMTApi.enabled) load(email);
+    if (!email) return;
+    let cancelado = false;
+    const intentar = () => {
+      if (cancelado || !window.LMTApi || !window.LMTApi.enabled) return;
+      load(email);
+    };
+    intentar();
+    window.addEventListener("lmt:auth", intentar);
+    return () => { cancelado = true; window.removeEventListener("lmt:auth", intentar); };
   }, [email, load]);
 
   if (askingEmail) {
@@ -118,13 +132,85 @@ const PassportPage = ({ stands }) => {
     { type: "end" },
   ];
 
+  return (
+    <PassportBook
+      passport={passport}
+      pages={pages}
+      visitados={visitados}
+      visitadosIds={visitadosIds}
+      stands={stands}
+      email={email}
+      page={page}
+      setPage={setPage}
+      flipping={flipping}
+      setFlipping={setFlipping}/>
+  );
+};
+
+// Presentación del pasaporte. El libro en three.js (js/passport-book.js) se
+// monta encima; si no puede —sin WebGL, sin three.js, contexto perdido— el
+// render en CSS de siempre queda visible y los botones ←/→ siguen mandando.
+// El 3D es una capa reemplazable, nunca el mecanismo de navegación.
+const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, setPage, flipping, setFlipping }) => {
+  const wrapRef = React.useRef(null);
+  const libroRef = React.useRef(null);
+  const [book3d, setBook3d] = React.useState(false);
+
+  // Clave estable: sin memoizar, el efecto se re-ejecutaría en cada render y
+  // acumularía libros (y contextos WebGL) hasta tumbar la pestaña.
+  const pagesKey = React.useMemo(
+    () => visitadosIds.join(",") + "|" + stands.length,
+    [visitadosIds, stands.length]
+  );
+
+  React.useEffect(() => {
+    const cont = wrapRef.current;
+    if (!cont || !window.LMTPassportBook || !window.LMTPassportBook.soportado()) return;
+
+    const libro = window.LMTPassportBook.mount(cont, {
+      paginas: [
+        { tipo: "portada", nombre: passport.nombre, correo: passport.correo, inicio: passport.inicio },
+        { tipo: "indice", visitados: visitados.length, totalSlots: Math.max(8, visitados.length), totalStands: stands.length },
+        ...visitados.map((s, i) => ({ tipo: "sello", indice: i, stand: s })),
+        { tipo: "final", visitados: visitados.length, totalStands: stands.length },
+      ],
+      paginaInicial: 0,
+      onReady: () => setBook3d(true),
+      onPageChange: (i) => setPage(i),
+      onFallback: () => setBook3d(false),
+    });
+    libroRef.current = libro;
+
+    return () => {
+      if (libro) libro.destroy();
+      libroRef.current = null;
+      setBook3d(false);
+    };
+  }, [pagesKey]);
+
+  // Mientras el libro esté montado él es la fuente de verdad del índice:
+  // React sólo lee (onPageChange) y escribe por los botones. Al revés se
+  // formaría un bucle setPage -> efecto -> irA -> onPageChange -> setPage.
   const go = (dir) => {
+    const libro = libroRef.current;
+    if (libro && book3d) {
+      dir > 0 ? libro.siguiente() : libro.anterior();
+      return;
+    }
     if (flipping) return;
     const next = page + dir;
     if (next < 0 || next >= pages.length) return;
     setFlipping(true);
     setTimeout(() => { setPage(next); setFlipping(false); }, 380);
   };
+
+  const total = book3d && libroRef.current ? libroRef.current.totalPaginas() : pages.length;
+  const actual = pages[Math.min(page, pages.length - 1)] || pages[0];
+  const resumen = actual.type === "stamp"
+    ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}`
+    : actual.type === "cover" ? "Portada del pasaporte"
+    : actual.type === "index" ? "Índice de la travesía"
+    : "Fin del pasaporte";
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--ink)", color: "var(--paper)", padding: "16px 16px 28px" }}>
@@ -138,36 +224,54 @@ const PassportPage = ({ stands }) => {
           }} style={{ color: "var(--paper-3)", fontSize: 12 }}>Cerrar</button>
         </div>
 
-        <div style={{ marginTop: 18, aspectRatio: "0.72", perspective: "1400px", position: "relative" }}>
-          <div style={{ position: "absolute", inset: 0, borderRadius: "6px 12px 12px 6px", boxShadow: "0 30px 60px -20px rgba(0,0,0,0.6), -3px 0 0 rgba(0,0,0,0.3)" }}/>
-          <div style={{
-            position: "absolute", inset: 0, borderRadius: "6px 12px 12px 6px",
-            background: "var(--paper)", color: "var(--ink)", overflow: "hidden",
-            transformStyle: "preserve-3d", transformOrigin: "left center",
-            transform: flipping ? "rotateY(-12deg)" : "rotateY(0deg)",
-            transition: "transform 0.5s cubic-bezier(.4,.1,.3,1)",
-          }}>
-            <PassportPage_Page pageData={pages[page]} passport={passport} totalSlots={Math.max(8, visitados.length)} totalStands={stands.length}/>
-          </div>
+        {/* El montador inserta su canvas como PRIMER hijo con z-index 0; el
+            render CSS vive encima con z-index 1 y desaparece cuando el libro
+            avisa que está listo. Así no hay parpadeo en ninguna dirección. */}
+        <div className="pasaporte-horizontal">
+        <div ref={wrapRef} className="libro-marco" style={{ marginTop: 18, position: "relative" }}>
+          {!book3d && (
+            <React.Fragment>
+              <div style={{ position: "absolute", inset: 0, zIndex: 1, borderRadius: "6px 12px 12px 6px", boxShadow: "0 30px 60px -20px rgba(0,0,0,0.6), -3px 0 0 rgba(0,0,0,0.3)" }}/>
+              <div style={{
+                position: "absolute", inset: 0, zIndex: 1, borderRadius: "6px 12px 12px 6px",
+                background: "var(--paper)", color: "var(--ink)", overflow: "hidden",
+                transformStyle: "preserve-3d", transformOrigin: "left center",
+                transform: flipping ? "rotateY(-12deg)" : "rotateY(0deg)",
+                transition: "transform 0.5s cubic-bezier(.4,.1,.3,1)",
+              }}>
+                <PassportPage_Page pageData={pages[Math.min(page, pages.length - 1)]} passport={passport} totalSlots={Math.max(8, visitados.length)} totalStands={stands.length}/>
+              </div>
+            </React.Fragment>
+          )}
         </div>
 
-        <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
+        {/* El contenido del pasaporte nunca vive sólo dentro del canvas: un
+            lector de pantalla necesita saber en qué página está. */}
+        <div role="status" aria-live="polite" style={{
+          position: "absolute", width: 1, height: 1, overflow: "hidden",
+          clip: "rect(0 0 0 0)", whiteSpace: "nowrap",
+        }}>
+          Página {page + 1} de {total}. {resumen}
+        </div>
+
+        <div className="libro-controles" style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
           <button onClick={() => go(-1)} disabled={page === 0} style={{
             width: 44, height: 44, borderRadius: "50%",
             background: "var(--paper)", color: "var(--ink)", opacity: page === 0 ? 0.3 : 1,
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>←</button>
           <div className="mono" style={{ color: "var(--paper-3)" }}>
-            {String(page + 1).padStart(2, "0")} / {String(pages.length).padStart(2, "0")}
+            {String(page + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
           </div>
-          <button onClick={() => go(1)} disabled={page === pages.length - 1} style={{
+          <button onClick={() => go(1)} disabled={page >= total - 1} style={{
             width: 44, height: 44, borderRadius: "50%",
-            background: "var(--paper)", color: "var(--ink)", opacity: page === pages.length - 1 ? 0.3 : 1,
+            background: "var(--paper)", color: "var(--ink)", opacity: page >= total - 1 ? 0.3 : 1,
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>→</button>
         </div>
         <div className="mono" style={{ textAlign: "center", color: "var(--paper-3)", marginTop: 14, lineHeight: 1.6 }}>
           {visitados.length} / {stands.length} stands sellados
+        </div>
         </div>
       </div>
     </div>

@@ -35,7 +35,7 @@ function export_csv_stream(string $filename, array $columns, string $sql): void
     $out = fopen('php://output', 'w');
     // BOM para que Excel reconozca UTF-8
     fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, array_map('csv_safe_cell', $columns), ',', '"', '\\');
+    csv_escribir_fila($out, array_map('csv_safe_cell', $columns));
     $stmt = Db::pdo()->query($sql);
     while ($row = $stmt->fetch()) {
         $line = [];
@@ -45,10 +45,31 @@ function export_csv_stream(string $filename, array $columns, string $sql): void
             if (is_bool($v))  $v = $v ? '1' : '0';
             $line[] = csv_safe_cell((string) $v);
         }
-        fputcsv($out, $line, ',', '"', '\\');
+        csv_escribir_fila($out, $line);
     }
     fclose($out);
     exit;
+}
+
+/**
+ * Serializa una fila en CSV RFC 4180 puro, sin usar fputcsv().
+ *
+ * fputcsv() acepta un carácter de "escape" (aquí se le pasaba '\\') que NO
+ * forma parte del estándar CSV: al encontrarlo antes de una comilla deja de
+ * duplicarla, y el entrecomillado de la celda se rompe. Con eso, un comentario
+ * como  hola \",=1+1,x  se partía en varias celdas y  =1+1  quedaba como
+ * fórmula viva, saltándose por completo el apostrofo defensivo de
+ * csv_safe_cell(). PHP 8.4 permite `escape: ""` para desactivarlo, pero
+ * escribir la fila a mano es explícito y funciona en cualquier versión.
+ */
+function csv_escribir_fila($handle, array $campos): void
+{
+    $celdas = [];
+    foreach ($campos as $campo) {
+        // Comillas siempre: elimina toda ambigüedad y es CSV válido.
+        $celdas[] = '"' . str_replace('"', '""', (string) $campo) . '"';
+    }
+    fwrite($handle, implode(',', $celdas) . "\r\n");
 }
 
 /**
@@ -61,7 +82,11 @@ function export_csv_stream(string $filename, array $columns, string $sql): void
  */
 function csv_safe_cell(string $value): string
 {
-    if ($value !== '' && strpbrk($value[0], "=+-@\t\r") !== false) {
+    if ($value === '') return $value;
+    // strpbrk($value[0], ...) buscaba el primer carácter DENTRO del conjunto,
+    // que es lo mismo, pero se lee al revés y es fácil romperlo al editar.
+    // Comparación directa: más claro y sin sorpresas con bytes multibyte.
+    if (strpos("=+-@\t\r|", $value[0]) !== false) {
         return "'" . $value;
     }
     return $value;

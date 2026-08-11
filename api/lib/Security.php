@@ -4,6 +4,68 @@ defined('LMT_GUARD') || exit('forbidden');
 
 final class Security
 {
+    /**
+     * ¿La petición llegó por HTTPS?
+     *
+     * Detrás del proxy TLS institucional $_SERVER['HTTPS'] viene vacío y sólo
+     * X-Forwarded-Proto dice la verdad. Mirar únicamente HTTPS significaba no
+     * emitir nunca HSTS y, con force_https activo, entrar en un bucle de 301.
+     * Las cabeceras X-Forwarded-* las puede falsear cualquiera si no hay un
+     * proxy delante, así que sólo se tienen en cuenta cuando la configuración
+     * declara que lo hay (`trust_proxy`).
+     */
+    public static function esHttps(): bool
+    {
+        if (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') return true;
+        if ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443) return true;
+        if (!Config::get('trust_proxy', false)) return false;
+
+        $proto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        if ($proto !== '') return explode(',', $proto)[0] === 'https';
+        if (strtolower((string) ($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on') return true;
+        return false;
+    }
+
+    /**
+     * URL pública base del sitio (esquema + host + subdirectorio), SIN confiar
+     * en la cabecera Host.
+     *
+     * Host lo controla quien hace la petición. Construir enlaces con él permite
+     * que un anónimo dispare un correo institucional cuyo botón "Revisar
+     * solicitudes" apunte a su propio dominio: phishing al panel de
+     * administración firmado por la Gobernación. Por eso el orden es:
+     *   1) `public_base_url` de la configuración, si está;
+     *   2) el Host de la petición SÓLO si coincide con `allowed_origins`;
+     *   3) el primer `allowed_origins` como último recurso.
+     */
+    public static function baseUrlPublica(): string
+    {
+        $override = rtrim((string) Config::get('public_base_url', ''), '/');
+        if ($override !== '') return $override;
+
+        $permitidos = array_values(array_filter(array_map(
+            [self::class, 'originOf'],
+            (array) Config::get('allowed_origins', [])
+        )));
+
+        $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/api/index.php'));
+        $appBase = rtrim((string) preg_replace('#/(api|install)(/[^/]*)?$#', '', $scriptName), '/');
+        if ($appBase === '/' ) $appBase = '';
+
+        $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
+        if (preg_match('/^[A-Za-z0-9.\-]{1,253}(:[0-9]{1,5})?$/', $host)) {
+            $candidato = (self::esHttps() ? 'https' : 'http') . '://' . strtolower($host);
+            if (in_array(self::originOf($candidato), $permitidos, true)) {
+                return $candidato . $appBase;
+            }
+        }
+
+        if ($permitidos) return $permitidos[0] . $appBase;
+        // Sin lista blanca no hay forma segura de construir un enlace absoluto;
+        // devolvemos sólo la ruta para que al menos sea relativa al sitio.
+        return $appBase;
+    }
+
     /** Aplica cabeceras de seguridad a toda respuesta de la API. */
     public static function applyHeaders(): void
     {
@@ -11,12 +73,27 @@ final class Security
         header('X-Frame-Options: SAMEORIGIN');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()');
-        if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        // La API sólo devuelve JSON, imágenes PNG (QR) y CSV: no necesita
+        // ejecutar nada. Una CSP restrictiva aquí impide que una respuesta
+        // reflejada se convierta en vector de ejecución.
+        header("Content-Security-Policy: default-src 'none'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+
+        if (self::esHttps()) {
             header('Strict-Transport-Security: max-age=31536000; includeSubDomains; preload');
-        }
-        if (Config::get('force_https') && (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off')) {
-            $url = 'https://' . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? '/');
-            header('Location: ' . $url, true, 301);
+        } elseif (Config::get('force_https')) {
+            // El destino se construye con baseUrlPublica(), NO con Host: si no,
+            // esto es un redirector abierto envenenable en caché que apunta a
+            // donde quiera el atacante desde una URL legítima del dominio.
+            // Sólo el origen (esquema://host) sale de la configuración; la ruta
+            // es la que pidió el cliente, que ya incluye el subdirectorio.
+            $origen = self::originOf(self::baseUrlPublica());
+            if (strpos($origen, 'https://') !== 0) {
+                Response::error(500, 'https_no_configurable');
+            }
+            $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+            if ($uri === '' || $uri[0] !== '/') $uri = '/';
+            header('Cache-Control: no-store');
+            header('Location: ' . $origen . $uri, true, 301);
             exit;
         }
     }
@@ -30,6 +107,21 @@ final class Security
         $data = json_decode($raw, true, 8);
         if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
             Response::error(400, 'bad_json');
+        }
+        // Los validadores esperan escalares. Un {"stand":["st-01"]} llegaba
+        // hasta Validate::standId(), que declara ?string, y reventaba con un
+        // TypeError: 500 sin autenticar y una traza en el log del servidor por
+        // cada intento. Los valores no escalares se descartan de raíz.
+        foreach ($data as $clave => $valor) {
+            if ($valor !== null && !is_scalar($valor) && !is_array($valor)) {
+                unset($data[$clave]);
+            } elseif (is_array($valor)) {
+                // Sólo se admiten arrays de un nivel con valores escalares
+                // (p. ej. coords). Cualquier otra cosa se descarta.
+                foreach ($valor as $sub) {
+                    if ($sub !== null && !is_scalar($sub)) { unset($data[$clave]); break; }
+                }
+            }
         }
         return $data;
     }
@@ -63,20 +155,16 @@ final class Security
         $origin  = $_SERVER['HTTP_ORIGIN']  ?? '';
         $referer = $_SERVER['HTTP_REFERER'] ?? '';
 
+        // Sólo se compara el ORIGEN normalizado, nunca por prefijo de cadena.
+        // El fallback anterior hacía stripos($referer, 'http://127.0.0.1:8080')
+        // === 0, así que un Referer de http://127.0.0.1:8080.evil.com pasaba el
+        // filtro: dominio ajeno, prefijo idéntico. Comprobado explotable.
         $ok = false;
         if ($origin !== '') {
-            $oNorm = self::originOf($origin);
-            $ok = in_array($oNorm, $allowedOrigins, true);
-        }
-        // Fallback Referer: chequea por prefijo contra la URL completa permitida.
-        if (!$ok && $referer !== '') {
-            $rNorm = self::originOf($referer);
-            $ok = in_array($rNorm, $allowedOrigins, true);
-            if (!$ok) {
-                foreach ($allowed as $a) {
-                    if (stripos($referer, rtrim($a, '/')) === 0) { $ok = true; break; }
-                }
-            }
+            $ok = in_array(self::originOf($origin), $allowedOrigins, true);
+        } elseif ($referer !== '') {
+            // Referer sólo como suplente cuando el navegador no manda Origin.
+            $ok = in_array(self::originOf($referer), $allowedOrigins, true);
         }
         if (!$ok) Response::error(403, 'origin_not_allowed');
 
@@ -89,6 +177,24 @@ final class Security
     public static function requireAdmin(): void
     {
         if (!Session::isAdmin()) Response::error(401, 'unauthorized');
+    }
+
+    /**
+     * Exige una sesión de promotor y devuelve su id.
+     *
+     * Por defecto RECHAZA a quien aún no ha cambiado la contraseña temporal:
+     * la clave viaja por correo, así que mientras siga vigente el promotor no
+     * debe poder hacer nada salvo cambiarla. Los endpoints de ese trámite
+     * pasan $permitirClaveTemporal = true.
+     */
+    public static function requirePromotor(bool $permitirClaveTemporal = false): int
+    {
+        $p = Session::promotor();
+        if ($p === null) Response::error(401, 'unauthorized');
+        if (!$permitirClaveTemporal && $p['must_change']) {
+            Response::error(403, 'password_change_required');
+        }
+        return $p['id'];
     }
 
     public static function hashPassword(string $plain): string
@@ -115,5 +221,39 @@ final class Security
     public static function constantTimeEquals(string $a, string $b): bool
     {
         return hash_equals($a, $b);
+    }
+
+    /**
+     * Contraseña temporal para un promotor recién verificado.
+     *
+     * Va a llegar por correo y alguien la va a teclear desde el móvil, así que
+     * se excluyen los caracteres que se confunden al leer (O/0, l/1/I) y se
+     * agrupa con guiones. Cuatro grupos de cuatro sobre un alfabeto de 54
+     * símbolos son ~92 bits de entropía: de sobra frente a fuerza bruta, y la
+     * clave caduca en 72 horas de todos modos.
+     */
+    public static function generarClaveTemporal(): string
+    {
+        $minus  = 'abcdefghijkmnopqrstuvwxyz';   // sin l
+        $mayus  = 'ABCDEFGHJKLMNPQRSTUVWXYZ';    // sin I ni O
+        $digito = '23456789';                    // sin 0 ni 1
+        $alfabeto = $minus . $mayus . $digito;
+
+        $tomar = function (string $pool): string {
+            return $pool[random_int(0, strlen($pool) - 1)];
+        };
+
+        // Garantizamos al menos un carácter de cada clase y rellenamos el resto.
+        $chars = [$tomar($minus), $tomar($mayus), $tomar($digito)];
+        while (count($chars) < 16) $chars[] = $tomar($alfabeto);
+
+        // Barajado Fisher-Yates con random_int (no shuffle(), que usa un PRNG
+        // no criptográfico).
+        for ($i = count($chars) - 1; $i > 0; $i--) {
+            $j = random_int(0, $i);
+            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
+        }
+
+        return implode('-', str_split(implode('', $chars), 4));
     }
 }

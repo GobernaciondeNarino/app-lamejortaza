@@ -49,13 +49,58 @@ return [
     // (p. ej. 'https://tic.narino.gov.co/lamejortaza'), sin barra final.
     'public_base_url' => '',
 
+    // Envío de correo — lo usa el módulo de promotores para entregar la
+    // contraseña temporal cuando el administrador verifica una inscripción.
+    //
+    //   transport = 'smtp'  RECOMENDADO en producción. El correo sale
+    //                       autenticado desde el dominio institucional y no
+    //                       acaba en spam.
+    //   transport = 'mail'  Usa la función mail() de PHP. Sirve si el hosting
+    //                       tiene un MTA local, pero muchos proveedores la
+    //                       tienen capada o marcan el correo como spam.
+    //   transport = 'log'   No envía nada: escribe el mensaje en `log_file`.
+    //                       Para desarrollo y para probar plantillas.
+    'mail' => [
+        'transport' => 'mail',
+        'from'      => 'no-reply@narino.gov.co',
+        'from_name' => 'La Mejor Taza — Festival',
+        'reply_to'  => '',                    // vacío = sin Reply-To
+        // Déjalo VACÍO: el fichero se crea entonces en el directorio temporal
+        // del sistema, FUERA del document root. Con la ruta anterior
+        // (db/correo-salida.log) cualquiera podía descargarlo por HTTP y leer
+        // las contraseñas temporales de los promotores en claro.
+        'log_file'  => '',
+        'smtp' => [
+            'host'     => 'smtp.narino.gov.co',
+            'port'     => 587,
+            'secure'   => 'tls',              // 'tls' (STARTTLS), 'ssl' (puerto 465) o '' (sin cifrar)
+            'user'     => '',
+            'password' => '',
+            'timeout'  => 15,
+        ],
+    ],
+
+    // Imágenes que suben los promotores (logo de empresa, fotos de producto).
+    // `dir` debe ser escribible por PHP. Si lo dejas por defecto, la carpeta
+    // uploads/ se crea en la raíz del sitio con un .htaccess que impide
+    // ejecutar código dentro.
+    'uploads' => [
+        'dir'       => __DIR__ . '/../uploads',
+        'max_bytes' => 3 * 1024 * 1024,       // 3 MB por archivo
+        'max_dim'   => 1600,                  // se redimensiona a este lado máximo
+    ],
+
     // Rate limits por IP (segundos / max hits).
     'rate_limits' => [
-        'login'      => ['window' => 600, 'max' => 5],   // 5 intentos / 10 min
-        'vote'       => ['window' => 60,  'max' => 1],   // 1 voto / min / IP / stand
-        'vote_email' => ['window' => 600, 'max' => 12],  // 12 votos / 10 min / correo
-        'pasaporte'  => ['window' => 60,  'max' => 20],  // 20 consultas / min / IP (anti-enumeración)
-        'global'     => ['window' => 60,  'max' => 120], // anti-flood
+        'login'             => ['window' => 600, 'max' => 5],   // 5 intentos / 10 min
+        'vote'              => ['window' => 60,  'max' => 1],   // 1 voto / min / IP / stand
+        'vote_email'        => ['window' => 600, 'max' => 12],  // 12 votos / 10 min / correo
+        'pasaporte'         => ['window' => 60,  'max' => 20],  // 20 consultas / min / IP (anti-enumeración)
+        'pasaporte_correo'  => ['window' => 3600, 'max' => 10],  // 10 consultas / hora / correo (anti-sondeo dirigido)
+        'promotor_registro' => ['window' => 3600, 'max' => 5],  // 5 inscripciones / hora / IP
+        'promotor_login'    => ['window' => 900, 'max' => 15],  // 15 intentos / 15 min / IP
+        'promotor_upload'   => ['window' => 3600, 'max' => 60], // 60 imágenes / hora / promotor
+        'global'            => ['window' => 60,  'max' => 120], // anti-flood
     ],
 
     // Token para el endpoint de diagnóstico api/diag.php. Déjalo vacío para
@@ -66,6 +111,13 @@ return [
 
     // Forzar HTTPS (envía 301 a https://). Apaga si haces dev local sin TLS.
     'force_https' => false,
+
+    // Pon true SÓLO si hay un proxy inverso o balanceador TLS delante (es el
+    // caso habitual en la infraestructura de la Gobernación). Entonces se hace
+    // caso a X-Forwarded-Proto para detectar HTTPS y emitir HSTS. Con false,
+    // esa cabecera se ignora: si no hay proxy, cualquiera podría enviarla y
+    // hacer creer al servidor que la conexión es segura.
+    'trust_proxy' => false,
 
     // Modo debug (NUNCA true en producción).
     'debug' => false,

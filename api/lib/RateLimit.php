@@ -24,35 +24,53 @@ final class RateLimit
         $pdo = Db::pdo();
 
         try {
-            // Reset si la ventana expiró.
-            $stmt = $pdo->prepare('SELECT hits, window_start FROM rate_limits WHERE id = :id');
-            $stmt->execute([':id' => $key]);
-            $row = $stmt->fetch();
-
-            if (!$row) {
-                $ins = $pdo->prepare('INSERT INTO rate_limits (id, bucket, hits, window_start) VALUES (:id, :b, 1, :ws)');
-                $ins->execute([':id' => $key, ':b' => $bucket, ':ws' => $now]);
-                return true;
+            // Incremento ATÓMICO: se escribe primero y se decide después con el
+            // valor ya persistido.
+            //
+            // La versión anterior hacía SELECT, decidía en PHP y luego UPDATE.
+            // Entre el SELECT y el UPDATE no había nada: N peticiones
+            // simultáneas leían todas el mismo contador y todas pasaban. Con
+            // 200 intentos de login en paralelo se probaban 200 contraseñas en
+            // la ventana que debía permitir 5.
+            $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'mysql') {
+                $sql = 'INSERT INTO rate_limits (id, bucket, hits, window_start)
+                        VALUES (:id, :b, 1, :ws)
+                        ON DUPLICATE KEY UPDATE
+                          hits = IF(:now1 - window_start >= :win1, 1, hits + 1),
+                          window_start = IF(:now2 - window_start >= :win2, :now3, window_start)';
+                $pdo->prepare($sql)->execute([
+                    ':id' => $key, ':b' => $bucket, ':ws' => $now,
+                    ':now1' => $now, ':win1' => $window,
+                    ':now2' => $now, ':win2' => $window, ':now3' => $now,
+                ]);
+            } else {
+                $sql = 'INSERT INTO rate_limits (id, bucket, hits, window_start)
+                        VALUES (:id, :b, 1, :ws)
+                        ON CONFLICT(id) DO UPDATE SET
+                          hits = CASE WHEN :now1 - rate_limits.window_start >= :win1 THEN 1 ELSE rate_limits.hits + 1 END,
+                          window_start = CASE WHEN :now2 - rate_limits.window_start >= :win2 THEN :now3 ELSE rate_limits.window_start END';
+                $pdo->prepare($sql)->execute([
+                    ':id' => $key, ':b' => $bucket, ':ws' => $now,
+                    ':now1' => $now, ':win1' => $window,
+                    ':now2' => $now, ':win2' => $window, ':now3' => $now,
+                ]);
             }
 
-            $start = (int)$row['window_start'];
-            $hits  = (int)$row['hits'];
+            $sel = $pdo->prepare('SELECT hits FROM rate_limits WHERE id = :id');
+            $sel->execute([':id' => $key]);
+            $hits = (int) $sel->fetchColumn();
 
-            if ($now - $start >= $window) {
-                $upd = $pdo->prepare('UPDATE rate_limits SET hits = 1, window_start = :ws WHERE id = :id');
-                $upd->execute([':ws' => $now, ':id' => $key]);
-                return true;
-            }
-            if ($hits >= $max) {
-                return false;
-            }
-            $upd = $pdo->prepare('UPDATE rate_limits SET hits = hits + 1 WHERE id = :id');
-            $upd->execute([':id' => $key]);
-            return true;
+            return $hits <= $max;
         } catch (\Throwable $e) {
-            // Falla abierta sólo en debug; en producción cierra (deniega) para no exponer.
-            error_log('[lmt][ratelimit] ' . $e->getMessage());
-            return Config::debug();
+            // Antes devolvía Config::debug(), es decir false en producción: un
+            // fallo de permisos sobre la tabla convertía el 100% del tráfico en
+            // 429, incluido el login del administrador, y el mensaje de error
+            // apuntaba al sitio equivocado. Ahora se distingue el bucket:
+            // en los que protegen credenciales se sigue cerrando, y en el resto
+            // se deja pasar para no tumbar la feria entera por una tabla rota.
+            error_log('[lmt][ratelimit][' . $bucket . '] ' . $e->getMessage());
+            return !in_array($bucket, ['login', 'promotor_login', 'promotor_registro'], true);
         }
     }
 

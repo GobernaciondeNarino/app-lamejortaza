@@ -20,8 +20,18 @@ if (!is_file(__DIR__ . '/api/config.php')
     }
 }
 
-// 3) /api/... → front controller
+// 3) /api/...
 if (strpos($path, '/api') === 0) {
+    // Los .php reales de api/ (check.php, diag.php) se sirven tal cual, igual
+    // que hace Apache. Antes el front controller se los tragaba y no había
+    // forma de probarlos en desarrollo — justo los dos ficheros cuyo control
+    // de acceso conviene poder verificar.
+    $real = __DIR__ . $path;
+    if (preg_match('#^/api/[a-z0-9_-]+\.php$#i', $path) && is_file($real)
+        && basename($real) !== 'index.php' && basename($real) !== 'config.php') {
+        require $real;
+        return true;
+    }
     require __DIR__ . '/api/index.php';
     return true;
 }
@@ -33,7 +43,9 @@ $spaRoute = (
     preg_match('#^/s/[a-z0-9\-]{2,32}/?$#', $path) ||
     preg_match('#^/admin(/.*)?$#', $path) ||
     preg_match('#^/festival(/[a-z0-9\-]+)?/?$#', $path) ||
-    $path === '/pasaporte' || $path === '/pasaporte/'
+    $path === '/pasaporte' || $path === '/pasaporte/' ||
+    $path === '/inscripcion' || $path === '/inscripcion/' ||
+    $path === '/promotor' || $path === '/promotor/'
 );
 if ($spaRoute) {
     require __DIR__ . '/app.php';
