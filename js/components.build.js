@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: c8fd73531f74b925
+// Huella de las fuentes: 31c1d279ce709754
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -196,7 +196,8 @@ const standUrl = standId => {
 const QRCode = ({
   data = "st-01",
   size = 140,
-  bg = "#ffffff"
+  bg = "#ffffff",
+  ansioso = false
 }) => {
   const raw = String(data == null ? "" : data);
   const m = raw.match(/\/s\/([a-z0-9\-]{2,32})/i);
@@ -218,7 +219,8 @@ const QRCode = ({
       imageRendering: "pixelated",
       borderRadius: 4
     },
-    loading: "lazy"
+    loading: ansioso ? "eager" : "lazy",
+    decoding: ansioso ? "sync" : "async"
   });
 };
 const BarraVotos = ({
@@ -1445,7 +1447,8 @@ Object.assign(window, {
 (function () {
 const QRPoster = ({
   stand,
-  variant = "vertical"
+  variant = "vertical",
+  paraImprimir = false
 }) => {
   const url = standUrl(stand.id);
   return React.createElement("div", {
@@ -1555,7 +1558,8 @@ const QRPoster = ({
     data: url,
     size: 240,
     fg: "#111111",
-    bg: "#ffffff"
+    bg: "#ffffff",
+    ansioso: paraImprimir
   }), React.createElement("div", {
     className: "mono",
     style: {
@@ -1611,20 +1615,54 @@ const QRPoster = ({
     }
   }, React.createElement("span", null, "Pega en el frente del stand"), React.createElement("span", null, "\xB7 14\u201420 abr \xB7 Pasto"))));
 };
+const QRHojas = ({
+  stands
+}) => {
+  if (!stands || stands.length === 0) return null;
+  return ReactDOM.createPortal(React.createElement("div", {
+    className: "qr-imprimible"
+  }, stands.map(s => React.createElement("div", {
+    key: s.id,
+    className: "qr-hoja"
+  }, React.createElement(QRPoster, {
+    stand: s,
+    paraImprimir: true
+  })))), document.body);
+};
+const esperarImagenes = (raiz, msMax = 8000) => {
+  const imgs = Array.from((raiz || document).querySelectorAll("img"));
+  const pendientes = imgs.filter(i => !i.complete || i.naturalWidth === 0);
+  if (pendientes.length === 0) return Promise.resolve();
+  return Promise.race([Promise.all(pendientes.map(img => new Promise(listo => {
+    img.addEventListener("load", listo, {
+      once: true
+    });
+    img.addEventListener("error", listo, {
+      once: true
+    });
+  }))), new Promise(listo => setTimeout(listo, msMax))]);
+};
 const QRPrintView = ({
   stands
 }) => {
   const [selected, setSelected] = React.useState(stands[0] ? stands[0].id : null);
-  const [printAll, setPrintAll] = React.useState(false);
+  const [hojas, setHojas] = React.useState([]);
+  const [preparando, setPreparando] = React.useState("");
   const stand = stands.find(s => s.id === selected) || stands[0];
+  const imprimir = React.useCallback(async lista => {
+    if (!lista.length) return;
+    setPreparando(lista.length > 1 ? `Preparando ${lista.length} carteles…` : "Preparando el cartel…");
+    setHojas(lista);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await esperarImagenes(document.querySelector(".qr-imprimible"));
+    setPreparando("");
+    window.print();
+  }, []);
   React.useEffect(() => {
-    if (!printAll) return;
-    const t = setTimeout(() => {
-      window.print();
-      setPrintAll(false);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [printAll]);
+    const alTerminar = () => setHojas([]);
+    window.addEventListener("afterprint", alTerminar);
+    return () => window.removeEventListener("afterprint", alTerminar);
+  }, []);
   if (!stand) {
     return React.createElement("div", {
       className: "admin-page"
@@ -1646,17 +1684,9 @@ const QRPrintView = ({
   }
   return React.createElement("div", {
     className: "admin-page qr-print-screen"
-  }, React.createElement("style", null, `
-        @media print {
-          @page { size: A5; margin: 0; }
-          body { background: #fff !important; }
-          .qr-print-screen aside, .qr-print-screen .mono, .qr-print-screen h1, .qr-print-screen .qr-frame, .lmt-admin-aside { display: none !important; }
-          .qr-print-screen { padding: 0 !important; }
-          .qr-print-page { display: block !important; page-break-after: always; padding: 0; background: #fff; }
-          .qr-poster { box-shadow: none !important; border: none !important; transform: none !important; margin: 0 auto; }
-          aside, header { display: none !important; }
-        }
-      `), React.createElement("div", {
+  }, React.createElement(QRHojas, {
+    stands: hojas
+  }), React.createElement("div", {
     className: "mono"
   }, "C\xF3digos QR \xB7 Imprimir y pegar"), React.createElement("h1", {
     style: {
@@ -1735,7 +1765,8 @@ const QRPrintView = ({
     }
   }, "Acciones"), React.createElement("button", {
     className: "btn btn-primary",
-    onClick: () => window.print(),
+    disabled: !!preparando,
+    onClick: () => imprimir([stand]),
     style: {
       width: "100%",
       justifyContent: "center",
@@ -1743,7 +1774,8 @@ const QRPrintView = ({
     }
   }, "\uD83D\uDDA8 Imprimir este cartel"), React.createElement("button", {
     className: "btn btn-ghost",
-    onClick: () => setPrintAll(true),
+    disabled: !!preparando,
+    onClick: () => imprimir(stands),
     style: {
       width: "100%",
       justifyContent: "center",
@@ -1760,14 +1792,21 @@ const QRPrintView = ({
       marginBottom: 8,
       textDecoration: "none"
     }
-  }, "Probar URL del QR \u2197"), React.createElement("div", {
+  }, "Probar URL del QR \u2197"), preparando && React.createElement("div", {
+    className: "mono",
+    role: "status",
+    style: {
+      color: "var(--grano)",
+      marginTop: 4
+    }
+  }, preparando), React.createElement("div", {
     className: "nota-menor",
     style: {
       color: "var(--ink-3)",
       marginTop: 8,
       lineHeight: 1.5
     }
-  }, "Cartel A5 \xB7 148 \xD7 210 mm \xB7 Papel offset mate recomendado.", React.createElement("br", null), "Para PDF: imprimir \u2192 \"Guardar como PDF\"."))), React.createElement("div", {
+  }, "Un cartel A5 (148 \xD7 210 mm) por hoja. Papel offset mate recomendado.", React.createElement("br", null), "Si tu impresora tiene A4, marca \xABAjustar al papel\xBB en el di\xE1logo.", React.createElement("br", null), "Para PDF: imprimir \u2192 \xABGuardar como PDF\xBB."))), React.createElement("div", {
     className: "qr-frame",
     style: {
       background: "var(--paper-2)",
@@ -1780,12 +1819,7 @@ const QRPrintView = ({
       backgroundSize: "16px 16px",
       backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0"
     }
-  }, printAll ? stands.map(s => React.createElement("div", {
-    key: s.id,
-    className: "qr-print-page"
   }, React.createElement(QRPoster, {
-    stand: s
-  }))) : React.createElement(QRPoster, {
     stand: stand
   }))));
 };

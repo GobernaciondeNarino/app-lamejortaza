@@ -334,10 +334,53 @@ input, textarea, select { font-family: inherit; color: inherit; }
     margin-right: -176px; margin-bottom: -249px;
   }
 }
-/* Al imprimir, ni escalado ni recorte: vuelve a ser un A5 exacto. */
+/* Hoja de impresión de los carteles QR.
+   ---------------------------------------------------------------------------
+   El contenedor .qr-imprimible cuelga de <body> (portal de React), no del
+   panel. Así basta con ocultar a sus hermanos: antes se ocultaba el marco de
+   vista previa —que era quien CONTENÍA los carteles— y de la impresora salía
+   una hoja en blanco.
+
+   En pantalla no se ve nunca; sólo existe para la impresora. */
+.qr-imprimible { display: none; }
+
 @media print {
-  .qr-frame { height: auto !important; overflow: visible !important; padding: 0 !important; }
-  .qr-frame .qr-poster { transform: none !important; }
+  @page { size: A5 portrait; margin: 0; }
+
+  /* Sólo el área imprimible. `body > *` alcanza al #root entero de una vez. */
+  body > *:not(.qr-imprimible) { display: none !important; }
+  .qr-imprimible { display: block !important; }
+
+  html, body {
+    background: #fff !important;
+    margin: 0 !important; padding: 0 !important;
+    min-height: 0 !important; height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Una hoja por cartel, centrado y a tamaño de página. */
+  .qr-hoja {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100vh; overflow: hidden;
+    break-after: page; page-break-after: always;
+  }
+  .qr-hoja:last-child { break-after: auto; page-break-after: auto; }
+
+  /* El cartel se diseña a 420×594 px para verse en pantalla; al imprimir se
+     amplía hasta llenar el A5 dejando un margen para recortar y pegar. */
+  .qr-hoja .qr-poster {
+    transform: scale(1.25); transform-origin: center center;
+    box-shadow: none !important; border: none !important;
+    /* Fondo blanco: el papel crema de la pantalla, impreso, es un A5 entero de
+       tinta de fondo por cada stand. */
+    background: #fff !important;
+  }
+
+  /* Sin esto el navegador descarta fondos e imprime el sello sin color. */
+  .qr-imprimible, .qr-imprimible * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 /* Objetivos táctiles: 44px es el mínimo cómodo con el dedo. */

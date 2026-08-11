@@ -87,7 +87,10 @@ const standUrl = (standId) => {
 // librería (js/vendor/qrcode.min.js) no está en el repo, así que los QR salían
 // en blanco. Usar el endpoint elimina esa dependencia y funciona siempre.
 // `data` puede ser el id del stand o una URL /s/{id}.
-const QRCode = ({ data = "st-01", size = 140, bg = "#ffffff" }) => {
+// `ansioso` desactiva la carga diferida: en la hoja de impresión las imágenes
+// nunca llegan a estar en pantalla, así que con loading="lazy" el navegador no
+// las pedía y los carteles salían sin QR.
+const QRCode = ({ data = "st-01", size = 140, bg = "#ffffff", ansioso = false }) => {
   const raw = String(data == null ? "" : data);
   const m = raw.match(/\/s\/([a-z0-9\-]{2,32})/i);
   const standId = m ? m[1] : raw;
@@ -108,7 +111,8 @@ const QRCode = ({ data = "st-01", size = 140, bg = "#ffffff" }) => {
       role="img"
       alt={`Código QR — ${standId}`}
       style={{ display: "block", width: size, height: size, background: bg, imageRendering: "pixelated", borderRadius: 4 }}
-      loading="lazy"
+      loading={ansioso ? "eager" : "lazy"}
+      decoding={ansioso ? "sync" : "async"}
     />
   );
 };
