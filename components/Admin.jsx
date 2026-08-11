@@ -11,7 +11,8 @@ const AdminShell = ({ active, user, children }) => {
     { id: "qr",         label: "Códigos QR",   sub: "Impresión",    path: "/admin/qr" },
     { id: "live",       label: "Actividad",    sub: "En vivo",      path: "/admin/live" },
     { id: "caracterizacion", label: "Visitantes", sub: "Caracterización", path: "/admin/caracterizacion" },
-    { id: "correos",    label: "Correos",      sub: "Bitácora",     path: "/admin/correos" },
+    { id: "correo",     label: "Correo",       sub: "Envío y pruebas", path: "/admin/correo" },
+    { id: "correos",    label: "Bitácora",     sub: "Mensajes enviados", path: "/admin/correos" },
   ].concat(user && user.rol === "propietario"
     ? [{ id: "cuentas", label: "Administradores", sub: "Cuentas de acceso", path: "/admin/cuentas" }]
     : []);
@@ -162,6 +163,7 @@ const AdminPage = ({ section, user, stands, comentarios, editingId }) => {
   if (section === "live")    return <AdminShell active="live" user={user}><ActivityLive stands={stands} comentarios={comentarios || (window.COMENTARIOS_DEMO || [])}/></AdminShell>;
   if (section === "promotores") return <AdminShell active="promotores" user={user}><AdminPromotores stands={stands}/></AdminShell>;
   if (section === "correos")    return <AdminShell active="correos" user={user}><AdminCorreos/></AdminShell>;
+  if (section === "correo")     return <AdminShell active="correo" user={user}><AdminCorreoConfig/></AdminShell>;
   if (section === "caracterizacion") return <AdminShell active="caracterizacion" user={user}><AdminCaracterizacion/></AdminShell>;
   if (section === "cuentas")    return <AdminShell active="cuentas" user={user}><AdminCuentas user={user}/></AdminShell>;
   return <AdminShell active="stands" user={user}><div style={{ padding: 32 }}>—</div></AdminShell>;

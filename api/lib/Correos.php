@@ -302,6 +302,33 @@ HTML);
         return ['asunto' => 'Tu perfil de visitante — La Mejor Taza', 'html' => $html, 'texto' => $texto];
     }
 
+    /** Mensaje de prueba del panel: si esto llega, el correo funciona. */
+    public static function pruebaEnvio(string $destino, string $transporte): array
+    {
+        $d = self::h($destino);
+        $t = self::h($transporte);
+        $cuando = self::h(date('d/m/Y H:i'));
+        $html = self::envoltura('Prueba de correo', <<<HTML
+<p style="font-size:16px;margin:0 0 14px;">Si estás leyendo esto, el correo saliente funciona.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e0d6c2;border-radius:8px;margin:0 0 18px;">
+  <tr><td style="padding:16px 18px;font-size:14px;line-height:1.7;color:#4a4136;">
+    <strong>Destinatario:</strong> {$d}<br>
+    <strong>Transporte:</strong> {$t}<br>
+    <strong>Enviado:</strong> {$cuando}
+  </td></tr>
+</table>
+<p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0;">
+  Este mensaje lo generó la prueba del panel de La Mejor Taza. Si llegó a la carpeta de correo
+  no deseado, pide a quien administra el dominio que autorice a este servidor en el registro SPF:
+  mientras no lo haga, las contraseñas de los promotores acabarán en spam.
+</p>
+HTML);
+        $texto = "Si estás leyendo esto, el correo saliente funciona.\n\n"
+            . "Destinatario: {$destino}\nTransporte: {$transporte}\nEnviado: " . date('d/m/Y H:i') . "\n\n"
+            . "Si llegó a spam, pide que se autorice a este servidor en el SPF del dominio.\n";
+        return ['asunto' => 'Prueba de correo — La Mejor Taza', 'html' => $html, 'texto' => $texto];
+    }
+
     /** Aviso al administrador de que hay una solicitud esperando. */
     public static function avisoAdmin(string $nombreProm, string $emailProm, string $municipio): array
     {

@@ -143,6 +143,9 @@ const App = () => {
   if (route.path === "/admin/correos") {
     return <AdminPage section="correos" user={user} stands={stands}/>;
   }
+  if (route.path === "/admin/correo") {
+    return <AdminPage section="correo" user={user} stands={stands}/>;
+  }
   if (route.path === "/admin/caracterizacion") {
     return <AdminPage section="caracterizacion" user={user} stands={stands}/>;
   }
@@ -172,7 +175,7 @@ window.Splash = Splash;
 const waitForGlobals = () => {
   const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail",
                   "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave",
-                  "PerfilVisitantePage", "AdminCaracterizacion"];
+                  "PerfilVisitantePage", "AdminCaracterizacion", "AdminCorreoConfig"];
   if (needed.every((k) => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
   } else {

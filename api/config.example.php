@@ -104,6 +104,7 @@ return [
         'perfil_visitante'  => ['window' => 600, 'max' => 30],  // perfil del visitante / 10 min / IP
         'perfil_enlace'     => ['window' => 3600, 'max' => 10], // enlaces de perfil / hora / IP
         'perfil_enlace_correo' => ['window' => 3600, 'max' => 3], // por correo, para no usarlo de arma
+        'correo_prueba'     => ['window' => 600, 'max' => 10],  // pruebas de envío desde el panel
         'global'            => ['window' => 60,  'max' => 120], // anti-flood
     ],
 

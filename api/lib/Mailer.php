@@ -46,10 +46,23 @@ final class Mailer
         return Validate::email($clean) ?? '';
     }
 
-    private static function cfg(): array
+    /** Transporte y detalle del último envío, para poder contarlo en el panel. */
+    private static string $ultimoTransporte = '';
+    private static ?string $ultimoError = null;
+    private static array $ultimaTraza = [];
+
+    public static function ultimoTransporte(): string { return self::$ultimoTransporte; }
+    public static function ultimoError(): ?string     { return self::$ultimoError; }
+    /** Diálogo SMTP del último intento, con la contraseña ya tapada. */
+    public static function ultimaTraza(): array       { return self::$ultimaTraza; }
+
+    /**
+     * Configuración efectiva del correo: la de config.php, pisada por lo que el
+     * administrador haya guardado desde el panel.
+     */
+    public static function cfg(): array
     {
-        $c = (array) Config::get('mail', []);
-        return $c + [
+        $base = (array) Config::get('mail', []) + [
             'transport' => 'mail',
             'from'      => 'no-reply@localhost',
             'from_name' => 'La Mejor Taza',
@@ -57,6 +70,26 @@ final class Mailer
             'log_file'  => '',
             'smtp'      => [],
         ];
+        $c = Ajustes::grupo('mail', $base);
+        // La contraseña del SMTP se guarda cifrada; aquí vuelve a ser usable.
+        if (!empty($c['smtp']['password']) && Ajustes::esCifrado((string) $c['smtp']['password'])) {
+            $c['smtp']['password'] = Ajustes::descifrar((string) $c['smtp']['password']);
+        }
+        return $c;
+    }
+
+    /**
+     * ¿Este transporte entrega de verdad?
+     *
+     * 'log' escribe el mensaje en un fichero y devuelve éxito. Es utilísimo para
+     * probar plantillas y es una trampa mortal en producción: el panel decía
+     * «la contraseña salió hacia…» y no había salido nada. Quien pregunte por
+     * esto recibe un no, y la interfaz lo dice con todas las letras.
+     */
+    public static function entregaDeVerdad(?string $transporte = null): bool
+    {
+        $t = $transporte ?? (string) self::cfg()['transport'];
+        return $t !== 'log';
     }
 
     /**
@@ -138,6 +171,7 @@ final class Mailer
         $transport = (string) $cfg['transport'];
         $ok = false;
         $error = null;
+        self::$ultimaTraza = [];
         try {
             if ($transport === 'log') {
                 $ok = self::porLog($cfg, $toHeader, $subject, $headers, $body);
@@ -153,8 +187,17 @@ final class Mailer
             error_log('[lmt][mailer] ' . $e->getMessage());
         }
 
+        self::$ultimoTransporte = $transport;
+        self::$ultimoError = $error;
         self::registrar($dest, $subject, $tipo, $transport, $ok, $error);
         return $ok;
+    }
+
+    private static function traza(string $linea): void
+    {
+        // La contraseña viaja en base64 dentro del diálogo: se tapa antes de
+        // que esta traza llegue a una pantalla o a un fichero de registro.
+        self::$ultimaTraza[] = mb_substr($linea, 0, 300, 'UTF-8');
     }
 
     private static function hostname(string $from): string
@@ -224,8 +267,17 @@ final class Mailer
         }
         // El destinatario va en el argumento, no en las cabeceras.
         $hdr = implode("\r\n", $headers);
+        self::traza('→ mail() con remitente de sobre ' . $from);
         $ok = @mail($toHeader, self::encodeHeader($subject), $body, $hdr, '-f' . $from);
-        if (!$ok) $error = 'mail_rechazado';
+        if (!$ok) {
+            $error = 'mail_rechazado';
+            self::traza('✗ mail() devolvió false: el MTA local ni siquiera aceptó el mensaje');
+        } else {
+            // Importante para no engañar a nadie: true aquí significa
+            // «encolado», no «entregado». El rebote llega después al buzón del
+            // remitente, o no llega nunca.
+            self::traza('· mail() devolvió true: el MTA local lo aceptó para entrega. NO garantiza que llegue.');
+        }
         return (bool) $ok;
     }
 
@@ -246,6 +298,7 @@ final class Mailer
               . 'ASUNTO: ' . $subject . "\n"
               . implode("\n", $headers) . "\n\n"
               . $body . "\n";
+        self::traza('· transporte «log»: el mensaje se escribe en ' . $file . ' y NO se envía a nadie');
         $ok = @file_put_contents($file, $dump, FILE_APPEND | LOCK_EX) !== false;
         // Sólo el usuario del servidor web: en hosting compartido 0644 significa
         // que los demás inquilinos leen las contraseñas temporales.
@@ -275,8 +328,13 @@ final class Mailer
             'SNI_enabled'       => true,
         ]]);
         $dsn = ($secure === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port;
+        self::traza('→ conectando a ' . $dsn . ' (espera ' . $timeout . ' s)');
         $fp = @stream_socket_client($dsn, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $ctx);
-        if (!$fp) { $error = 'smtp_conexion: ' . $errstr; return false; }
+        if (!$fp) {
+            $error = 'smtp_conexion: ' . $errstr;
+            self::traza('✗ no se pudo abrir el socket: ' . $errstr . ' (errno ' . $errno . ')');
+            return false;
+        }
         stream_set_timeout($fp, $timeout);
 
         $leer = function () use ($fp): array {
@@ -286,9 +344,15 @@ final class Mailer
                 // La última línea de una respuesta multilínea usa espacio tras el código.
                 if (strlen($line) >= 4 && $line[3] === ' ') break;
             }
+            $meta = stream_get_meta_data($fp);
+            if (!empty($meta['timed_out'])) {
+                self::traza('✗ el servidor no respondió dentro del plazo');
+            }
+            self::traza('← ' . trim($data));
             return [(int) substr($data, 0, 3), $data];
         };
-        $decir = function (string $cmd) use ($fp, $leer): array {
+        $decir = function (string $cmd, bool $secreto = false) use ($fp, $leer): array {
+            self::traza('→ ' . ($secreto ? '(credencial oculta)' : $cmd));
             fwrite($fp, $cmd . "\r\n");
             return $leer();
         };
@@ -315,15 +379,17 @@ final class Mailer
 
             if ($user !== '') {
                 if (stripos($resp, 'AUTH') !== false && stripos($resp, 'PLAIN') !== false) {
-                    [$code] = $decir('AUTH PLAIN ' . base64_encode("\0" . $user . "\0" . $pass));
+                    [$code] = $decir('AUTH PLAIN ' . base64_encode("\0" . $user . "\0" . $pass), true);
                 } else {
                     [$code] = $decir('AUTH LOGIN');
                     if ($code !== 334) { $error = 'smtp_auth_' . $code; return false; }
-                    [$code] = $decir(base64_encode($user));
+                    [$code] = $decir(base64_encode($user), true);
                     if ($code !== 334) { $error = 'smtp_auth_usuario_' . $code; return false; }
-                    [$code] = $decir(base64_encode($pass));
+                    [$code] = $decir(base64_encode($pass), true);
                 }
                 if ($code !== 235) { $error = 'smtp_auth_rechazado_' . $code; return false; }
+            } else {
+                self::traza('· sin usuario configurado: se envía sin autenticar');
             }
 
             [$code] = $decir('MAIL FROM:<' . $from . '>');
@@ -339,11 +405,13 @@ final class Mailer
             ])) . "\r\n\r\n" . $body;
             // Dot-stuffing: una línea que empiece por '.' terminaría el DATA.
             $mensaje = preg_replace('/^\./m', '..', $mensaje);
+            self::traza('→ (mensaje: ' . strlen($mensaje) . ' bytes)');
             fwrite($fp, $mensaje . "\r\n.\r\n");
             [$code] = $leer();
             if ($code !== 250) { $error = 'smtp_envio_' . $code; return false; }
 
             $decir('QUIT');
+            self::traza('✓ el servidor aceptó el mensaje para entrega');
             return true;
         } finally {
             @fclose($fp);

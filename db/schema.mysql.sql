@@ -198,6 +198,14 @@ CREATE TABLE IF NOT EXISTS visitantes (
   KEY idx_visitante_municipio (municipio)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Ajustes que se cambian desde el panel (correo, etc.). Lo que hay aquí pisa a
+-- api/config.php clave a clave; si la fila no existe, manda el fichero.
+CREATE TABLE IF NOT EXISTS ajustes (
+  clave      VARCHAR(64) NOT NULL PRIMARY KEY,
+  valor      TEXT NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Bitácora de correos salientes ---------------------------------------------
 -- Sirve para que el administrador sepa si la clave llegó a salir del servidor
 -- (el envío de correo es el punto más frágil de un hosting compartido).

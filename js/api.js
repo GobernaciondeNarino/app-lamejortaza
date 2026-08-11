@@ -250,6 +250,12 @@
     return request("/admin/promotores/" + id + "/stand", { method: "PUT", body: { stand_id: standId || null } });
   }
   async function listarEmails(limit)        { return request("/admin/emails" + (limit ? "?limit=" + encodeURIComponent(limit) : "")); }
+
+  // Correo saliente
+  async function getCorreoConfig()          { return request("/admin/correo"); }
+  async function guardarCorreoConfig(b)     { await ensureCsrf(); return request("/admin/correo", { method: "PUT", body: b }); }
+  async function olvidarCorreoConfig()      { await ensureCsrf(); return request("/admin/correo", { method: "DELETE" }); }
+  async function probarCorreo(destino)      { await ensureCsrf(); return request("/admin/correo/prueba", { method: "POST", body: { destino } }); }
   async function getVitrina()               { return request("/vitrina"); }
 
   // Administradores (sólo propietario)
@@ -355,6 +361,10 @@
     cambiarEstadoPromotor,
     vincularStand,
     listarEmails,
+    getCorreoConfig,
+    guardarCorreoConfig,
+    olvidarCorreoConfig,
+    probarCorreo,
     getVitrina,
     listarAdmins,
     crearAdmin,

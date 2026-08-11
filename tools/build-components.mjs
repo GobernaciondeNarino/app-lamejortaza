@@ -35,6 +35,7 @@ const ARCHIVOS = [
   'components/Cuentas.jsx',
   'components/Perfil.jsx',
   'components/Caracterizacion.jsx',
+  'components/Correo.jsx',
   'components/App.jsx',
 ];
 

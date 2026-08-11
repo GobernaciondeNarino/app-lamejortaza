@@ -172,6 +172,14 @@ CREATE TABLE IF NOT EXISTS visitantes (
 );
 CREATE INDEX IF NOT EXISTS idx_visitante_municipio ON visitantes(municipio);
 
+-- Ajustes que se cambian desde el panel (correo, etc.). Lo que hay aquí pisa a
+-- api/config.php clave a clave; si la fila no existe, manda el fichero.
+CREATE TABLE IF NOT EXISTS ajustes (
+  clave      TEXT PRIMARY KEY,
+  valor      TEXT NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Bitácora de correos salientes ---------------------------------------------
 CREATE TABLE IF NOT EXISTS emails_log (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

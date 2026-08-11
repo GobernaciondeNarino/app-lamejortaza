@@ -7,7 +7,8 @@
  *   2. Datos de la base de datos (MySQL/MariaDB o SQLite).
  *   3. Datos del administrador y del sitio.
  *   4. Ejecución (escribe config.php, crea esquema, seed opcional, alta admin).
- *   5. Confirmación y enlace al panel.
+ *   5. Correo saliente: se configura Y SE PRUEBA de verdad antes de terminar.
+ *   6. Confirmación y enlace al panel.
  *
  * Cuando termina, el archivo se autobloquea: si `api/config.php` existe
  * con la marca `'installed' => true`, el instalador rehúsa volver a correr
@@ -289,6 +290,7 @@ return [
         'perfil_visitante'  => ['window' => 600,  'max' => 30],
         'perfil_enlace'     => ['window' => 3600, 'max' => 10],
         'perfil_enlace_correo' => ['window' => 3600, 'max' => 3],
+        'correo_prueba'     => ['window' => 600,  'max' => 10],
         'global'            => ['window' => 60,   'max' => 120],
     ],
 
@@ -375,6 +377,10 @@ function head(string $title, int $current = 0): void { ?>
   }
   input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 560px) { .row, .grid-2 { grid-template-columns: 1fr; } }
+  .hint { display: block; font-size: 12px; line-height: 1.5; color: var(--ink-3); margin-top: 6px; text-transform: none; letter-spacing: 0; }
+  fieldset legend { font-size: 10px; }
   .field { margin-bottom: 18px; }
   .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
   .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 500; border: 1px solid transparent; cursor: pointer; }
@@ -406,7 +412,7 @@ function head(string $title, int $current = 0): void { ?>
   </header>
   <?php if ($current > 0): ?>
   <nav class="steps">
-    <?php foreach (['1·Entorno', '2·Base de datos', '3·Administrador', '4·Instalando', '5·Listo'] as $i => $label): ?>
+    <?php foreach (['1·Entorno', '2·Base de datos', '3·Administrador', '4·Instalando', '5·Correo', '6·Listo'] as $i => $label): ?>
       <?php $idx = $i + 1; $cls = $idx === $current ? 'is-current' : ($idx < $current ? 'is-done' : ''); ?>
       <span class="<?= h($cls) ?>"><?= h($label) ?></span>
     <?php endforeach; ?>
@@ -432,7 +438,7 @@ function render_error(string $message): void {
 // ---------------------------------------------------------------------------
 // Bloqueo si ya está instalado (excepto si venimos de terminar el flujo).
 // ---------------------------------------------------------------------------
-$justFinished = !empty($_SESSION['done']) && (int)($_GET['step'] ?? 0) === 5;
+$justFinished = !empty($_SESSION['done']) && in_array((int)($_GET['step'] ?? 0), [5, 6], true);
 // Si la instalación es incompleta (sin admin), dejamos pasar al wizard
 // aunque `installed=true`. Es la única forma sensata de recuperarse.
 $incomplete = install_incomplete();
@@ -459,7 +465,7 @@ if (is_installed() && !reinstall_token_ok() && !$justFinished && !$incomplete) {
 // Procesamiento
 // ---------------------------------------------------------------------------
 $step = (int)($_GET['step'] ?? 1);
-if ($step < 1 || $step > 5) $step = 1;
+if ($step < 1 || $step > 6) $step = 1;
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'POST') {
@@ -666,6 +672,102 @@ if ($method === 'POST') {
 }
 
 // ---------------------------------------------------------------------------
+// Paso 5 — Correo saliente
+//
+// Se configura Y SE PRUEBA aquí, antes de dar la instalación por buena. El
+// envío es la única pieza que falla en silencio: con el transporte de pruebas
+// el panel dice «la contraseña salió hacia…» y no ha salido nada. Que el
+// instalador obligue a mandarse un correo real ahorra descubrirlo el día del
+// festival, con los caficultores esperando su clave.
+// ---------------------------------------------------------------------------
+$correoResultado = $_SESSION['correo_resultado'] ?? null;
+unset($_SESSION['correo_resultado']);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 5) {
+    check_csrf();
+    $accion = (string) ($_POST['accion'] ?? 'guardar');
+    $mail = [
+        'transport' => in_array($_POST['transport'] ?? '', ['smtp', 'mail', 'log'], true) ? $_POST['transport'] : 'smtp',
+        'from'      => valid_email($_POST['from'] ?? null) ?? '',
+        'from_name' => mb_substr(trim((string) ($_POST['from_name'] ?? '')), 0, 80),
+        'smtp' => [
+            'host'    => preg_replace('/[^A-Za-z0-9.\-]/', '', (string) ($_POST['host'] ?? '')) ?? '',
+            'port'    => max(1, min(65535, (int) ($_POST['port'] ?? 587))),
+            'secure'  => in_array($_POST['secure'] ?? '', ['tls', 'ssl', ''], true) ? (string) $_POST['secure'] : 'tls',
+            'user'    => mb_substr(trim((string) ($_POST['user'] ?? '')), 0, 254),
+            'password' => (string) ($_POST['password'] ?? ''),
+            'timeout' => 15,
+        ],
+    ];
+    $_SESSION['correo_form'] = $mail;
+
+    if ($accion === 'saltar') { go(6); }
+
+    if ($mail['from'] === '') {
+        $_SESSION['flash_errors'] = ['La dirección del remitente no es válida.'];
+        go(5);
+    }
+    if ($mail['transport'] === 'smtp' && $mail['smtp']['host'] === '') {
+        $_SESSION['flash_errors'] = ['Falta el servidor SMTP.'];
+        go(5);
+    }
+
+    try {
+        instalar_guardar_correo($mail);
+        if ($accion === 'probar') {
+            $destino = valid_email($_POST['destino'] ?? null);
+            if (!$destino) {
+                $_SESSION['flash_errors'] = ['Escribe una dirección válida para la prueba.'];
+                go(5);
+            }
+            $_SESSION['correo_resultado'] = instalar_probar_correo($destino);
+        } else {
+            $_SESSION['correo_resultado'] = ['guardado' => true];
+        }
+    } catch (\Throwable $e) {
+        $_SESSION['flash_errors'] = ['No se pudo guardar la configuración de correo: ' . $e->getMessage()];
+    }
+    go(5);
+}
+
+/** Carga el runtime de la app (ya hay config.php) para reutilizar Mailer. */
+function instalar_runtime(): void {
+    static $listo = false;
+    if ($listo) return;
+    foreach (['Config', 'Response', 'Db', 'Validate', 'Ajustes', 'Mailer', 'Correos'] as $c) {
+        require_once LMT_ROOT . '/api/lib/' . $c . '.php';
+    }
+    \LMT\Config::load(LMT_CONFIG_PATH);
+    $listo = true;
+}
+
+function instalar_guardar_correo(array $mail): void {
+    instalar_runtime();
+    $clave = (string) $mail['smtp']['password'];
+    unset($mail['smtp']['password']);
+    if ($clave !== '') {
+        try { $mail['smtp']['password'] = \LMT\Ajustes::cifrar($clave); }
+        catch (\Throwable $e) { throw new RuntimeException('este PHP no tiene sodium ni openssl para guardar la contraseña cifrada'); }
+    }
+    \LMT\Ajustes::guardar('mail', $mail);
+}
+
+function instalar_probar_correo(string $destino): array {
+    instalar_runtime();
+    $cfg = \LMT\Mailer::cfg();
+    $pl = \LMT\Correos::pruebaEnvio($destino, (string) $cfg['transport']);
+    $ok = \LMT\Mailer::send($destino, '', $pl['asunto'], $pl['html'], $pl['texto'], 'prueba_instalacion');
+    return [
+        'aceptado'   => $ok,
+        'entregado'  => $ok && \LMT\Mailer::entregaDeVerdad(\LMT\Mailer::ultimoTransporte()),
+        'transporte' => \LMT\Mailer::ultimoTransporte(),
+        'error'      => \LMT\Mailer::ultimoError(),
+        'traza'      => \LMT\Mailer::ultimaTraza(),
+        'destino'    => $destino,
+    ];
+}
+
+// ---------------------------------------------------------------------------
 // Render por paso
 // ---------------------------------------------------------------------------
 $flash = $_SESSION['flash_errors'] ?? [];
@@ -861,9 +963,137 @@ if ($step === 4) {
 }
 
 if ($step === 5) {
+    if (empty($_SESSION['done'])) go(1);
+    head('Correo saliente', 5);
+
+    $f = $_SESSION['correo_form'] ?? null;
+    if (!$f) {
+        // Punto de partida: lo que quedó escrito en api/config.php.
+        $cfgArchivo = @include LMT_CONFIG_PATH;
+        $m = is_array($cfgArchivo) ? (array) ($cfgArchivo['mail'] ?? []) : [];
+        $f = [
+            'transport' => 'smtp',
+            'from'      => (string) ($m['from'] ?? ''),
+            'from_name' => (string) ($m['from_name'] ?? 'La Mejor Taza — Festival'),
+            'smtp' => ['host' => (string) ($m['smtp']['host'] ?? ''), 'port' => 587, 'secure' => 'tls', 'user' => '', 'password' => ''],
+        ];
+    }
+    $emailAdmin = (string) ($_SESSION['done']['email'] ?? '');
+    ?>
+    <h2>Configura el correo saliente.</h2>
+    <p>De aquí salen las contraseñas de los promotores y el código QR de su stand. Es la pieza que
+       más falla y la única que falla <em>en silencio</em>: conviene comprobarla ahora, no el día del festival.</p>
+
+    <?php if (!empty($flash)): ?>
+      <div class="alert alert-error" style="white-space:pre-wrap;"><?= h(implode("\n", $flash)) ?></div>
+    <?php endif; ?>
+
+    <?php if ($correoResultado && !empty($correoResultado['guardado'])): ?>
+      <div class="alert alert-ok">Configuración guardada. Manda una prueba para confirmar que sale de verdad.</div>
+    <?php elseif ($correoResultado): ?>
+      <?php if (!empty($correoResultado['entregado'])): ?>
+        <div class="alert alert-ok">
+          <strong>El servidor de correo aceptó el mensaje</strong> para <?= h($correoResultado['destino']) ?>.
+          Revisa la bandeja (y la carpeta de spam). Si llegó, ya puedes terminar.
+        </div>
+      <?php elseif (!empty($correoResultado['aceptado'])): ?>
+        <div class="alert alert-error">
+          <strong>No se envió a nadie.</strong> El transporte «<?= h($correoResultado['transporte']) ?>» sólo escribe
+          el mensaje en un archivo del servidor. Elige SMTP para que salga de verdad.
+        </div>
+      <?php else: ?>
+        <div class="alert alert-error">
+          <strong>No se pudo enviar.</strong> <?= h((string) $correoResultado['error']) ?>
+        </div>
+      <?php endif; ?>
+      <?php if (!empty($correoResultado['traza'])): ?>
+        <details style="margin:-6px 0 18px;">
+          <summary class="mono" style="cursor:pointer;">Diálogo con el servidor</summary>
+          <pre style="white-space:pre-wrap;word-break:break-word;background:var(--paper-2);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;line-height:1.6;overflow-x:auto;"><?= h(implode("\n", $correoResultado['traza'])) ?></pre>
+        </details>
+      <?php endif; ?>
+    <?php endif; ?>
+
+    <form method="post" action="install.php?step=5">
+      <input type="hidden" name="_csrf" value="<?= h(csrf()) ?>">
+
+      <div class="field">
+        <label>¿Cómo se envía?</label>
+        <select name="transport">
+          <option value="smtp" <?= $f['transport'] === 'smtp' ? 'selected' : '' ?>>SMTP autenticado — recomendado</option>
+          <option value="mail" <?= $f['transport'] === 'mail' ? 'selected' : '' ?>>Función mail() de PHP — poco fiable en hosting compartido</option>
+          <option value="log"  <?= $f['transport'] === 'log'  ? 'selected' : '' ?>>Sólo registrar en un archivo — NO envía nada</option>
+        </select>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Dirección del remitente</label>
+          <input type="email" name="from" value="<?= h($f['from']) ?>" required placeholder="no-reply@narino.gov.co">
+        </div>
+        <div class="field">
+          <label>Nombre visible</label>
+          <input type="text" name="from_name" value="<?= h($f['from_name']) ?>" maxlength="80">
+        </div>
+      </div>
+
+      <fieldset style="border:1px solid var(--line);border-radius:10px;padding:16px;margin:18px 0;">
+        <legend class="mono" style="padding:0 8px;">Servidor SMTP</legend>
+        <div class="grid-2">
+          <div class="field">
+            <label>Servidor</label>
+            <input type="text" name="host" value="<?= h((string) $f['smtp']['host']) ?>" placeholder="smtp.narino.gov.co">
+          </div>
+          <div class="field">
+            <label>Puerto</label>
+            <input type="number" name="port" value="<?= h((string) $f['smtp']['port']) ?>" min="1" max="65535">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Cifrado</label>
+            <select name="secure">
+              <option value="tls" <?= $f['smtp']['secure'] === 'tls' ? 'selected' : '' ?>>STARTTLS (587)</option>
+              <option value="ssl" <?= $f['smtp']['secure'] === 'ssl' ? 'selected' : '' ?>>SSL directo (465)</option>
+              <option value=""    <?= $f['smtp']['secure'] === ''    ? 'selected' : '' ?>>Sin cifrar</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Usuario del buzón</label>
+            <input type="text" name="user" value="<?= h((string) $f['smtp']['user']) ?>" autocomplete="off">
+          </div>
+        </div>
+        <div class="field">
+          <label>Contraseña del buzón</label>
+          <input type="password" name="password" value="" autocomplete="new-password">
+          <span class="hint">Se guarda cifrada en la base de datos, no en el archivo de configuración.</span>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label>Mandarme una prueba a</label>
+        <input type="email" name="destino" value="<?= h($emailAdmin) ?>">
+        <span class="hint">Se envía de verdad. Es la única forma de saber si funciona.</span>
+      </div>
+
+      <div class="actions" style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" type="submit" name="accion" value="probar">Guardar y enviar prueba</button>
+        <button class="btn btn-ghost" type="submit" name="accion" value="guardar">Sólo guardar</button>
+        <button class="btn btn-ghost" type="submit" name="accion" value="saltar">Configurarlo después →</button>
+      </div>
+      <p class="hint" style="margin-top:14px;">
+        Todo esto se puede cambiar más adelante desde <strong>Panel → Correo</strong>, sin tocar archivos.
+      </p>
+    </form>
+    <?php
+    tail();
+    exit;
+}
+
+if ($step === 6) {
     $done = $_SESSION['done'] ?? null;
     if (!$done) go(1);
-    head('Listo', 5);
+    head('Listo', 6);
     ?>
     <h2>¡Listo! El festival está servido.</h2>
     <div class="alert alert-ok">

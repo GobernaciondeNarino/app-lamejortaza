@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 6a1f965362635180
+// Huella de las fuentes: c62598ef6283e441
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -546,9 +546,14 @@ const AdminShell = ({
     sub: "Caracterización",
     path: "/admin/caracterizacion"
   }, {
+    id: "correo",
+    label: "Correo",
+    sub: "Envío y pruebas",
+    path: "/admin/correo"
+  }, {
     id: "correos",
-    label: "Correos",
-    sub: "Bitácora",
+    label: "Bitácora",
+    sub: "Mensajes enviados",
     path: "/admin/correos"
   }].concat(user && user.rol === "propietario" ? [{
     id: "cuentas",
@@ -878,6 +883,10 @@ const AdminPage = ({
     active: "correos",
     user: user
   }, React.createElement(AdminCorreos, null));
+  if (section === "correo") return React.createElement(AdminShell, {
+    active: "correo",
+    user: user
+  }, React.createElement(AdminCorreoConfig, null));
   if (section === "caracterizacion") return React.createElement(AdminShell, {
     active: "caracterizacion",
     user: user
@@ -7206,6 +7215,481 @@ Object.assign(window, {
 });
 })();
 
+/* components/Correo.jsx */
+(function () {
+const CLAVE_OCULTA = "__sin_cambios__";
+const NIVEL_COLOR = {
+  critico: "var(--bad)",
+  alto: "var(--bad)",
+  medio: "var(--meh)",
+  bajo: "var(--ink-3)"
+};
+const AvisoDiagnostico = ({
+  nivel,
+  children
+}) => {
+  const color = NIVEL_COLOR[nivel] || "var(--ink-2)";
+  return React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+      padding: "12px 14px",
+      borderRadius: "var(--r-sm)",
+      border: `1px solid ${color}`,
+      color,
+      background: `color-mix(in oklch, ${color} 6%, var(--paper))`,
+      fontSize: 13,
+      lineHeight: 1.6
+    }
+  }, React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      flex: "0 0 auto",
+      fontWeight: 700
+    }
+  }, nivel === "critico" ? "!" : nivel === "alto" ? "!" : "·"), React.createElement("span", null, children));
+};
+const TRANSPORTES = [{
+  id: "smtp",
+  titulo: "SMTP autenticado",
+  nota: "Recomendado. El correo sale desde el buzón institucional, autenticado, y no acaba en spam."
+}, {
+  id: "mail",
+  titulo: "Función mail() de PHP",
+  nota: "Depende del servidor de correo local del hosting. Da éxito aunque el mensaje se pierda después."
+}, {
+  id: "log",
+  titulo: "Sólo registrar en un archivo",
+  nota: "NO envía nada. Sirve para probar plantillas sin molestar a nadie."
+}];
+const AdminCorreoConfig = () => {
+  const [datos, setDatos] = React.useState(null);
+  const [form, setForm] = React.useState(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [guardando, setGuardando] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [ok, setOk] = React.useState("");
+  const [destino, setDestino] = React.useState("");
+  const [probando, setProbando] = React.useState(false);
+  const [resultado, setResultado] = React.useState(null);
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    try {
+      const d = await window.LMTApi.getCorreoConfig();
+      setDatos(d);
+      setForm(d.config);
+      setError("");
+    } catch (e) {
+      setError(mensajeError(e, "No fue posible leer la configuración de correo."));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+  React.useEffect(() => {
+    cargar();
+  }, [cargar]);
+  React.useEffect(() => {
+    const u = window.LMTApi.user && window.LMTApi.user();
+    if (u && u.email && !destino) setDestino(u.email);
+  }, [destino]);
+  const set = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  const setSmtp = (k, v) => setForm(f => ({
+    ...f,
+    smtp: {
+      ...f.smtp,
+      [k]: v
+    }
+  }));
+  const guardar = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    setOk("");
+    setGuardando(true);
+    try {
+      const d = await window.LMTApi.guardarCorreoConfig(form);
+      setDatos(x => ({
+        ...x,
+        ...d,
+        sobrescrito: x ? x.sobrescrito : []
+      }));
+      setForm(d.config);
+      setOk("Configuración guardada. Manda una prueba para confirmar que sale.");
+      await cargar();
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible guardar la configuración."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const restablecer = async () => {
+    if (!window.confirm("Se descarta lo configurado desde el panel y vuelve a mandar api/config.php. ¿Continuar?")) return;
+    setGuardando(true);
+    setError("");
+    setOk("");
+    try {
+      const d = await window.LMTApi.olvidarCorreoConfig();
+      setForm(d.config);
+      setOk("Se restableció la configuración del archivo.");
+      await cargar();
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible restablecer."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const probar = async () => {
+    setResultado(null);
+    setError("");
+    setProbando(true);
+    try {
+      setResultado(await window.LMTApi.probarCorreo(destino));
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible ejecutar la prueba."));
+    } finally {
+      setProbando(false);
+    }
+  };
+  if (cargando || !form) return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    className: "splash"
+  }, "Cargando\u2026"));
+  const diag = datos && datos.diagnostico || {
+    avisos: [],
+    historico: []
+  };
+  const sobrescrito = datos && datos.sobrescrito || [];
+  return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Correo saliente"), React.createElement("h1", {
+    className: "titulo-xl"
+  }, "Env\xEDo de correo"), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.6,
+      margin: "10px 0 24px",
+      maxWidth: 680
+    }
+  }, "De aqu\xED salen las contrase\xF1as de los promotores, el QR de su stand y los enlaces del perfil de los visitantes. Si esto no funciona, no funciona la inscripci\xF3n."), diag.avisos.length > 0 && React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      marginBottom: 24
+    }
+  }, diag.avisos.map((a, i) => React.createElement(AvisoDiagnostico, {
+    key: i,
+    nivel: a.nivel
+  }, a.texto))), React.createElement("div", {
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: 20,
+      background: "var(--paper)",
+      marginBottom: 24
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 12
+    }
+  }, "Probar el env\xEDo"), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12,
+      flexWrap: "wrap",
+      alignItems: "flex-end"
+    }
+  }, React.createElement("div", {
+    className: "field",
+    style: {
+      flex: 1,
+      minWidth: 240
+    }
+  }, React.createElement("label", {
+    htmlFor: "co-destino"
+  }, "Mandar un correo de prueba a"), React.createElement("input", {
+    id: "co-destino",
+    type: "email",
+    value: destino,
+    onChange: e => setDestino(e.target.value),
+    maxLength: 254
+  })), React.createElement("button", {
+    className: "btn btn-primary",
+    onClick: probar,
+    disabled: probando || !destino
+  }, probando ? "Enviando…" : "Enviar prueba")), resultado && React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, React.createElement(AvisoDiagnostico, {
+    nivel: resultado.entregado ? "bajo" : resultado.aceptado ? "medio" : "critico"
+  }, React.createElement("strong", null, resultado.entregado ? "El servidor de correo aceptó el mensaje." : resultado.aceptado ? "Aceptado, pero no se entregó a nadie." : "No se pudo enviar."), React.createElement("br", null), resultado.pista), resultado.traza && resultado.traza.length > 0 && React.createElement("details", {
+    style: {
+      marginTop: 12
+    },
+    open: !resultado.entregado
+  }, React.createElement("summary", {
+    className: "mono",
+    style: {
+      cursor: "pointer"
+    }
+  }, "Di\xE1logo con el servidor (", resultado.traza.length, " l\xEDneas)"), React.createElement("pre", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      background: "var(--paper-2)",
+      borderRadius: "var(--r-sm)",
+      border: "1px solid var(--line)",
+      fontSize: 12,
+      lineHeight: 1.6,
+      overflowX: "auto",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word"
+    }
+  }, resultado.traza.join("\n"))))), React.createElement("form", {
+    onSubmit: guardar,
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 20
+    }
+  }, React.createElement(BloqueForm, {
+    titulo: "C\xF3mo se env\xEDa"
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, TRANSPORTES.map(t => React.createElement("label", {
+    key: t.id,
+    style: {
+      display: "flex",
+      gap: 12,
+      alignItems: "flex-start",
+      padding: 12,
+      cursor: "pointer",
+      border: "1px solid " + (form.transport === t.id ? "var(--ink)" : "var(--line)"),
+      borderRadius: "var(--r-md)",
+      background: form.transport === t.id ? "var(--paper-2)" : "transparent"
+    }
+  }, React.createElement("input", {
+    type: "radio",
+    name: "transporte",
+    value: t.id,
+    checked: form.transport === t.id,
+    onChange: () => set("transport", t.id),
+    style: {
+      marginTop: 3
+    }
+  }), React.createElement("span", null, React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: form.transport === t.id ? 600 : 400
+    }
+  }, t.titulo), React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 12,
+      color: "var(--ink-3)",
+      lineHeight: 1.5,
+      marginTop: 2
+    }
+  }, t.nota)))))), React.createElement(BloqueForm, {
+    titulo: "Qui\xE9n firma los mensajes"
+  }, React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-from"
+  }, "Direcci\xF3n del remitente"), React.createElement("input", {
+    id: "co-from",
+    type: "email",
+    value: form.from,
+    onChange: e => set("from", e.target.value),
+    maxLength: 254,
+    required: true
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-fromname"
+  }, "Nombre visible"), React.createElement("input", {
+    id: "co-fromname",
+    value: form.from_name,
+    onChange: e => set("from_name", e.target.value),
+    maxLength: 80
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-replyto"
+  }, "Responder a (opcional)"), React.createElement("input", {
+    id: "co-replyto",
+    type: "email",
+    value: form.reply_to,
+    onChange: e => set("reply_to", e.target.value),
+    maxLength: 254
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Si un promotor contesta, su respuesta ir\xE1 a esta direcci\xF3n."))), form.transport === "smtp" && React.createElement(BloqueForm, {
+    titulo: "Servidor SMTP",
+    nota: "P\xEDdeselos a quien administra el correo institucional."
+  }, React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-host"
+  }, "Servidor"), React.createElement("input", {
+    id: "co-host",
+    value: form.smtp.host,
+    onChange: e => setSmtp("host", e.target.value),
+    maxLength: 253,
+    placeholder: "smtp.narino.gov.co"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-port"
+  }, "Puerto"), React.createElement("input", {
+    id: "co-port",
+    type: "number",
+    min: "1",
+    max: "65535",
+    value: form.smtp.port,
+    onChange: e => setSmtp("port", parseInt(e.target.value, 10) || 587)
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "587 con TLS, o 465 con SSL."))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-secure"
+  }, "Cifrado"), React.createElement("select", {
+    id: "co-secure",
+    value: form.smtp.secure,
+    onChange: e => setSmtp("secure", e.target.value)
+  }, React.createElement("option", {
+    value: "tls"
+  }, "STARTTLS (puerto 587)"), React.createElement("option", {
+    value: "ssl"
+  }, "SSL directo (puerto 465)"), React.createElement("option", {
+    value: ""
+  }, "Sin cifrar \u2014 s\xF3lo para un servidor de la propia red"))), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-user"
+  }, "Usuario del buz\xF3n"), React.createElement("input", {
+    id: "co-user",
+    value: form.smtp.user,
+    onChange: e => setSmtp("user", e.target.value),
+    maxLength: 254,
+    autoComplete: "off"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-pass"
+  }, "Contrase\xF1a del buz\xF3n"), React.createElement("input", {
+    id: "co-pass",
+    type: "password",
+    autoComplete: "new-password",
+    value: form.smtp.password === CLAVE_OCULTA ? "" : form.smtp.password,
+    placeholder: form.smtp.password === CLAVE_OCULTA ? "Guardada — escribe sólo si la cambias" : "",
+    onChange: e => setSmtp("password", e.target.value === "" ? CLAVE_OCULTA : e.target.value),
+    maxLength: 200
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Se guarda cifrada y no vuelve a mostrarse.")))), React.createElement(Aviso, {
+    tipo: "ok"
+  }, ok), React.createElement(Aviso, null, error), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: guardando
+  }, guardando ? "Guardando…" : "Guardar configuración"), sobrescrito.length > 0 && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: restablecer,
+    disabled: guardando
+  }, "Volver a la del archivo")), React.createElement("p", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      lineHeight: 1.7
+    }
+  }, sobrescrito.length > 0 ? "Esta configuración está guardada en la base de datos y pisa a la de api/config.php." : "Ahora mismo manda la configuración de api/config.php.")), diag.historico && diag.historico.length > 0 && React.createElement("div", {
+    style: {
+      marginTop: 28
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 10
+    }
+  }, "Lo enviado hasta ahora"), React.createElement("div", {
+    className: "tabla-scroll",
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper)"
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 80px",
+      padding: "10px 16px",
+      borderBottom: "1px solid var(--line)",
+      background: "var(--paper-2)"
+    }
+  }, ["Transporte", "Resultado", "Mensajes"].map(h => React.createElement("div", {
+    key: h,
+    className: "mono"
+  }, h))), diag.historico.map((h, i) => React.createElement("div", {
+    key: i,
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 80px",
+      padding: "12px 16px",
+      borderTop: i ? "1px solid var(--line)" : "none",
+      fontSize: 13
+    }
+  }, React.createElement("div", null, h.transporte), React.createElement("div", {
+    style: {
+      color: h.estado === "enviado" ? h.transporte === "log" ? "var(--meh)" : "var(--good)" : "var(--bad)"
+    }
+  }, h.transporte === "log" && h.estado === "enviado" ? "sólo registrado, no salió" : h.estado), React.createElement("div", {
+    className: "mono"
+  }, h.n))))), React.createElement("p", {
+    style: {
+      marginTop: 12
+    }
+  }, React.createElement("a", {
+    href: "/admin/correos",
+    "data-route": true,
+    style: {
+      fontSize: 13,
+      color: "var(--grano)"
+    }
+  }, "Ver la bit\xE1cora mensaje a mensaje \u2192"))));
+};
+Object.assign(window, {
+  AdminCorreoConfig
+});
+})();
+
 /* components/App.jsx */
 (function () {
 const PALETTES = {
@@ -7378,6 +7862,13 @@ const App = () => {
       stands: stands
     });
   }
+  if (route.path === "/admin/correo") {
+    return React.createElement(AdminPage, {
+      section: "correo",
+      user: user,
+      stands: stands
+    });
+  }
   if (route.path === "/admin/caracterizacion") {
     return React.createElement(AdminPage, {
       section: "caracterizacion",
@@ -7431,7 +7922,7 @@ const NotFound = ({
 window.NotFound = NotFound;
 window.Splash = Splash;
 const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion"];
+  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion", "AdminCorreoConfig"];
   if (needed.every(k => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
   } else {
