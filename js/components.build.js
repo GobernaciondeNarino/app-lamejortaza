@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 31c1d279ce709754
+// Huella de las fuentes: 6a1f965362635180
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -182,7 +182,7 @@ const Placeholder = ({
     alignItems: "center",
     justifyContent: "center",
     fontFamily: "var(--font-mono)",
-    fontSize: 10,
+    fontSize: 12,
     color: "var(--ink-3)",
     textTransform: "uppercase",
     letterSpacing: "0.1em",

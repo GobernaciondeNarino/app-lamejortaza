@@ -217,7 +217,11 @@ input, textarea, select { font-family: inherit; color: inherit; }
 /* El pasaporte aprovecha todo el ancho del teléfono: .mobile-inner limita a
    460px, que en un móvil grande deja franjas muertas a los lados. */
 @media (max-width: 719px) {
-  .pasaporte-vista .mobile-inner { max-width: none; padding-left: 12px; padding-right: 12px; }
+  /* 6px, no 12: en portrait el libro está limitado por el ANCHO de la pantalla
+     —nunca por el alto—, así que cada píxel de relleno lateral sale
+     directamente del tamaño del pasaporte. */
+  .pasaporte-vista .mobile-inner { max-width: none; padding-left: 6px; padding-right: 6px; }
+  .pasaporte-vista { padding-left: 4px !important; padding-right: 4px !important; }
 }
 
 /* El libro del pasaporte.

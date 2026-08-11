@@ -490,7 +490,11 @@
     // más grande posible; sólo se abre mientras una hoja está en el aire, que
     // es cuando hace falta ver el arco. Antes estaba fijo en el valor ancho y
     // el libro desperdiciaba un tercio de la pantalla del móvil todo el rato.
-    var ENCUADRE_REPOSO = 1.08, ENCUADRE_VUELO = 1.42;
+    // 1.02 = el libro casi toca los bordes del lienzo. Con 1.08 sobraba un 8 %
+    // de aire alrededor todo el rato, que en un teléfono son milímetros de
+    // texto legible tirados a la basura; el margen que queda es sólo el que
+    // necesita la sombra del canto para no cortarse.
+    var ENCUADRE_REPOSO = 1.02, ENCUADRE_VUELO = 1.42;
     var encuadre = ENCUADRE_REPOSO, encuadreObjetivo = ENCUADRE_REPOSO;
     var arrastre = null;
     var selloAnimado = {}; // páginas cuyo sello ya aterrizó

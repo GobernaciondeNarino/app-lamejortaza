@@ -70,7 +70,7 @@ const Placeholder = ({ width = "100%", height = 80, label = "logo", style }) => 
     border: "1px solid var(--line)",
     borderRadius: "var(--r-sm)",
     display: "flex", alignItems: "center", justifyContent: "center",
-    fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)",
+    fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
     textTransform: "uppercase", letterSpacing: "0.1em",
     ...style
   }}>{label}</div>
