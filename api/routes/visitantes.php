@@ -95,7 +95,7 @@ function register_routes_visitantes(\LMT\Router $r): void
             ':gen' => visitante_opcion('genero', $b['genero'] ?? null),
             ':edad'=> visitante_opcion('rango_edad', $b['rango_edad'] ?? null),
             ':pais'=> visitante_texto($b['pais'] ?? null, 80),
-            ':dep' => visitante_texto($b['departamento'] ?? null, 80),
+            ':dep' => visitante_departamento($b['departamento'] ?? null),
             // Si el municipio es de Nariño se guarda con el nombre del DANE; si
             // el visitante viene de fuera, se acepta tal cual (texto libre). Así
             // el informe agregado no parte «Pasto» y «San Juan de Pasto» en dos.
@@ -325,6 +325,17 @@ function visitante_municipio($valor): ?string
     $libre = visitante_texto($valor, 80);
     if ($libre === null) return null;
     return \LMT\Territorio::municipio($libre) ?? $libre;
+}
+
+/**
+ * Departamento del visitante, con el mismo criterio: si es uno de los 33 de
+ * Colombia se guarda con su nombre oficial; si viene de fuera, tal cual.
+ */
+function visitante_departamento($valor): ?string
+{
+    $libre = visitante_texto($valor, 80);
+    if ($libre === null) return null;
+    return \LMT\Territorio::departamento($libre) ?? $libre;
 }
 
 function visitante_publico(array $v): array

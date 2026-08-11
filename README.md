@@ -233,6 +233,16 @@ privada, académica, un gremio o a título personal, cómo se enteró del festiv
 si es su primera vez, qué espera del evento y —en un bloque aparte— grupo
 étnico y situación de discapacidad.
 
+**País, departamento y municipio van encadenados.** El país es un desplegable
+(Colombia u «otro país», que abre un campo de texto); si es Colombia aparece el
+departamento con los 32 más Bogotá D.C.; y sólo si el departamento es **Nariño**
+el municipio pasa a ser la lista de los 64 del DANE. Fuera de Nariño se escribe,
+porque no tenemos el callejero del resto del país y obligar a elegir sería pedir
+que se mienta. Cambiar un eslabón limpia los de abajo: si no, quedaba «Pasto»
+colgando de «Valle del Cauca». El servidor guarda el nombre oficial cuando
+reconoce el departamento y lo deja tal cual cuando no (un visitante de Ecuador
+escribe su provincia).
+
 **Cómo se prueba que un perfil es tuyo.** El visitante no tiene contraseña, así
 que el correo por sí solo no abre nada: si bastara con escribirlo, cualquiera
 podría leer a qué grupo étnico pertenece un vecino. Al votar, el servidor emite
@@ -275,6 +285,20 @@ no está autorizada a enviar en nombre del dominio del remitente, así que el
 servidor de destino lo descarta o lo manda a spam. El panel avisa de las dos
 cosas en rojo, deja mandarse una prueba de verdad y enseña el diálogo completo
 con el servidor SMTP cuando falla, con la contraseña tapada.
+
+**«Network is unreachable» aunque `nc` sí conecte.** Si desde la consola del
+servidor `nc -zv smtp.gmail.com 587` conecta y aun así el envío falla con
+`errno 101`, no es el hosting: es IPv6. `smtp.gmail.com` publica registros A y
+AAAA; PHP resolvía, se quedaba con la **primera** dirección y ahí acababa su
+intento, mientras que `nc` recorre la lista entera. En un servidor sin ruta IPv6
+—lo normal en hosting compartido— esa primera podía ser la IPv6, y el
+diagnóstico acusaba al proveedor de bloquear una salida que no bloqueaba.
+
+Ahora el cliente resuelve el host a mano y **prueba todas las direcciones, IPv4
+primero**, con el certificado validado contra el nombre (`peer_name`) aunque se
+conecte por IP. La traza dice qué dirección usó, así que el fallo se ve de un
+vistazo. El diagnóstico del panel usa exactamente las mismas direcciones y en el
+mismo orden que el envío real.
 
 **El remitente del festival es `hosting@narino.gov.co`, un buzón sobre Gmail**
 (Google Workspace). Eso impone tres cosas, y el panel las comprueba y las avisa:

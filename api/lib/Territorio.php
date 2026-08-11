@@ -113,6 +113,43 @@ final class Territorio
         'Cartago' => 'San Pedro de Cartago',
     ];
 
+    /** Los 32 departamentos de Colombia y Bogotá D.C. */
+    public const DEPARTAMENTOS = [
+        'Amazonas',
+        'Antioquia',
+        'Arauca',
+        'Atlántico',
+        'Bogotá D.C.',
+        'Bolívar',
+        'Boyacá',
+        'Caldas',
+        'Caquetá',
+        'Casanare',
+        'Cauca',
+        'Cesar',
+        'Chocó',
+        'Córdoba',
+        'Cundinamarca',
+        'Guainía',
+        'Guaviare',
+        'Huila',
+        'La Guajira',
+        'Magdalena',
+        'Meta',
+        'Nariño',
+        'Norte de Santander',
+        'Putumayo',
+        'Quindío',
+        'Risaralda',
+        'San Andrés y Providencia',
+        'Santander',
+        'Sucre',
+        'Tolima',
+        'Valle del Cauca',
+        'Vaupés',
+        'Vichada',
+    ];
+
     /** Nombre canónico del municipio, o null si no es de Nariño. */
     public static function municipio($nombre): ?string
     {
@@ -145,6 +182,23 @@ final class Territorio
     public static function esSubregion($nombre): bool
     {
         return in_array((string) $nombre, self::SUBREGIONES, true);
+    }
+
+    /**
+     * Nombre canónico del departamento, o null si no es de Colombia.
+     *
+     * A diferencia del municipio del promotor, aquí null NO es un error: un
+     * visitante puede venir de Ecuador y escribir su provincia. Quien llama
+     * decide si lo rechaza o lo guarda tal cual.
+     */
+    public static function departamento($nombre): ?string
+    {
+        $clave = self::normalizar((string) $nombre);
+        if ($clave === '') return null;
+        foreach (self::DEPARTAMENTOS as $d) {
+            if (self::normalizar($d) === $clave) return $d;
+        }
+        return null;
     }
 
     /** Compara nombres sin que estorben tildes, mayúsculas ni artículos. */

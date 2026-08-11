@@ -379,7 +379,7 @@
       // lectura mecánica abajo. Antes era un índice de casillas vacías.
       var sellados = pagina.visitados | 0;
 
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
       textoEspaciado(ctx, "REPÚBLICA DE COLOMBIA · NARIÑO", W * 0.09, H * 0.075, 1.4 * k);
       ctx.textAlign = "right";
       textoEspaciado(ctx, "P·CAFÉ", W * 0.91, H * 0.075, 1.4 * k);
@@ -388,57 +388,57 @@
       ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.095); ctx.lineTo(W * 0.91, H * 0.095); ctx.stroke();
 
       // Recuadro de la foto: inicial y número de sellos.
-      var fx = W * 0.09, fy = H * 0.115, fw = W * 0.24, fh = H * 0.20;
+      var fx = W * 0.09, fy = H * 0.118, fw = W * 0.26, fh = H * 0.215;
       ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1.5 * k;
       ctx.strokeRect(fx, fy, fw, fh);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 46 * k);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 58 * k);
       ctx.textAlign = "center";
       ctx.fillText(String(pagina.nombre || "V").trim().charAt(0).toUpperCase(), fx + fw / 2, fy + fh * 0.46);
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 11 * k);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
       textoCentradoEspaciado(ctx, "SELLOS", fx + fw / 2, fy + fh * 0.72, 1.4 * k);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("mono", 18 * k);
-      ctx.fillText(("0" + sellados).slice(-2), fx + fw / 2, fy + fh * 0.92);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("mono", 24 * k);
+      ctx.fillText(("0" + sellados).slice(-2), fx + fw / 2, fy + fh * 0.94);
       ctx.textAlign = "left";
 
-      // Ficha: etiqueta pequeña arriba, valor debajo.
-      var cx = W * 0.38;
-      function campo(etiqueta, valor, x, y, maxAncho) {
-        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * k);
+      // Ficha: etiqueta pequeña arriba, valor grande debajo. En un teléfono
+      // esta hoja se mira a un palmo: los cuerpos de 10-12 px no se leían.
+      function campo(etiqueta, valor, x, y, maxAncho, tam) {
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
         textoEspaciado(ctx, etiqueta, x, y, 1.2 * k);
-        ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 16 * k);
-        ctx.fillText(recortar(ctx, String(valor == null || valor === "" ? "——" : valor), maxAncho), x, y + 21 * k);
+        ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", (tam || 21) * k);
+        ctx.fillText(recortar(ctx, String(valor == null || valor === "" ? "——" : valor), maxAncho), x, y + 27 * k);
       }
-      campo("PORTADOR / BEARER", pagina.nombre, cx, H * 0.135, W * 0.53);
-      campo("SEXO", pagina.sexo, cx, H * 0.195, W * 0.20);
-      campo("EDAD", pagina.edad, W * 0.60, H * 0.195, W * 0.31);
-      campo("PROCEDENCIA", pagina.procedencia, cx, H * 0.255, W * 0.53);
-      campo("Nº DE PASAPORTE", pagina.numero, cx, H * 0.315, W * 0.53);
 
-      campo("EXPEDIDO", pagina.expedido, W * 0.09, H * 0.395, W * 0.30);
-      campo("VISITANTE", pagina.visitante, W * 0.44, H * 0.395, W * 0.47);
-      campo("CONTACTO", pagina.correo, W * 0.09, H * 0.465, W * 0.55);
-      campo("AVANCE", sellados + " / " + (pagina.totalStands | 0), W * 0.70, H * 0.465, W * 0.21);
+      // El nombre, en display y grande: es lo primero que se mira.
+      var cx = W * 0.40;
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
+      textoEspaciado(ctx, "PORTADOR / BEARER", cx, H * 0.140, 1.2 * k);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 30 * k);
+      ctx.fillText(recortar(ctx, String(pagina.nombre || "——"), W * 0.51), cx, H * 0.178);
+
+      campo("SEXO", pagina.sexo, cx, H * 0.235, W * 0.22);
+      campo("EDAD", pagina.edad, W * 0.66, H * 0.235, W * 0.25);
+
+      campo("PROCEDENCIA", pagina.procedencia, W * 0.09, H * 0.395, W * 0.82, 22);
+      campo("Nº DE PASAPORTE", pagina.numero, W * 0.09, H * 0.470, W * 0.82, 24);
+      campo("EXPEDIDO", pagina.expedido, W * 0.09, H * 0.545, W * 0.38);
+      campo("SELLOS", sellados + " de " + (pagina.totalStands | 0), W * 0.52, H * 0.545, W * 0.39);
+      campo("VISITANTE", pagina.visitante, W * 0.09, H * 0.620, W * 0.82, 19);
 
       if (!pagina.conPerfil) {
-        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * k);
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 16 * k);
         parrafo(ctx, "Completa tu perfil de visitante y esta hoja se llena con tus datos.",
-                W * 0.09, H * 0.545, W * 0.82, 18 * k, 2);
+                W * 0.09, H * 0.700, W * 0.82, 21 * k, 2);
       }
 
-      campo("AUTORIDAD EXPEDIDORA", "Gobernación de Nariño", W * 0.09, H * 0.700, W * 0.50);
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * k);
-      textoEspaciado(ctx, "FIRMA", W * 0.66, H * 0.700, 1.2 * k);
-      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
-      if (ctx.setLineDash) ctx.setLineDash([1.5 * k, 3.5 * k]);
-      ctx.beginPath(); ctx.moveTo(W * 0.66, H * 0.725); ctx.lineTo(W * 0.91, H * 0.725); ctx.stroke();
-      if (ctx.setLineDash) ctx.setLineDash([]);
-
-      // Banda de lectura mecánica.
+      // Banda de lectura mecánica, con quién expide justo encima.
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
+      textoEspaciado(ctx, "EXPIDE · GOBERNACIÓN DE NARIÑO", W * 0.09, H * 0.855, 1.4 * k);
       ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
       ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.875); ctx.lineTo(W * 0.91, H * 0.875); ctx.stroke();
-      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("mono", 15 * k);
-      ctx.fillText(String(pagina.mrz1 || ""), W * 0.09, H * 0.915);
-      ctx.fillText(String(pagina.mrz2 || ""), W * 0.09, H * 0.950);
+      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("mono", 16 * k);
+      ctx.fillText(String(pagina.mrz1 || ""), W * 0.09, H * 0.918);
+      ctx.fillText(String(pagina.mrz2 || ""), W * 0.09, H * 0.955);
     } else if (tipo === "sello") {
       var s = pagina.stand || {};
       ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);

@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: d2d40bd333bff5a5
+// Huella de las fuentes: 9c2f272080bb4c59
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -842,6 +842,33 @@ const SelectorSubregion = ({
     className: "ayuda"
   }, derivada ? `Se completa sola con el municipio: ${municipio} está en ${derivada}.` : "Las 13 subregiones en que se agrupa el departamento."));
 };
+const DEPARTAMENTOS = () => (MAPA_NARINO() || {}).departamentos || [];
+const esNarino = departamento => normMuniSimple(departamento || "") === normMuniSimple("Nariño");
+const SelectorDepartamento = ({
+  id,
+  valor,
+  onCambio,
+  etiqueta = "Departamento",
+  requerido = false
+}) => {
+  const lista = DEPARTAMENTOS();
+  const enLista = !!valor && lista.some(d => normMuniSimple(d) === normMuniSimple(valor));
+  return React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: id
+  }, etiqueta, requerido ? " *" : ""), React.createElement("select", {
+    id: id,
+    required: requerido,
+    value: enLista ? valor : "",
+    onChange: e => onCambio(e.target.value)
+  }, React.createElement("option", {
+    value: ""
+  }, "Selecciona un departamento"), lista.map(d => React.createElement("option", {
+    key: d,
+    value: d
+  }, d))));
+};
 Object.assign(window, {
   SelectorUbicacion,
   geoAPunto,
@@ -851,7 +878,10 @@ Object.assign(window, {
   SelectorSubregion,
   subregionDe,
   MUNICIPIOS,
-  SUBREGIONES
+  SUBREGIONES,
+  SelectorDepartamento,
+  DEPARTAMENTOS,
+  esNarino
 });
 })();
 
@@ -3532,7 +3562,8 @@ const datosPagina = (passport, totalStands) => {
 const CampoDato = ({
   etiqueta,
   valor,
-  ancho
+  ancho,
+  tam = 16
 }) => React.createElement("div", {
   style: {
     flex: ancho || 1,
@@ -3541,15 +3572,15 @@ const CampoDato = ({
 }, React.createElement("div", {
   className: "mono",
   style: {
-    fontSize: 8,
+    fontSize: 9,
     color: "var(--ink-3)",
     lineHeight: 1.4
   }
 }, etiqueta), React.createElement("div", {
   style: {
-    fontSize: 12,
-    lineHeight: 1.25,
-    marginTop: 1,
+    fontSize: tam,
+    lineHeight: 1.2,
+    marginTop: 2,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis"
@@ -3580,29 +3611,29 @@ const PaginaDatos = ({
   }, React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 9
+      fontSize: 10
     }
   }, "REP\xDABLICA DE COLOMBIA \xB7 NARI\xD1O"), React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 9,
+      fontSize: 10,
       color: "var(--ink-3)"
     }
   }, "P\xB7CAF\xC9")), React.createElement("div", {
     style: {
       height: 1,
       background: "var(--line-2)",
-      margin: "8px 0 12px"
+      margin: "9px 0 14px"
     }
   }), React.createElement("div", {
     style: {
       display: "flex",
-      gap: 14
+      gap: 15
     }
   }, React.createElement("div", {
     style: {
-      width: 74,
-      height: 92,
+      width: 86,
+      height: 108,
       flexShrink: 0,
       border: "1px solid var(--line-2)",
       display: "flex",
@@ -3615,20 +3646,20 @@ const PaginaDatos = ({
     style: {
       fontFamily: "var(--font-display)",
       fontStyle: "italic",
-      fontSize: 30,
+      fontSize: 40,
       lineHeight: 1
     }
   }, (passport.nombre || "V").trim().charAt(0).toUpperCase()), React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 8,
+      fontSize: 9,
       color: "var(--ink-3)",
-      marginTop: 8
+      marginTop: 10
     }
   }, "SELLOS"), React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 14
+      fontSize: 18
     }
   }, String(sellos).padStart(2, "0"))), React.createElement("div", {
     style: {
@@ -3636,15 +3667,35 @@ const PaginaDatos = ({
       minWidth: 0,
       display: "flex",
       flexDirection: "column",
-      gap: 7
+      gap: 10
     }
-  }, React.createElement(CampoDato, {
-    etiqueta: "PORTADOR / BEARER",
-    valor: passport.nombre
-  }), React.createElement("div", {
+  }, React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 9,
+      color: "var(--ink-3)",
+      lineHeight: 1.4
+    }
+  }, "PORTADOR / BEARER"), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 22,
+      lineHeight: 1.15,
+      marginTop: 2,
+      overflow: "hidden",
+      display: "-webkit-box",
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: "vertical"
+    }
+  }, passport.nombre)), React.createElement("div", {
     style: {
       display: "flex",
-      gap: 10
+      gap: 12
     }
   }, React.createElement(CampoDato, {
     etiqueta: "SEXO",
@@ -3652,79 +3703,62 @@ const PaginaDatos = ({
   }), React.createElement(CampoDato, {
     etiqueta: "EDAD",
     valor: etiquetaPerfil("rango_edad", p.rango_edad),
-    ancho: 1.4
-  })), React.createElement(CampoDato, {
+    ancho: 1.3
+  })))), React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, React.createElement(CampoDato, {
     etiqueta: "PROCEDENCIA",
-    valor: procedencia
-  }), React.createElement(CampoDato, {
+    valor: procedencia,
+    tam: 17
+  })), React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, React.createElement(CampoDato, {
     etiqueta: "N\xBA DE PASAPORTE",
-    valor: passport.numero || DATO_VACIO
-  }))), React.createElement("div", {
+    valor: passport.numero || DATO_VACIO,
+    tam: 18
+  })), React.createElement("div", {
     style: {
       display: "flex",
-      gap: 10,
-      marginTop: 10
+      gap: 12,
+      marginTop: 12
     }
   }, React.createElement(CampoDato, {
     etiqueta: "EXPEDIDO",
     valor: fechaCorta(passport.inicio)
   }), React.createElement(CampoDato, {
-    etiqueta: "VISITANTE",
-    valor: entidad,
-    ancho: 1.6
+    etiqueta: "SELLOS",
+    valor: sellos + " de " + totalStands
   })), React.createElement("div", {
     style: {
-      display: "flex",
-      gap: 10,
-      marginTop: 7
-    }
-  }, React.createElement(CampoDato, {
-    etiqueta: "CONTACTO",
-    valor: passport.correo,
-    ancho: 2
-  }), React.createElement(CampoDato, {
-    etiqueta: "AVANCE",
-    valor: sellos + " / " + totalStands
-  })), !passport.perfil && React.createElement("p", {
-    style: {
-      fontSize: 10,
-      color: "var(--ink-3)",
-      lineHeight: 1.5,
       marginTop: 12
     }
-  }, "Completa tu perfil de visitante y esta hoja se llena con tus datos."), React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      alignItems: "flex-end",
-      marginTop: 16
-    }
   }, React.createElement(CampoDato, {
-    etiqueta: "AUTORIDAD EXPEDIDORA",
-    valor: "Gobernaci\xF3n de Nari\xF1o",
-    ancho: 1.5
-  }), React.createElement("div", {
+    etiqueta: "VISITANTE",
+    valor: entidad,
+    tam: 15
+  })), !passport.perfil && React.createElement("p", {
     style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, React.createElement("div", {
-    className: "mono",
-    style: {
-      fontSize: 8,
+      fontSize: 12,
       color: "var(--ink-3)",
-      lineHeight: 1.4
+      lineHeight: 1.5,
+      marginTop: 14
     }
-  }, "FIRMA"), React.createElement("div", {
-    style: {
-      borderBottom: "1px dotted var(--line-2)",
-      height: 16
-    }
-  }))), React.createElement("div", {
+  }, "Completa tu perfil de visitante y esta hoja se llena con tus datos."), React.createElement("div", {
     style: {
       marginTop: "auto"
     }
   }, React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 9,
+      color: "var(--ink-3)",
+      marginBottom: 8
+    }
+  }, "EXPIDE \xB7 GOBERNACI\xD3N DE NARI\xD1O"), React.createElement("div", {
     style: {
       height: 1,
       background: "var(--line-2)"
@@ -3732,8 +3766,8 @@ const PaginaDatos = ({
   }), React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 9,
-      letterSpacing: "0.08em",
+      fontSize: 10,
+      letterSpacing: "0.06em",
       lineHeight: 1.7,
       padding: "8px 0 14px",
       color: "var(--ink-2)",
@@ -7156,6 +7190,7 @@ Object.assign(window, {
 
 /* components/Perfil.jsx */
 (function () {
+const OTRO_PAIS = "__otro_pais__";
 const PERFIL_ETIQUETAS = {
   genero: {
     hombre: "Hombre",
@@ -7532,27 +7567,57 @@ const PerfilVisitantePage = () => {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "pf-pais"
-  }, "Pa\xEDs"), React.createElement("input", {
+  }, "Pa\xEDs"), React.createElement("select", {
     id: "pf-pais",
-    value: form.pais,
-    onChange: e => set("pais", e.target.value),
-    maxLength: 80
-  })), React.createElement("div", {
+    value: form.pais === "" ? "" : form.pais === "Colombia" ? "Colombia" : OTRO_PAIS,
+    onChange: e => setForm(f => ({
+      ...f,
+      pais: e.target.value === OTRO_PAIS ? "" : e.target.value,
+      departamento: "",
+      municipio: ""
+    }))
+  }, React.createElement("option", {
+    value: ""
+  }, "Selecciona un pa\xEDs"), React.createElement("option", {
+    value: "Colombia"
+  }, "Colombia"), React.createElement("option", {
+    value: OTRO_PAIS
+  }, "Otro pa\xEDs"))), form.pais === "Colombia" ? React.createElement(SelectorDepartamento, {
+    id: "pf-dep",
+    valor: form.departamento,
+    onCambio: departamento => setForm(f => ({
+      ...f,
+      departamento,
+      municipio: ""
+    }))
+  }) : React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
-    htmlFor: "pf-dep"
-  }, "Departamento"), React.createElement("input", {
-    id: "pf-dep",
-    value: form.departamento,
-    onChange: e => set("departamento", e.target.value),
+    htmlFor: "pf-pais-otro"
+  }, "\xBFCu\xE1l?"), React.createElement("input", {
+    id: "pf-pais-otro",
+    value: form.pais,
     maxLength: 80,
-    placeholder: "Nari\xF1o"
-  }))), React.createElement(SelectorMunicipio, {
+    placeholder: "Ecuador",
+    onChange: e => set("pais", e.target.value)
+  }))), form.pais === "Colombia" && esNarino(form.departamento) ? React.createElement(SelectorMunicipio, {
     id: "pf-mun",
     valor: form.municipio,
-    permitirOtro: true,
     onCambio: municipio => set("municipio", municipio)
-  })), React.createElement(BloqueForm, {
+  }) : React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-mun-texto"
+  }, form.pais === "Colombia" ? "Municipio" : "Ciudad"), React.createElement("input", {
+    id: "pf-mun-texto",
+    value: form.municipio,
+    maxLength: 80,
+    disabled: form.pais === "Colombia" && !form.departamento,
+    placeholder: form.pais === "Colombia" ? "Cali" : "Quito",
+    onChange: e => set("municipio", e.target.value)
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, form.pais === "Colombia" && !form.departamento ? "Elige antes el departamento." : "Escríbelo como se llama; sólo los de Nariño salen de una lista."))), React.createElement(BloqueForm, {
     titulo: "Tu visita"
   }, React.createElement(CampoOpcion, {
     id: "pf-tipo",
