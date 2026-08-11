@@ -32,6 +32,7 @@ const ARCHIVOS = [
   'components/Passport.jsx',
   'components/Dashboard.jsx',
   'components/Promotores.jsx',
+  'components/Cuentas.jsx',
   'components/App.jsx',
 ];
 

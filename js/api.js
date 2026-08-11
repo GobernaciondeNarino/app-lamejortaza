@@ -237,6 +237,25 @@
   async function listarEmails(limit)        { return request("/admin/emails" + (limit ? "?limit=" + encodeURIComponent(limit) : "")); }
   async function getVitrina()               { return request("/vitrina"); }
 
+  // Administradores (sólo propietario)
+  async function listarAdmins()             { return request("/admin/administradores"); }
+  async function crearAdmin(b)              { await ensureCsrf(); return request("/admin/administradores", { method: "POST", body: b }); }
+  async function actualizarAdmin(id, b)     { await ensureCsrf(); return request("/admin/administradores/" + id, { method: "PUT", body: b }); }
+  async function reponerClaveAdmin(id)      { await ensureCsrf(); return request("/admin/administradores/" + id + "/clave", { method: "POST" }); }
+  async function borrarAdmin(id)            { await ensureCsrf(); return request("/admin/administradores/" + id, { method: "DELETE" }); }
+
+  /** Cambio de la propia contraseña de administrador. */
+  async function cambiarClaveAdmin(actual, nueva) {
+    await ensureCsrf();
+    const data = await request("/auth/password", {
+      method: "POST",
+      body: { password_actual: actual, password_nueva: nueva },
+    });
+    if (user) user = Object.assign({}, user, { must_change: false });
+    dispatchAuth();
+    return data;
+  }
+
   async function ensureCsrf() {
     if (csrf) return;
     try { const me = await request("/auth/me"); csrf = me.csrf || ""; } catch (_) {}
@@ -295,6 +314,12 @@
     vincularStand,
     listarEmails,
     getVitrina,
+    listarAdmins,
+    crearAdmin,
+    actualizarAdmin,
+    reponerClaveAdmin,
+    borrarAdmin,
+    cambiarClaveAdmin,
     submitVote,
     getPasaporte,
     listStands,

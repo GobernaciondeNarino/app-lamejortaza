@@ -89,6 +89,7 @@ require __DIR__ . '/routes/dashboard.php';
 require __DIR__ . '/routes/exports.php';
 require __DIR__ . '/routes/qr.php';
 require __DIR__ . '/routes/promotores.php';
+require __DIR__ . '/routes/administradores.php';
 
 \register_routes_health($router);
 \register_routes_auth($router);
@@ -99,5 +100,6 @@ require __DIR__ . '/routes/promotores.php';
 \register_routes_exports($router);
 \register_routes_qr($router);
 \register_routes_promotores($router);
+\register_routes_administradores($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);

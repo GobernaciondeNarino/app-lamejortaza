@@ -2,13 +2,18 @@
 // y navegación por rutas /admin/...).
 
 const AdminShell = ({ active, user, children }) => {
+  // Las cuentas de acceso sólo las ve un propietario. Se oculta el enlace
+  // además de que el backend lo rechace: enseñar una sección que siempre
+  // responde 403 es una trampa, no una medida de seguridad.
   const items = [
     { id: "stands",     label: "Stands",       sub: "Registro",     path: "/admin/stands" },
     { id: "promotores", label: "Promotores",   sub: "Inscripciones", path: "/admin/promotores" },
     { id: "qr",         label: "Códigos QR",   sub: "Impresión",    path: "/admin/qr" },
     { id: "live",       label: "Actividad",    sub: "En vivo",      path: "/admin/live" },
     { id: "correos",    label: "Correos",      sub: "Bitácora",     path: "/admin/correos" },
-  ];
+  ].concat(user && user.rol === "propietario"
+    ? [{ id: "cuentas", label: "Administradores", sub: "Cuentas de acceso", path: "/admin/cuentas" }]
+    : []);
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
     window.LMTRouter.go("/");
@@ -36,6 +41,11 @@ const AdminShell = ({ active, user, children }) => {
         <div className="admin-sesion">
           <div className="mono" style={{ marginBottom: 4 }}>Sesión</div>
           <div style={{ fontSize: 12, color: "var(--ink-2)", wordBreak: "break-all" }}>{user ? user.email : "—"}</div>
+          {user && user.rol && (
+            <div className="mono" style={{ marginTop: 4, color: "var(--ink-3)" }}>
+              {user.rol === "propietario" ? "Propietario" : "Organizador"}
+            </div>
+          )}
           <button onClick={logout} className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", marginTop: 10, padding: "8px" }}>
             Cerrar sesión
           </button>
@@ -151,6 +161,7 @@ const AdminPage = ({ section, user, stands, comentarios, editingId }) => {
   if (section === "live")    return <AdminShell active="live" user={user}><ActivityLive stands={stands} comentarios={comentarios || (window.COMENTARIOS_DEMO || [])}/></AdminShell>;
   if (section === "promotores") return <AdminShell active="promotores" user={user}><AdminPromotores stands={stands}/></AdminShell>;
   if (section === "correos")    return <AdminShell active="correos" user={user}><AdminCorreos/></AdminShell>;
+  if (section === "cuentas")    return <AdminShell active="cuentas" user={user}><AdminCuentas user={user}/></AdminShell>;
   return <AdminShell active="stands" user={user}><div style={{ padding: 32 }}>—</div></AdminShell>;
 };
 

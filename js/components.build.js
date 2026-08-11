@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 2b30554b1d5576c8
+// Huella de las fuentes: 8d9f255a32e5747f
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -256,6 +256,80 @@ const calcScore = votos => {
   return (votos.bueno * 100 + votos.regular * 50) / total;
 };
 const totalVotos = votos => votos.bueno + votos.regular + votos.malo;
+const ERRORES = {
+  email_invalido: "El correo no es válido.",
+  nombre_invalido: "Escribe tu nombre completo.",
+  debe_aceptar_tratamiento_datos: "Debes autorizar el tratamiento de tus datos para continuar.",
+  invalid_credentials: "Usuario o contraseña incorrectos.",
+  cuenta_bloqueada: "Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.",
+  cuenta_suspendida: "Tu cuenta está suspendida. Comunícate con el equipo organizador.",
+  solicitud_rechazada: "Tu solicitud no fue aprobada.",
+  pendiente_de_verificacion: "Tu solicitud aún está en revisión.",
+  password_expirada: "La contraseña temporal caducó. Pide al organizador que te la reenvíe.",
+  password_actual_incorrecta: "La contraseña actual no coincide.",
+  password_corta: "La contraseña debe tener al menos 10 caracteres.",
+  password_larga: "La contraseña es demasiado larga.",
+  password_simple: "Combina mayúsculas, minúsculas, números y símbolos.",
+  password_predecible: "Evita tu nombre, tu correo o palabras del festival.",
+  password_repetida: "La nueva contraseña debe ser distinta de la actual.",
+  password_change_required: "Primero debes cambiar tu contraseña temporal.",
+  rate_limited: "Demasiadas solicitudes seguidas. Espera un momento.",
+  nombre_empresa_invalido: "El nombre de la empresa es obligatorio.",
+  nombre_producto_invalido: "El nombre del producto es obligatorio.",
+  altura_invalida: "La altura debe estar entre 0 y 6000 msnm.",
+  precio_invalido: "El precio no es válido.",
+  limite_productos: "Alcanzaste el máximo de 30 productos.",
+  registra_la_empresa_primero: "Guarda primero los datos de tu empresa.",
+  archivo_muy_grande: "La imagen supera el tamaño máximo (3 MB).",
+  no_es_imagen: "El archivo no es una imagen válida.",
+  formato_no_permitido: "Sólo se aceptan imágenes JPG, PNG o WEBP.",
+  imagen_muy_pequena: "La imagen es demasiado pequeña.",
+  archivo_ausente: "Selecciona un archivo.",
+  unauthorized: "Tu sesión expiró. Vuelve a entrar.",
+  not_found: "No encontrado.",
+  ya_verificado: "Este promotor ya estaba verificado.",
+  sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
+  stand_no_existe: "Ese stand no existe.",
+  estado_invalido: "Ese cambio de estado no es válido.",
+  estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
+  bad_id: "El identificador no es válido. Recarga la página.",
+  bad_json: "Los datos enviados no son válidos. Recarga la página.",
+  password_invalida: "La contraseña no es válida.",
+  payload_too_large: "El contenido es demasiado grande.",
+  admin_ya_existe: "Ya hay una cuenta con ese correo.",
+  requiere_propietario: "Sólo un propietario puede administrar cuentas.",
+  ultimo_propietario: "Debe quedar al menos un propietario activo.",
+  no_puedes_eliminarte: "No puedes eliminar tu propia cuenta.",
+  origin_not_allowed: "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
+  csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
+  internal_error: "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado."
+};
+const mensajeError = (e, porDefecto) => {
+  const code = String(e && (e.code || e.message) || e || "");
+  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
+  const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
+  return (porDefecto || "Ocurrió un error.") + (limpio ? ` (código: ${limpio})` : "");
+};
+const Aviso = ({
+  tipo = "error",
+  children
+}) => {
+  if (!children) return null;
+  const color = tipo === "ok" ? "var(--good)" : tipo === "info" ? "var(--ink-2)" : "var(--bad)";
+  return React.createElement("div", {
+    role: tipo === "error" ? "alert" : "status",
+    style: {
+      marginTop: 14,
+      padding: "10px 12px",
+      fontSize: 13,
+      lineHeight: 1.5,
+      border: `1px solid ${color}`,
+      color,
+      borderRadius: "var(--r-sm)",
+      background: `color-mix(in oklch, ${color} 6%, var(--paper))`
+    }
+  }, children);
+};
 Object.assign(window, {
   LogoTaza,
   Wordmark,
@@ -266,7 +340,10 @@ Object.assign(window, {
   BarraVotos,
   calcScore,
   totalVotos,
-  standUrl
+  standUrl,
+  ERRORES,
+  mensajeError,
+  Aviso
 });
 })();
 
@@ -302,7 +379,12 @@ const AdminShell = ({
     label: "Correos",
     sub: "Bitácora",
     path: "/admin/correos"
-  }];
+  }].concat(user && user.rol === "propietario" ? [{
+    id: "cuentas",
+    label: "Administradores",
+    sub: "Cuentas de acceso",
+    path: "/admin/cuentas"
+  }] : []);
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
     window.LMTRouter.go("/");
@@ -366,7 +448,13 @@ const AdminShell = ({
       color: "var(--ink-2)",
       wordBreak: "break-all"
     }
-  }, user ? user.email : "—"), React.createElement("button", {
+  }, user ? user.email : "—"), user && user.rol && React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 4,
+      color: "var(--ink-3)"
+    }
+  }, user.rol === "propietario" ? "Propietario" : "Organizador"), React.createElement("button", {
     onClick: logout,
     className: "btn btn-ghost",
     style: {
@@ -619,6 +707,12 @@ const AdminPage = ({
     active: "correos",
     user: user
   }, React.createElement(AdminCorreos, null));
+  if (section === "cuentas") return React.createElement(AdminShell, {
+    active: "cuentas",
+    user: user
+  }, React.createElement(AdminCuentas, {
+    user: user
+  }));
   return React.createElement(AdminShell, {
     active: "stands",
     user: user
@@ -3826,76 +3920,6 @@ const EstadoPill = ({
     }
   }, e.texto);
 };
-const ERRORES = {
-  email_invalido: "El correo no es válido.",
-  nombre_invalido: "Escribe tu nombre completo.",
-  debe_aceptar_tratamiento_datos: "Debes autorizar el tratamiento de tus datos para continuar.",
-  invalid_credentials: "Usuario o contraseña incorrectos.",
-  cuenta_bloqueada: "Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.",
-  cuenta_suspendida: "Tu cuenta está suspendida. Comunícate con el equipo organizador.",
-  solicitud_rechazada: "Tu solicitud no fue aprobada.",
-  pendiente_de_verificacion: "Tu solicitud aún está en revisión.",
-  password_expirada: "La contraseña temporal caducó. Pide al organizador que te la reenvíe.",
-  password_actual_incorrecta: "La contraseña actual no coincide.",
-  password_corta: "La contraseña debe tener al menos 10 caracteres.",
-  password_larga: "La contraseña es demasiado larga.",
-  password_simple: "Combina mayúsculas, minúsculas, números y símbolos.",
-  password_predecible: "Evita tu nombre, tu correo o palabras del festival.",
-  password_repetida: "La nueva contraseña debe ser distinta de la actual.",
-  password_change_required: "Primero debes cambiar tu contraseña temporal.",
-  rate_limited: "Demasiadas solicitudes seguidas. Espera un momento.",
-  nombre_empresa_invalido: "El nombre de la empresa es obligatorio.",
-  nombre_producto_invalido: "El nombre del producto es obligatorio.",
-  altura_invalida: "La altura debe estar entre 0 y 6000 msnm.",
-  precio_invalido: "El precio no es válido.",
-  limite_productos: "Alcanzaste el máximo de 30 productos.",
-  registra_la_empresa_primero: "Guarda primero los datos de tu empresa.",
-  archivo_muy_grande: "La imagen supera el tamaño máximo (3 MB).",
-  no_es_imagen: "El archivo no es una imagen válida.",
-  formato_no_permitido: "Sólo se aceptan imágenes JPG, PNG o WEBP.",
-  imagen_muy_pequena: "La imagen es demasiado pequeña.",
-  archivo_ausente: "Selecciona un archivo.",
-  unauthorized: "Tu sesión expiró. Vuelve a entrar.",
-  not_found: "No encontrado.",
-  ya_verificado: "Este promotor ya estaba verificado.",
-  sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
-  stand_no_existe: "Ese stand no existe.",
-  estado_invalido: "Ese cambio de estado no es válido.",
-  estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
-  bad_id: "El identificador no es válido. Recarga la página.",
-  bad_json: "Los datos enviados no son válidos. Recarga la página.",
-  password_invalida: "La contraseña no es válida.",
-  payload_too_large: "El contenido es demasiado grande.",
-  origin_not_allowed: "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
-  csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
-  internal_error: "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado."
-};
-const mensajeError = (e, porDefecto) => {
-  const code = String(e && (e.code || e.message) || e || "");
-  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
-  const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
-  return (porDefecto || "Ocurrió un error.") + (limpio ? ` (código: ${limpio})` : "");
-};
-const Aviso = ({
-  tipo = "error",
-  children
-}) => {
-  if (!children) return null;
-  const color = tipo === "ok" ? "var(--good)" : tipo === "info" ? "var(--ink-2)" : "var(--bad)";
-  return React.createElement("div", {
-    role: tipo === "error" ? "alert" : "status",
-    style: {
-      marginTop: 14,
-      padding: "10px 12px",
-      fontSize: 13,
-      lineHeight: 1.5,
-      border: `1px solid ${color}`,
-      color,
-      borderRadius: "var(--r-sm)",
-      background: `color-mix(in oklch, ${color} 6%, var(--paper))`
-    }
-  }, children);
-};
 const PromotorRegistroPage = () => {
   const vacio = {
     nombre: "",
@@ -5441,6 +5465,548 @@ Object.assign(window, {
 });
 })();
 
+/* components/Cuentas.jsx */
+(function () {
+const ROL_ETIQUETA = {
+  propietario: {
+    texto: "Propietario",
+    color: "var(--galeras)",
+    ayuda: "Administra el festival y las cuentas de acceso."
+  },
+  organizador: {
+    texto: "Organizador",
+    color: "var(--cafeto)",
+    ayuda: "Administra el festival: stands, votos, pasaportes y promotores."
+  }
+};
+const RolPill = ({
+  rol
+}) => {
+  const r = ROL_ETIQUETA[rol] || {
+    texto: rol,
+    color: "var(--ink-3)"
+  };
+  return React.createElement("span", {
+    className: "mono",
+    style: {
+      display: "inline-block",
+      padding: "3px 10px",
+      borderRadius: 999,
+      border: `1px solid ${r.color}`,
+      color: r.color,
+      fontSize: 10
+    }
+  }, r.texto);
+};
+const fechaCorta = iso => {
+  if (!iso) return "—";
+  const d = new Date(String(iso).replace(" ", "T") + (String(iso).endsWith("Z") ? "" : "Z"));
+  if (isNaN(d.getTime())) return String(iso).slice(0, 16);
+  return d.toLocaleDateString("es-CO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }) + " · " + d.toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
+const AdminCambioClave = ({
+  user
+}) => {
+  const [actual, setActual] = React.useState("");
+  const [nueva, setNueva] = React.useState("");
+  const [repetir, setRepetir] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const enviar = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    if (nueva.length < 10) {
+      setError("La nueva contraseña debe tener al menos 10 caracteres.");
+      return;
+    }
+    if (nueva !== repetir) {
+      setError("Las dos contraseñas nuevas no coinciden.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.LMTApi.cambiarClaveAdmin(actual, nueva);
+      window.LMTRouter.go("/admin");
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible cambiar la contraseña."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const salir = async () => {
+    if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
+    window.LMTRouter.go("/");
+  };
+  return React.createElement("div", {
+    style: {
+      minHeight: "100dvh",
+      display: "grid",
+      placeItems: "center",
+      padding: "24px 16px",
+      background: "var(--paper-2)"
+    }
+  }, React.createElement("form", {
+    onSubmit: enviar,
+    style: {
+      width: "100%",
+      maxWidth: 460,
+      background: "var(--paper)",
+      padding: "28px 24px",
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)"
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Primer acceso"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontWeight: 400,
+      fontSize: 32,
+      margin: "6px 0 12px",
+      lineHeight: 1.1
+    }
+  }, "Cambia tu contrase\xF1a"), React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: "var(--ink-2)",
+      lineHeight: 1.6,
+      margin: "0 0 22px"
+    }
+  }, "La contrase\xF1a que usaste lleg\xF3 por correo, as\xED que la damos por conocida. Elige una nueva para entrar al panel", user && user.email ? ` como ${user.email}` : "", "."), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 18
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "cc-actual"
+  }, "Contrase\xF1a que te enviamos"), React.createElement("input", {
+    id: "cc-actual",
+    type: "password",
+    autoComplete: "current-password",
+    value: actual,
+    onChange: e => setActual(e.target.value),
+    maxLength: 128,
+    required: true
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "cc-nueva"
+  }, "Contrase\xF1a nueva"), React.createElement("input", {
+    id: "cc-nueva",
+    type: "password",
+    autoComplete: "new-password",
+    value: nueva,
+    onChange: e => setNueva(e.target.value),
+    maxLength: 128,
+    required: true
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "M\xEDnimo 10 caracteres, con may\xFAsculas, min\xFAsculas y n\xFAmeros. Evita tu nombre, tu correo y palabras como \xABcaf\xE9\xBB o \xABfestival\xBB.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "cc-repetir"
+  }, "Repite la contrase\xF1a nueva"), React.createElement("input", {
+    id: "cc-repetir",
+    type: "password",
+    autoComplete: "new-password",
+    value: repetir,
+    onChange: e => setRepetir(e.target.value),
+    maxLength: 128,
+    required: true
+  })), React.createElement(Aviso, null, error), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: busy,
+    style: {
+      justifyContent: "center",
+      padding: 14,
+      opacity: busy ? 0.6 : 1
+    }
+  }, busy ? "Guardando…" : "Guardar y entrar →"), React.createElement("button", {
+    type: "button",
+    onClick: salir,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center"
+    }
+  }, "Cerrar sesi\xF3n"))));
+};
+const AdminCuentas = ({
+  user
+}) => {
+  const [datos, setDatos] = React.useState(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [error, setError] = React.useState("");
+  const [aviso, setAviso] = React.useState(null);
+  const [ocupado, setOcupado] = React.useState(0);
+  const [abierto, setAbierto] = React.useState(false);
+  const [nuevo, setNuevo] = React.useState({
+    nombre: "",
+    email: "",
+    rol: "organizador"
+  });
+  const [creando, setCreando] = React.useState(false);
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    try {
+      setDatos(await window.LMTApi.listarAdmins());
+      setError("");
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible cargar las cuentas."));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+  React.useEffect(() => {
+    cargar();
+  }, [cargar]);
+  const accion = async (id, fn, exito) => {
+    setOcupado(id);
+    setAviso(null);
+    try {
+      const res = await fn();
+      await cargar();
+      setAviso(exito(res));
+    } catch (err) {
+      setAviso({
+        tipo: "error",
+        texto: mensajeError(err, "No fue posible completar la acción.")
+      });
+    } finally {
+      setOcupado(0);
+    }
+  };
+  const crear = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setAviso(null);
+    if (!window.LMTSecurity || !window.LMTSecurity.isEmail(nuevo.email)) {
+      setAviso({
+        tipo: "error",
+        texto: "El correo no es válido."
+      });
+      return;
+    }
+    if (nuevo.nombre.trim().length < 3) {
+      setAviso({
+        tipo: "error",
+        texto: "Escribe el nombre completo de la persona."
+      });
+      return;
+    }
+    setCreando(true);
+    try {
+      const res = await window.LMTApi.crearAdmin({
+        nombre: nuevo.nombre.trim(),
+        email: nuevo.email.trim().toLowerCase(),
+        rol: nuevo.rol
+      });
+      setNuevo({
+        nombre: "",
+        email: "",
+        rol: "organizador"
+      });
+      setAbierto(false);
+      await cargar();
+      setAviso(res.correo_enviado ? {
+        tipo: "ok",
+        texto: `Cuenta creada. La contraseña temporal salió hacia ${res.email || nuevo.email}.`
+      } : {
+        tipo: "error",
+        texto: `Cuenta creada, pero el correo NO salió. Entrega esta contraseña en persona: ${res.clave_temporal}`
+      });
+    } catch (err) {
+      setAviso({
+        tipo: "error",
+        texto: mensajeError(err, "No fue posible crear la cuenta.")
+      });
+    } finally {
+      setCreando(false);
+    }
+  };
+  const cambiarRol = (a, rol) => accion(a.id, () => window.LMTApi.actualizarAdmin(a.id, {
+    nombre: a.nombre || a.email,
+    rol
+  }), () => ({
+    tipo: "ok",
+    texto: `${a.nombre || a.email} ahora es ${ROL_ETIQUETA[rol].texto.toLowerCase()}.`
+  }));
+  const alternarActivo = a => accion(a.id, () => window.LMTApi.actualizarAdmin(a.id, {
+    nombre: a.nombre || a.email,
+    activo: !a.activo
+  }), () => ({
+    tipo: "ok",
+    texto: a.activo ? "Cuenta desactivada: ya no puede entrar." : "Cuenta reactivada."
+  }));
+  const reponer = a => {
+    if (!window.confirm(`Se generará una contraseña nueva para ${a.email} y la actual dejará de funcionar. ¿Continuar?`)) return;
+    accion(a.id, () => window.LMTApi.reponerClaveAdmin(a.id), res => res.correo_enviado ? {
+      tipo: "ok",
+      texto: `Contraseña nueva enviada a ${a.email}.`
+    } : {
+      tipo: "error",
+      texto: `El correo no salió. Contraseña nueva para ${a.email}: ${res.clave_temporal}`
+    });
+  };
+  const eliminar = a => {
+    if (!window.confirm(`Eliminar la cuenta de ${a.email}. Esta acción no se puede deshacer. ¿Continuar?`)) return;
+    accion(a.id, () => window.LMTApi.borrarAdmin(a.id), () => ({
+      tipo: "ok",
+      texto: "Cuenta eliminada."
+    }));
+  };
+  const lista = datos && datos.lista || [];
+  const yoId = datos && datos.yo && datos.yo.id || user && user.id || 0;
+  const propietarios = lista.filter(a => a.rol === "propietario" && a.activo).length;
+  return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      gap: 12,
+      flexWrap: "wrap",
+      marginBottom: 24
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    className: "mono"
+  }, "Cuentas \xB7 ", lista.length, " registradas"), React.createElement("h1", {
+    className: "titulo-xl"
+  }, "Administradores")), React.createElement("button", {
+    className: "btn btn-primary",
+    onClick: () => setAbierto(v => !v)
+  }, abierto ? "Cancelar" : "+ Crear cuenta")), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.6,
+      margin: "0 0 20px",
+      maxWidth: 640
+    }
+  }, "Al crear una cuenta se genera una contrase\xF1a temporal y se env\xEDa al correo de la persona. El sistema le exige cambiarla la primera vez que entra: hasta entonces no puede ver ni exportar nada."), abierto && React.createElement("form", {
+    onSubmit: crear,
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: 20,
+      background: "var(--paper)",
+      marginBottom: 24
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 14
+    }
+  }, "Nueva cuenta"), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 16
+    }
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "ac-nombre"
+  }, "Nombre completo"), React.createElement("input", {
+    id: "ac-nombre",
+    value: nuevo.nombre,
+    maxLength: 120,
+    required: true,
+    onChange: e => setNuevo(n => ({
+      ...n,
+      nombre: e.target.value
+    }))
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "ac-email"
+  }, "Correo institucional"), React.createElement("input", {
+    id: "ac-email",
+    type: "email",
+    value: nuevo.email,
+    maxLength: 254,
+    required: true,
+    autoComplete: "off",
+    onChange: e => setNuevo(n => ({
+      ...n,
+      email: e.target.value
+    }))
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Ah\xED llegar\xE1 la contrase\xF1a temporal."))), React.createElement("div", {
+    className: "field",
+    style: {
+      marginTop: 16,
+      maxWidth: 420
+    }
+  }, React.createElement("label", {
+    htmlFor: "ac-rol"
+  }, "Perfil"), React.createElement("select", {
+    id: "ac-rol",
+    value: nuevo.rol,
+    onChange: e => setNuevo(n => ({
+      ...n,
+      rol: e.target.value
+    }))
+  }, React.createElement("option", {
+    value: "organizador"
+  }, "Organizador"), React.createElement("option", {
+    value: "propietario"
+  }, "Propietario")), React.createElement("span", {
+    className: "ayuda"
+  }, ROL_ETIQUETA[nuevo.rol].ayuda)), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: creando,
+    style: {
+      marginTop: 18
+    }
+  }, creando ? "Creando…" : "Crear y enviar contraseña")), aviso && React.createElement(Aviso, {
+    tipo: aviso.tipo
+  }, aviso.texto), React.createElement(Aviso, null, error), cargando ? React.createElement("div", {
+    className: "splash"
+  }, "Cargando\u2026") : React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 14,
+      marginTop: 18
+    }
+  }, lista.map(a => {
+    const soyYo = a.id === yoId;
+    const ultimoPropietario = a.rol === "propietario" && a.activo && propietarios <= 1;
+    const bloqueado = ocupado === a.id;
+    return React.createElement("div", {
+      key: a.id,
+      style: {
+        border: "1px solid var(--line)",
+        borderRadius: "var(--r-md)",
+        padding: 20,
+        background: "var(--paper)",
+        opacity: a.activo ? 1 : 0.62
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 16,
+        flexWrap: "wrap",
+        alignItems: "flex-start"
+      }
+    }, React.createElement("div", {
+      style: {
+        minWidth: 220,
+        flex: 1
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexWrap: "wrap"
+      }
+    }, React.createElement("strong", {
+      style: {
+        fontSize: 16,
+        fontWeight: 600
+      }
+    }, a.nombre || a.email), React.createElement(RolPill, {
+      rol: a.rol
+    }), soyYo && React.createElement("span", {
+      className: "mono",
+      style: {
+        color: "var(--ink-3)"
+      }
+    }, "t\xFA"), !a.activo && React.createElement("span", {
+      className: "mono",
+      style: {
+        color: "var(--bad)"
+      }
+    }, "desactivada"), a.clave_sin_usar && React.createElement("span", {
+      className: "mono",
+      style: {
+        color: "var(--meh)"
+      }
+    }, "clave sin estrenar")), React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: "var(--ink-2)",
+        marginTop: 6,
+        lineHeight: 1.7,
+        wordBreak: "break-word"
+      }
+    }, a.email), React.createElement("div", {
+      className: "mono",
+      style: {
+        marginTop: 6,
+        color: "var(--ink-3)"
+      }
+    }, "\xDAltimo acceso: ", fechaCorta(a.ultimo_acceso), " \xB7 Alta: ", fechaCorta(a.created_at))), React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        alignItems: "center"
+      }
+    }, React.createElement("select", {
+      value: a.rol,
+      disabled: bloqueado || ultimoPropietario,
+      title: ultimoPropietario ? "Debe quedar al menos un propietario activo." : "Perfil de la cuenta",
+      onChange: e => cambiarRol(a, e.target.value),
+      style: {
+        padding: "7px 10px",
+        fontSize: 13
+      }
+    }, React.createElement("option", {
+      value: "organizador"
+    }, "Organizador"), React.createElement("option", {
+      value: "propietario"
+    }, "Propietario")), React.createElement("button", {
+      className: "btn",
+      disabled: bloqueado,
+      onClick: () => reponer(a),
+      style: {
+        padding: "7px 14px",
+        fontSize: 13
+      }
+    }, "Reponer contrase\xF1a"), React.createElement("button", {
+      className: "btn",
+      disabled: bloqueado || ultimoPropietario,
+      onClick: () => alternarActivo(a),
+      style: {
+        padding: "7px 14px",
+        fontSize: 13
+      }
+    }, a.activo ? "Desactivar" : "Reactivar"), React.createElement("button", {
+      className: "btn",
+      disabled: bloqueado || soyYo || ultimoPropietario,
+      onClick: () => eliminar(a),
+      title: soyYo ? "No puedes eliminar tu propia cuenta." : "",
+      style: {
+        padding: "7px 14px",
+        fontSize: 13,
+        color: soyYo ? "var(--ink-3)" : "var(--bad)"
+      }
+    }, "Eliminar"))));
+  })));
+};
+Object.assign(window, {
+  AdminCuentas,
+  AdminCambioClave,
+  RolPill
+});
+})();
+
 /* components/App.jsx */
 (function () {
 const PALETTES = {
@@ -5497,6 +6063,9 @@ const App = () => {
       window.LMTRouter.go("/admin/login");
       return null;
     }
+    if (user.must_change) return React.createElement(AdminCambioClave, {
+      user: user
+    });
   }
   if (route.path === "/" || route.path === "") {
     return React.createElement(LoginAdmin, {
@@ -5607,6 +6176,16 @@ const App = () => {
       stands: stands
     });
   }
+  if (route.path === "/admin/cuentas") {
+    if (user.rol !== "propietario") return React.createElement(NotFound, {
+      back: "/admin"
+    });
+    return React.createElement(AdminPage, {
+      section: "cuentas",
+      user: user,
+      stands: stands
+    });
+  }
   return React.createElement(NotFound, {
     back: "/"
   });
@@ -5643,7 +6222,7 @@ const NotFound = ({
 window.NotFound = NotFound;
 window.Splash = Splash;
 const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores"];
+  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave"];
   if (needed.every(k => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
   } else {

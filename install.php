@@ -285,6 +285,7 @@ return [
         'promotor_registro' => ['window' => 3600, 'max' => 5],
         'promotor_login'    => ['window' => 900,  'max' => 15],
         'promotor_upload'   => ['window' => 3600, 'max' => 60],
+        'promotor_logo_publico' => ['window' => 3600, 'max' => 10], // logos en la inscripción (sin sesión)
         'global'            => ['window' => 60,   'max' => 120],
     ],
 

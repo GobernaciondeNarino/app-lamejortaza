@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS admins (
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   is_admin      INTEGER NOT NULL DEFAULT 1,
+  nombre        TEXT,
+  rol           TEXT NOT NULL DEFAULT 'organizador' CHECK (rol IN ('propietario','organizador')),
+  must_change_password INTEGER NOT NULL DEFAULT 0,
+  ultimo_acceso DATETIME,
+  creado_por    INTEGER,
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -23,6 +28,13 @@ CREATE TABLE IF NOT EXISTS stands (
   coords_x      REAL DEFAULT 0.5,
   coords_y      REAL DEFAULT 0.5,
   color         TEXT DEFAULT 'oklch(0.45 0.1 40)',
+  -- Un stand y su promotor son la misma cosa: estos campos vienen del
+  -- formulario de inscripción y se copian aquí al verificarlo.
+  propietario   TEXT,
+  propietario_documento TEXT,
+  nit           TEXT,
+  sitio_web     TEXT,
+  logo_path     TEXT,
   votos_bueno   INTEGER NOT NULL DEFAULT 0,
   votos_regular INTEGER NOT NULL DEFAULT 0,
   votos_malo    INTEGER NOT NULL DEFAULT 0,
@@ -72,6 +84,14 @@ CREATE TABLE IF NOT EXISTS promotores (
   municipio            TEXT,
   empresa_tentativa    TEXT,
   mensaje              TEXT,
+  -- Borrador del stand tal y como lo escribió el promotor al inscribirse.
+  stand_nombre         TEXT,
+  stand_region         TEXT,
+  stand_direccion      TEXT,
+  stand_descripcion    TEXT,
+  stand_nit            TEXT,
+  stand_sitio_web      TEXT,
+  logo_path            TEXT,
   estado               TEXT NOT NULL DEFAULT 'pendiente'
                        CHECK (estado IN ('pendiente','verificado','activo','rechazado','suspendido')),
   password_hash        TEXT,
@@ -125,6 +145,32 @@ CREATE TABLE IF NOT EXISTS productos (
   updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_producto_promotor ON productos(promotor_id);
+
+-- Caracterización de visitantes ---------------------------------------------
+-- Datos que el propio visitante aporta OPCIONALMENTE desde su perfil. Ninguno
+-- es obligatorio y todos admiten "prefiero no decir", como exige tratar datos
+-- sensibles (Ley 1581/2012, art. 6: etnia y discapacidad son especiales).
+CREATE TABLE IF NOT EXISTS visitantes (
+  correo         TEXT PRIMARY KEY,
+  nombre         TEXT,
+  telefono       TEXT,
+  genero         TEXT CHECK (genero IS NULL OR genero IN ('hombre','mujer','otro','prefiero_no_decir')),
+  rango_edad     TEXT CHECK (rango_edad IS NULL OR rango_edad IN ('menor_18','18_25','26_35','36_45','46_60','mayor_60','prefiero_no_decir')),
+  pais           TEXT,
+  departamento   TEXT,
+  municipio      TEXT,
+  tipo_visitante TEXT CHECK (tipo_visitante IS NULL OR tipo_visitante IN ('publica','privada','academica','gremio','particular','otro','prefiero_no_decir')),
+  entidad        TEXT,
+  grupo_etnico   TEXT CHECK (grupo_etnico IS NULL OR grupo_etnico IN ('indigena','afrodescendiente','raizal','palenquero','rrom','ninguno','prefiero_no_decir')),
+  discapacidad   TEXT CHECK (discapacidad IS NULL OR discapacidad IN ('fisica','visual','auditiva','intelectual','psicosocial','multiple','ninguna','prefiero_no_decir')),
+  expectativa    TEXT,
+  como_se_entero TEXT CHECK (como_se_entero IS NULL OR como_se_entero IN ('redes','radio','television','prensa','voz_a_voz','institucion','otro')),
+  primera_visita INTEGER,
+  acepta_datos   INTEGER NOT NULL DEFAULT 0,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_visitante_municipio ON visitantes(municipio);
 
 -- Bitácora de correos salientes ---------------------------------------------
 CREATE TABLE IF NOT EXISTS emails_log (

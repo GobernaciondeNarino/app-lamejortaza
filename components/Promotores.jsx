@@ -26,76 +26,9 @@ const EstadoPill = ({ estado }) => {
   );
 };
 
-// Traducción de los códigos de error del backend a español llano.
-const ERRORES = {
-  email_invalido: "El correo no es válido.",
-  nombre_invalido: "Escribe tu nombre completo.",
-  debe_aceptar_tratamiento_datos: "Debes autorizar el tratamiento de tus datos para continuar.",
-  invalid_credentials: "Usuario o contraseña incorrectos.",
-  cuenta_bloqueada: "Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.",
-  cuenta_suspendida: "Tu cuenta está suspendida. Comunícate con el equipo organizador.",
-  solicitud_rechazada: "Tu solicitud no fue aprobada.",
-  pendiente_de_verificacion: "Tu solicitud aún está en revisión.",
-  password_expirada: "La contraseña temporal caducó. Pide al organizador que te la reenvíe.",
-  password_actual_incorrecta: "La contraseña actual no coincide.",
-  password_corta: "La contraseña debe tener al menos 10 caracteres.",
-  password_larga: "La contraseña es demasiado larga.",
-  password_simple: "Combina mayúsculas, minúsculas, números y símbolos.",
-  password_predecible: "Evita tu nombre, tu correo o palabras del festival.",
-  password_repetida: "La nueva contraseña debe ser distinta de la actual.",
-  password_change_required: "Primero debes cambiar tu contraseña temporal.",
-  rate_limited: "Demasiadas solicitudes seguidas. Espera un momento.",
-  nombre_empresa_invalido: "El nombre de la empresa es obligatorio.",
-  nombre_producto_invalido: "El nombre del producto es obligatorio.",
-  altura_invalida: "La altura debe estar entre 0 y 6000 msnm.",
-  precio_invalido: "El precio no es válido.",
-  limite_productos: "Alcanzaste el máximo de 30 productos.",
-  registra_la_empresa_primero: "Guarda primero los datos de tu empresa.",
-  archivo_muy_grande: "La imagen supera el tamaño máximo (3 MB).",
-  no_es_imagen: "El archivo no es una imagen válida.",
-  formato_no_permitido: "Sólo se aceptan imágenes JPG, PNG o WEBP.",
-  imagen_muy_pequena: "La imagen es demasiado pequeña.",
-  archivo_ausente: "Selecciona un archivo.",
-  unauthorized: "Tu sesión expiró. Vuelve a entrar.",
-  not_found: "No encontrado.",
-  ya_verificado: "Este promotor ya estaba verificado.",
-  sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
-  stand_no_existe: "Ese stand no existe.",
-  estado_invalido: "Ese cambio de estado no es válido.",
-  estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
-  bad_id: "El identificador no es válido. Recarga la página.",
-  bad_json: "Los datos enviados no son válidos. Recarga la página.",
-  password_invalida: "La contraseña no es válida.",
-  payload_too_large: "El contenido es demasiado grande.",
-  // Estos tres no son errores del usuario sino del despliegue, y antes caían
-  // todos en un "No fue posible completar la acción" que no decía nada. El
-  // administrador necesita saber dónde mirar.
-  origin_not_allowed:
-    "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
-  csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
-  internal_error:
-    "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado.",
-};
-const mensajeError = (e, porDefecto) => {
-  const code = String((e && (e.code || e.message)) || e || "");
-  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
-  // Si el código es desconocido, mostrarlo: un mensaje genérico obliga a
-  // adivinar, y quien administra el festival no tiene acceso a los logs.
-  const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
-  return (porDefecto || "Ocurrió un error.") + (limpio ? ` (código: ${limpio})` : "");
-};
+// ERRORES, mensajeError y Aviso viven en components/Shared.jsx (los comparte el
+// módulo de cuentas de administración).
 
-const Aviso = ({ tipo = "error", children }) => {
-  if (!children) return null;
-  const color = tipo === "ok" ? "var(--good)" : tipo === "info" ? "var(--ink-2)" : "var(--bad)";
-  return (
-    <div role={tipo === "error" ? "alert" : "status"} style={{
-      marginTop: 14, padding: "10px 12px", fontSize: 13, lineHeight: 1.5,
-      border: `1px solid ${color}`, color, borderRadius: "var(--r-sm)",
-      background: `color-mix(in oklch, ${color} 6%, var(--paper))`,
-    }}>{children}</div>
-  );
-};
 
 // ---------------------------------------------------------------------------
 // 1. Inscripción pública

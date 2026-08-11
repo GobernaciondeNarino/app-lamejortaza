@@ -83,6 +83,11 @@ input, textarea, select { font-family: inherit; color: inherit; }
 }
 .field input:focus, .field textarea:focus { border-bottom-color: var(--ink); }
 .field textarea { resize: vertical; min-height: 60px; }
+/* Texto de ayuda bajo un campo: qué formato, qué tamaño, para qué sirve. */
+.field .ayuda {
+  font-size: 12px; line-height: 1.5; color: var(--ink-3);
+  text-transform: none; letter-spacing: 0;
+}
 
 /* Divider con estrellita */
 .divider-stamp {
@@ -337,8 +342,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 /* Objetivos táctiles: 44px es el mínimo cómodo con el dedo. */
 @media (pointer: coarse) {
-  .btn { min-height: 44px; }
-  button, a.btn { touch-action: manipulation; }
+  /* `select` incluido: los desplegables de perfil y de estado quedaban en 35px
+     de alto y con el dedo se fallaba al primer intento. */
+  .btn, button, select { min-height: 44px; }
+  button, a.btn, select { touch-action: manipulation; }
 }
 
 /* iOS hace zoom automático al enfocar un input de menos de 16px. Ese zoom

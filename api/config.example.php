@@ -100,6 +100,7 @@ return [
         'promotor_registro' => ['window' => 3600, 'max' => 5],  // 5 inscripciones / hora / IP
         'promotor_login'    => ['window' => 900, 'max' => 15],  // 15 intentos / 15 min / IP
         'promotor_upload'   => ['window' => 3600, 'max' => 60], // 60 imágenes / hora / promotor
+        'promotor_logo_publico' => ['window' => 3600, 'max' => 10], // logos en la inscripción (sin sesión)
         'global'            => ['window' => 60,  'max' => 120], // anti-flood
     ],
 

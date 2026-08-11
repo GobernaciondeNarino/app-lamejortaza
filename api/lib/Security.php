@@ -201,9 +201,23 @@ final class Security
         }
     }
 
-    public static function requireAdmin(): void
+    /**
+     * Exige una sesión de administrador vigente.
+     *
+     * Igual que con los promotores, quien entra con la contraseña temporal que
+     * le llegó por correo no puede hacer nada más que cambiarla: la clave viajó
+     * en claro por el correo institucional y hasta que se sustituya la cuenta se
+     * considera prestada. El endpoint del cambio pasa
+     * $permitirClaveTemporal = true; ocultarlo sólo en la interfaz dejaba la API
+     * abierta a cualquiera con la contraseña del correo.
+     */
+    public static function requireAdmin(bool $permitirClaveTemporal = false): void
     {
         if (!Session::isAdmin()) Response::error(401, 'unauthorized');
+        if (!$permitirClaveTemporal) {
+            $u = Session::user();
+            if (!empty($u['must_change'])) Response::error(403, 'password_change_required');
+        }
     }
 
     /**

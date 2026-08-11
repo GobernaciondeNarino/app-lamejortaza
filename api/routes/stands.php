@@ -105,7 +105,7 @@ function register_routes_stands(\LMT\Router $r): void
  */
 function stand_row_to_api(array $r): array
 {
-    $esAdmin = \LMT\Session::isAdmin();
+    $esAdmin = \LMT\Session::isAdminPleno();
     return [
         'id'          => $r['id'],
         'nombre'      => $r['nombre'],
