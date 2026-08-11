@@ -183,7 +183,7 @@ const ayudaImagen = (cuadrada) => {
     + (cuadrada ? " Si no es cuadrada se verá recortada." : "");
 };
 
-const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, ayuda }) => {
+const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, ayuda, ruta, almacen }) => {
   const ref = React.useRef(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -237,7 +237,16 @@ const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, 
         display: "flex", alignItems: "center", gap: 14, background: "var(--paper-2)", flexWrap: "wrap",
       }}>
         {actual
-          ? <img src={actual} alt={etiqueta} style={{ height: alto, width: alto, objectFit: "cover", borderRadius: "var(--r-sm)", background: "var(--paper)" }}/>
+          ? (
+            // La miniatura recorta al centro para que la rejilla no baile; el
+            // enlace abre el archivo tal cual quedó guardado, que es la única
+            // forma de comprobar de verdad qué se subió.
+            <a href={actual} target="_blank" rel="noopener" title="Abrir la imagen guardada"
+              style={{ display: "block", flex: "0 0 auto" }}>
+              <img src={actual} alt={etiqueta}
+                style={{ height: alto, width: alto, objectFit: "cover", borderRadius: "var(--r-sm)", background: "var(--paper)", border: "1px solid var(--line)" }}/>
+            </a>
+          )
           : <Placeholder width={alto} height={alto} label="sin imagen"/>}
         <div style={{ flex: 1, minWidth: 180 }}>
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => ref.current && ref.current.click()}>
@@ -246,6 +255,12 @@ const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, 
           <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5, color: "var(--ink-3)" }}>
             {ayuda || ayudaImagen(cuadrada)}
           </div>
+          {actual && ruta && (
+            <div className="ruta" style={{ marginTop: 8 }}>
+              Archivo: {ruta}
+              {almacen && <><br/>En el servidor: {almacen.replace(/\/$/, "")}/{String(ruta).replace(/^uploads\//, "")}</>}
+            </div>
+          )}
           <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" onChange={elegir} style={{ display: "none" }}/>
         </div>
       </div>

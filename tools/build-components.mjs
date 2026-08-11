@@ -26,6 +26,7 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 // siguientes los usan. App.jsx va al final porque monta React.
 const ARCHIVOS = [
   'components/Shared.jsx',
+  'components/Mapa.jsx',
   'components/Admin.jsx',
   'components/QRPrint.jsx',
   'components/VoteFlow.jsx',
@@ -35,6 +36,7 @@ const ARCHIVOS = [
   'components/Cuentas.jsx',
   'components/Perfil.jsx',
   'components/Caracterizacion.jsx',
+  'components/Correo.jsx',
   'components/App.jsx',
 ];
 

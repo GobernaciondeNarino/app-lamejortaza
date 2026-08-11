@@ -72,6 +72,10 @@ function register_routes_promotores(\LMT\Router $r): void
         $standNit     = Validate::documento($b['stand_nit'] ?? null);
         $standWeb     = Validate::url($b['stand_sitio_web'] ?? null, 255);
         $logo         = promotor_logo_reclamado($b['logo'] ?? null);
+        // Punto elegido en el mapa. Fuera de Nariño no se guarda: sólo puede
+        // venir de un error, y un punto en otro continente ensucia el mapa del
+        // festival sin que nadie se dé cuenta.
+        [$standLat, $standLng] = promotor_coordenadas($b['lat'] ?? null, $b['lng'] ?? null);
 
         if (!$email)  Response::error(422, 'email_invalido');
         if (!$nombre) Response::error(422, 'nombre_invalido');
@@ -95,10 +99,11 @@ function register_routes_promotores(\LMT\Router $r): void
                 'INSERT INTO promotores (email, nombre, documento, telefono, municipio,
                                          empresa_tentativa, mensaje, stand_nombre, stand_region,
                                          stand_direccion, stand_descripcion, stand_nit,
-                                         stand_sitio_web, logo_path, estado, acepta_datos, ip_hash,
+                                         stand_sitio_web, logo_path, stand_lat, stand_lng,
+                                         estado, acepta_datos, ip_hash,
                                          created_at, updated_at)
                  VALUES (:e, :n, :doc, :tel, :mun, :emp, :msg, :sn, :sr, :sd, :sdesc, :snit,
-                         :sweb, :logo, \'pendiente\', 1, :ip,
+                         :sweb, :logo, :slat, :slng, \'pendiente\', 1, :ip,
                          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
             );
             $ins->execute([
@@ -116,6 +121,8 @@ function register_routes_promotores(\LMT\Router $r): void
                 ':snit'  => $standNit,
                 ':sweb'  => $standWeb,
                 ':logo'  => $logo,
+                ':slat'  => $standLat,
+                ':slng'  => $standLng,
                 ':ip'    => RateLimit::ipHash(),
             ]);
         } catch (\PDOException $e) {
@@ -782,7 +789,8 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
     $sel = $pdo->prepare(
         'SELECT stand_id, nombre, documento, telefono, municipio, email,
                 stand_nombre, stand_region, stand_direccion, stand_descripcion,
-                stand_nit, stand_sitio_web, logo_path, empresa_tentativa
+                stand_nit, stand_sitio_web, logo_path, stand_lat, stand_lng,
+                empresa_tentativa
          FROM promotores WHERE id = :id'
     );
     $sel->execute([':id' => $promotorId]);
@@ -804,6 +812,9 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
         ':nit'    => $p['stand_nit'] ?: null,
         ':web'    => $p['stand_sitio_web'] ?: null,
         ':logo'   => promotor_ruta_publica($p['logo_path'] ?? null),
+        ':tel'    => $p['telefono'] ?: null,
+        ':lat'    => $p['stand_lat'] !== null ? (float) $p['stand_lat'] : null,
+        ':lng'    => $p['stand_lng'] !== null ? (float) $p['stand_lng'] : null,
     ];
 
     if (!empty($p['stand_id'])) {
@@ -811,6 +822,7 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
             'UPDATE stands SET nombre=:nombre, municipio=:mun, region=:reg, direccion=:dir,
                                correo=:correo, descripcion=:desc, propietario=:prop,
                                propietario_documento=:propdoc, nit=:nit, sitio_web=:web,
+                               telefono=:tel, lat=COALESCE(:lat, lat), lng=COALESCE(:lng, lng),
                                logo_path=COALESCE(:logo, logo_path)
              WHERE id=:id'
         )->execute($datos + [':id' => $p['stand_id']]);
@@ -821,9 +833,9 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
     $pdo->prepare(
         'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
                              propietario, propietario_documento, nit, sitio_web, logo_path,
-                             coords_x, coords_y, color)
+                             telefono, lat, lng, coords_x, coords_y, color)
          VALUES (:id, :nombre, :mun, :reg, :dir, :correo, :desc, :prop, :propdoc, :nit, :web,
-                 :logo, 0.5, 0.5, :color)'
+                 :logo, :tel, :lat, :lng, 0.5, 0.5, :color)'
     )->execute($datos + [':id' => $id, ':color' => promotor_color_stand($id)]);
 
     return ['id' => $id, 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun']];
@@ -947,6 +959,19 @@ function promotor_logo_reclamado($valor): ?string
     if (!preg_match('#^uploads/inscripciones/[0-9a-f]{32}\.(jpg|png|webp)$#', $valor)) return null;
     $abs = Uploads::raiz() . '/' . substr($valor, strlen('uploads/'));
     return is_file($abs) ? $valor : null;
+}
+
+/**
+ * Coordenadas del stand. Se aceptan sólo dentro del rectángulo que envuelve a
+ * Nariño (con un margen): cualquier otra cosa es un error del cliente y
+ * ensuciaría el mapa del festival sin que nadie lo note.
+ */
+function promotor_coordenadas($lat, $lng): array
+{
+    if (!is_numeric($lat) || !is_numeric($lng)) return [null, null];
+    $la = (float) $lat; $lo = (float) $lng;
+    if ($la < 0.2 || $la > 2.9 || $lo < -79.3 || $lo > -76.5) return [null, null];
+    return [round($la, 6), round($lo, 6)];
 }
 
 /** Ruta de imagen lista para el cliente, o null si no hay o no es válida. */

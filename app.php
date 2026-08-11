@@ -40,7 +40,7 @@ header('Cache-Control: no-store, must-revalidate');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=(self), interest-cohort=()');
 
 $cfg = include __DIR__ . '/api/config.php';
 $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
@@ -76,7 +76,7 @@ $bundle      = __DIR__ . '/js/components.build.js';
 $usarBundle  = is_file($bundle);
 $bundleVersion = $usarBundle ? (string) filemtime($bundle) : '';
 
-$componentes = ['Shared', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'Cuentas', 'Perfil', 'Caracterizacion', 'App'];
+$componentes = ['Shared', 'Mapa', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'Cuentas', 'Perfil', 'Caracterizacion', 'Correo', 'App'];
 
 // ¿El bundle quedó viejo respecto a algún .jsx? Es el único fallo de este
 // esquema y es silencioso, así que lo detectamos explícitamente.

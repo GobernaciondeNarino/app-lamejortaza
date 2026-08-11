@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS stands (
   nit           VARCHAR(32)  DEFAULT NULL,
   sitio_web     VARCHAR(255) DEFAULT NULL,
   logo_path     VARCHAR(255) DEFAULT NULL,
+  telefono      VARCHAR(32)  DEFAULT NULL,
+  -- Ubicación geográfica del stand, elegida en el mapa de la inscripción.
+  lat           DECIMAL(9,6) DEFAULT NULL,
+  lng           DECIMAL(9,6) DEFAULT NULL,
   votos_bueno   INT UNSIGNED NOT NULL DEFAULT 0,
   votos_regular INT UNSIGNED NOT NULL DEFAULT 0,
   votos_malo    INT UNSIGNED NOT NULL DEFAULT 0,
@@ -112,6 +116,8 @@ CREATE TABLE IF NOT EXISTS promotores (
   stand_nit            VARCHAR(32)  DEFAULT NULL,
   stand_sitio_web      VARCHAR(255) DEFAULT NULL,
   logo_path            VARCHAR(255) DEFAULT NULL,
+  stand_lat            DECIMAL(9,6) DEFAULT NULL,
+  stand_lng            DECIMAL(9,6) DEFAULT NULL,
   estado               ENUM('pendiente','verificado','activo','rechazado','suspendido')
                        NOT NULL DEFAULT 'pendiente',
   password_hash        VARCHAR(255) DEFAULT NULL,
@@ -196,6 +202,14 @@ CREATE TABLE IF NOT EXISTS visitantes (
   created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_visitante_municipio (municipio)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Ajustes que se cambian desde el panel (correo, etc.). Lo que hay aquí pisa a
+-- api/config.php clave a clave; si la fila no existe, manda el fichero.
+CREATE TABLE IF NOT EXISTS ajustes (
+  clave      VARCHAR(64) NOT NULL PRIMARY KEY,
+  valor      TEXT NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bitácora de correos salientes ---------------------------------------------

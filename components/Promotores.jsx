@@ -44,6 +44,7 @@ const PromotorRegistroPage = () => {
     stand_nit: "", stand_sitio_web: "",
   };
   const [form, setForm] = React.useState(vacio);
+  const [ubicacion, setUbicacion] = React.useState({ lat: null, lng: null });
   const [logo, setLogo] = React.useState("");        // ruta devuelta por el servidor
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -74,6 +75,8 @@ const PromotorRegistroPage = () => {
         stand_nombre: form.stand_nombre.trim() || form.empresa.trim(),
         email: sec.normalizeEmail(form.email),
         logo: logo || null,
+        lat: ubicacion.lat,
+        lng: ubicacion.lng,
         acepta_datos: true,
       });
       setEnviado(true);
@@ -188,7 +191,23 @@ const PromotorRegistroPage = () => {
               actual={logo ? urlImagen(logo) : ""}
               etiqueta="Logo de tu producto"
               cuadrada
+              ruta={logo}
               onSubir={subirLogo}/>
+          </BloqueForm>
+
+          <BloqueForm titulo="¿Dónde estás?"
+            nota="Toca el mapa de Nariño donde queda tu finca o tu negocio. Al marcarlo se
+                  completa solo el municipio. Es opcional, pero ayuda a los visitantes a
+                  encontrarte y al festival a saber de qué zonas viene el café.">
+            <SelectorUbicacion
+              lat={ubicacion.lat} lng={ubicacion.lng} municipio={form.municipio}
+              alto={320}
+              onCambio={(u) => {
+                setUbicacion({ lat: u.lat, lng: u.lng });
+                // El municipio sale del propio mapa: es más fiable que
+                // escribirlo a mano y evita «Pasto» / «San Juan de Pasto».
+                if (u.municipio) set("municipio", u.municipio);
+              }}/>
           </BloqueForm>
 
           <div className="field">
@@ -614,7 +633,8 @@ const EmpresaEditor = ({ empresa, logoUrl, onGuardar, onLogo }) => {
       </div>
 
       {empresa
-        ? <SubirImagen actual={logoUrl} etiqueta="Logo del producto o de la empresa" cuadrada onSubir={onLogo}/>
+        ? <SubirImagen actual={logoUrl} etiqueta="Logo del producto o de la empresa" cuadrada
+            ruta={empresa && empresa.logo} onSubir={onLogo}/>
         : <Aviso tipo="info">Guarda los datos y después podrás subir el logo.</Aviso>}
 
       <Aviso>{error}</Aviso>

@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS stands (
   nit           TEXT,
   sitio_web     TEXT,
   logo_path     TEXT,
+  telefono      TEXT,
+  -- Ubicación geográfica del stand, elegida en el mapa de la inscripción.
+  lat           REAL,
+  lng           REAL,
   votos_bueno   INTEGER NOT NULL DEFAULT 0,
   votos_regular INTEGER NOT NULL DEFAULT 0,
   votos_malo    INTEGER NOT NULL DEFAULT 0,
@@ -92,6 +96,8 @@ CREATE TABLE IF NOT EXISTS promotores (
   stand_nit            TEXT,
   stand_sitio_web      TEXT,
   logo_path            TEXT,
+  stand_lat            REAL,
+  stand_lng            REAL,
   estado               TEXT NOT NULL DEFAULT 'pendiente'
                        CHECK (estado IN ('pendiente','verificado','activo','rechazado','suspendido')),
   password_hash        TEXT,
@@ -171,6 +177,14 @@ CREATE TABLE IF NOT EXISTS visitantes (
   updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_visitante_municipio ON visitantes(municipio);
+
+-- Ajustes que se cambian desde el panel (correo, etc.). Lo que hay aquí pisa a
+-- api/config.php clave a clave; si la fila no existe, manda el fichero.
+CREATE TABLE IF NOT EXISTS ajustes (
+  clave      TEXT PRIMARY KEY,
+  valor      TEXT NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Bitácora de correos salientes ---------------------------------------------
 CREATE TABLE IF NOT EXISTS emails_log (

@@ -16,6 +16,7 @@ Gobernación de Nariño.
    - [Promotores de stands](#1bis-promotores-de-stands)
    - [Cuentas de administración](#1ter-cuentas-de-administración)
    - [Perfil del visitante](#1quater-perfil-del-visitante)
+   - [Correo saliente](#1quinquies-correo-saliente)
 2. [Arquitectura](#2-arquitectura)
 3. [Requisitos](#3-requisitos)
 4. [Instalación local](#4-instalación-local)
@@ -95,10 +96,24 @@ Módulo completo de inscripción para quienes exhiben en el festival.
 
 1. El caficultor entra a `/inscripcion` y envía **todos los datos de su stand**
    —él y su stand son la misma cosa—: nombre y documento del propietario,
-   empresa, nombre del stand, municipio, región, dirección, NIT, sitio web,
-   descripción y el **logo de su producto** (cuadrado, máx. 1600×1600 px y
-   3 MB). Queda `pendiente`. Recibe un acuse por correo; los administradores
-   reciben un aviso.
+   teléfono, empresa, nombre del stand, municipio, región, dirección, NIT,
+   sitio web, descripción, el **logo de su producto** (cuadrado, máx.
+   1600×1600 px y 3 MB) y la **ubicación marcada en el mapa de Nariño**. Queda
+   `pendiente`. Recibe un acuse por correo; los administradores reciben un aviso.
+
+   El formulario público y el alta interna (`/admin/stands/new`) piden **los
+   mismos trece datos**; sólo el identificador del stand, el color de su sello y
+   su posición dentro del recinto son internos, porque el promotor no puede
+   saberlos. Hay una prueba que lo comprueba en los dos sentidos abriendo ambos
+   formularios en un navegador.
+
+   El mapa es propio: los 64 municipios del DANE ya vienen dibujados en
+   `js/narino-municipios.js`. No se cargan teselas de Google ni de
+   OpenStreetMap, que obligarían a abrir la política de seguridad a dominios
+   ajenos y le contarían a un tercero quién se está inscribiendo. Al tocar el
+   mapa se rellena solo el municipio (el navegador resuelve qué polígono
+   contiene el punto), y desde un teléfono en la finca el botón «usar mi
+   ubicación» lo hace en un toque.
 2. Un organizador la revisa en `/admin/promotores` y pulsa
    **«Verificar y enviar clave»**. En ese momento —y sólo entonces— el sistema
    genera una contraseña temporal fuerte, guarda su hash (Argon2id + pepper),
@@ -184,6 +199,40 @@ desde la misma página sin perder su voto ni su pasaporte.
 El panel lo resume en `/admin/caracterización` — sólo agregados, nunca correos
 ni nombres— y lo exporta completo en `api/export/visitantes.csv`, que sí lleva
 datos personales y es responsabilidad de quien lo descarga.
+
+---
+
+## 1.quinquies. Correo saliente
+
+`/admin/correo` — configuración, diagnóstico y prueba real.
+
+De aquí salen las contraseñas de los promotores, el QR de su stand y los enlaces
+del perfil de los visitantes. Es la pieza más frágil del sistema y la única que
+falla **en silencio**, así que el panel es explícito sobre lo que está pasando:
+
+| Transporte | Qué hace |
+|---|---|
+| `smtp` | Envío autenticado contra el servidor institucional. **Es el recomendado.** |
+| `mail` | La función `mail()` de PHP. Devuelve éxito en cuanto el servidor local acepta el mensaje: eso **no** es entrega. |
+| `log` | Escribe el mensaje en un archivo y **no envía nada**. Sólo para desarrollo. |
+
+Si «el sistema dice que envió el correo pero no llega», la causa está casi
+siempre en esa tabla: con `log` no salió nunca, y con `mail` sale de una IP que
+no está autorizada a enviar en nombre del dominio del remitente, así que el
+servidor de destino lo descarta o lo manda a spam. El panel avisa de las dos
+cosas en rojo, deja mandarse una prueba de verdad y enseña el diálogo completo
+con el servidor SMTP cuando falla, con la contraseña tapada.
+
+La configuración se guarda en la tabla `ajustes` y **pisa a la de
+`api/config.php`** clave a clave, así que se cambia desde el navegador sin FTP.
+No se reescribe `config.php` a propósito: un fichero PHP que la aplicación
+regenera con datos de un formulario está a un paso de ser ejecución de código, y
+además el usuario del servidor web casi nunca puede escribir ahí. La contraseña
+del SMTP se guarda cifrada (libsodium, o AES-256-GCM) con una clave derivada de
+`app_secret`, y no vuelve a salir del servidor.
+
+El asistente de instalación tiene un paso dedicado (5·Correo) que configura
+**y envía una prueba** antes de dar la instalación por terminada.
 
 ---
 
@@ -383,6 +432,7 @@ php -r "echo bin2hex(random_bytes(32)) . PHP_EOL;"   # ejecuta dos veces
 | `productos`   | Cafés que expone cada promotor.                            |
 | `visitantes`  | Caracterización voluntaria del público (Ley 1581/2012).    |
 | `emails_log`  | Bitácora de correos salientes.                             |
+| `ajustes`     | Configuración editable desde el panel (correo). Pisa a `api/config.php`. |
 | `rate_limits` | Ventanas fijas por (bucket, hash) para limitar requests.  |
 
 Esquema completo en [`db/schema.mysql.sql`](db/schema.mysql.sql) y
@@ -399,9 +449,9 @@ php db/migrate.php --dry-run   # enseña lo que haría, sin tocar nada
 php db/migrate.php             # lo aplica
 ```
 
-Añade las columnas nuevas de `admins`, `stands` y `promotores`, crea la tabla
-`visitantes` y asigna el perfil `propietario` a la cuenta de administración más
-antigua. Ejecútalo **antes** de subir el código nuevo o justo después; mientras
+Añade las columnas nuevas de `admins`, `stands` (incluidas `telefono`, `lat` y
+`lng`) y `promotores`, crea las tablas `visitantes` y `ajustes`, y asigna el
+perfil `propietario` a la cuenta de administración más antigua. Ejecútalo **antes** de subir el código nuevo o justo después; mientras
 tanto el login sigue funcionando (cae a un `SELECT` reducido), pero el módulo de
 cuentas y el de visitantes no.
 
@@ -543,6 +593,11 @@ Todas las respuestas usan `application/json` y la forma:
 | `POST`  | `/api/visitantes/enlace`      | público*     | Manda el enlace del perfil al buzón. |
 | `GET`   | `/api/admin/visitantes/resumen` | admin      | Sólo agregados, sin correos.       |
 | `GET`   | `/api/admin/visitantes/expectativas` | admin | Texto libre, últimas 100.          |
+| **Correo** | | | |
+| `GET`   | `/api/admin/correo`           | admin        | Configuración efectiva + diagnóstico. |
+| `PUT/DELETE` | `/api/admin/correo`      | propietario  | Guardar o volver a la del archivo. |
+| `POST`  | `/api/admin/correo/prueba`    | admin        | Envía una prueba y devuelve el diálogo SMTP. |
+| `GET`   | `/api/admin/uploads`          | admin        | Dónde se guardan las imágenes y si la carpeta es escribible. |
 | **QR** | | | |
 | `GET`   | `/api/qr/{id}.png`            | público      | PNG del QR de un stand.            |
 
@@ -696,7 +751,9 @@ la-mejor-taza/
 │   ├── Passport.jsx           # PassportPage real (libreta del usuario)
 │   ├── Dashboard.jsx          # PublicDashboard + MapaNarino + PublicDetail
 │   ├── Promotores.jsx         # inscripción, portal del promotor, revisión
+│   ├── Mapa.jsx               # selector de ubicación sobre el mapa de Nariño
 │   ├── Cuentas.jsx            # cuentas de administración + cambio de clave
+│   ├── Correo.jsx             # configuración, diagnóstico y prueba de envío
 │   ├── Perfil.jsx             # perfil del visitante (/perfil)
 │   └── Caracterizacion.jsx    # resumen del público en el panel
 ├── js/
@@ -722,6 +779,7 @@ la-mejor-taza/
 │   │   ├── Mailer.php         # SMTP / mail() / log, con adjuntos incrustados
 │   │   ├── Correos.php        # plantillas HTML+texto de cada correo
 │   │   ├── Uploads.php        # imágenes: valida, recodifica y guarda
+│   │   ├── Ajustes.php        # config editable desde el panel, con secretos cifrados
 │   │   └── Router.php
 │   └── routes/
 │       ├── auth.php
@@ -733,7 +791,8 @@ la-mejor-taza/
 │       ├── qr.php
 │       ├── promotores.php
 │       ├── administradores.php
-│       └── visitantes.php
+│       ├── visitantes.php
+│       └── correo.php
 ├── db/
 │   ├── schema.mysql.sql
 │   ├── schema.sqlite.sql

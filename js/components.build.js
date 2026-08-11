@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 6a1f965362635180
+// Huella de las fuentes: 9089d38806e8cb35
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -316,7 +316,9 @@ const SubirImagen = ({
   etiqueta,
   alto = 120,
   cuadrada = false,
-  ayuda
+  ayuda,
+  ruta,
+  almacen
 }) => {
   const ref = React.useRef(null);
   const [busy, setBusy] = React.useState(false);
@@ -375,7 +377,16 @@ const SubirImagen = ({
       background: "var(--paper-2)",
       flexWrap: "wrap"
     }
-  }, actual ? React.createElement("img", {
+  }, actual ? React.createElement("a", {
+    href: actual,
+    target: "_blank",
+    rel: "noopener",
+    title: "Abrir la imagen guardada",
+    style: {
+      display: "block",
+      flex: "0 0 auto"
+    }
+  }, React.createElement("img", {
     src: actual,
     alt: etiqueta,
     style: {
@@ -383,9 +394,10 @@ const SubirImagen = ({
       width: alto,
       objectFit: "cover",
       borderRadius: "var(--r-sm)",
-      background: "var(--paper)"
+      background: "var(--paper)",
+      border: "1px solid var(--line)"
     }
-  }) : React.createElement(Placeholder, {
+  })) : React.createElement(Placeholder, {
     width: alto,
     height: alto,
     label: "sin imagen"
@@ -406,7 +418,12 @@ const SubirImagen = ({
       lineHeight: 1.5,
       color: "var(--ink-3)"
     }
-  }, ayuda || ayudaImagen(cuadrada)), React.createElement("input", {
+  }, ayuda || ayudaImagen(cuadrada)), actual && ruta && React.createElement("div", {
+    className: "ruta",
+    style: {
+      marginTop: 8
+    }
+  }, "Archivo: ", ruta, almacen && React.createElement(React.Fragment, null, React.createElement("br", null), "En el servidor: ", almacen.replace(/\/$/, ""), "/", String(ruta).replace(/^uploads\//, ""))), React.createElement("input", {
     ref: ref,
     type: "file",
     accept: "image/jpeg,image/png,image/webp",
@@ -513,6 +530,236 @@ Object.assign(window, {
 });
 })();
 
+/* components/Mapa.jsx */
+(function () {
+const MAPA_NARINO = () => window.NARINO_MAPA || null;
+const mapaDimensiones = mapa => {
+  const [,, w, h] = (mapa.viewBox || "0 0 1000 1068").split(" ").map(Number);
+  return {
+    w,
+    h
+  };
+};
+const puntoAGeo = (mapa, x, y) => {
+  const {
+    w,
+    h
+  } = mapaDimensiones(mapa);
+  const b = mapa.bounds;
+  return {
+    lng: b.lonMin + x / w * (b.lonMax - b.lonMin),
+    lat: b.latMax - y / h * (b.latMax - b.latMin)
+  };
+};
+const geoAPunto = (mapa, lat, lng) => {
+  const {
+    w,
+    h
+  } = mapaDimensiones(mapa);
+  const b = mapa.bounds;
+  return {
+    x: (lng - b.lonMin) / (b.lonMax - b.lonMin) * w,
+    y: (b.latMax - lat) / (b.latMax - b.latMin) * h
+  };
+};
+const municipioEnPunto = (svg, mapa, x, y) => {
+  if (svg && svg.createSVGPoint) {
+    const pt = svg.createSVGPoint();
+    pt.x = x;
+    pt.y = y;
+    const trazos = svg.querySelectorAll("path[data-muni]");
+    for (const path of trazos) {
+      try {
+        if (path.isPointInFill(pt)) {
+          return mapa.municipios.find(m => m.id === path.getAttribute("data-muni")) || null;
+        }
+      } catch (_) {}
+    }
+  }
+  let mejor = null,
+    mejorD = Infinity;
+  mapa.municipios.forEach(m => {
+    const d = (m.cx - x) ** 2 + (m.cy - y) ** 2;
+    if (d < mejorD) {
+      mejorD = d;
+      mejor = m;
+    }
+  });
+  return mejor;
+};
+const SelectorUbicacion = ({
+  lat,
+  lng,
+  municipio,
+  onCambio,
+  alto = 380,
+  soloLectura = false
+}) => {
+  const mapa = MAPA_NARINO();
+  const svgRef = React.useRef(null);
+  const [aviso, setAviso] = React.useState("");
+  const [buscando, setBuscando] = React.useState(false);
+  if (!mapa || !mapa.bounds) {
+    return React.createElement(Aviso, {
+      tipo: "info"
+    }, "El mapa no est\xE1 disponible en este navegador. Puedes continuar sin marcar la ubicaci\xF3n.");
+  }
+  const {
+    w,
+    h
+  } = mapaDimensiones(mapa);
+  const tienePunto = typeof lat === "number" && typeof lng === "number" && !isNaN(lat) && !isNaN(lng);
+  const punto = tienePunto ? geoAPunto(mapa, lat, lng) : null;
+  const marcar = (clienteX, clienteY) => {
+    if (soloLectura) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const caja = svg.getBoundingClientRect();
+    const escala = Math.min(caja.width / w, caja.height / h);
+    const x = (clienteX - caja.left - (caja.width - w * escala) / 2) / escala;
+    const y = (clienteY - caja.top - (caja.height - h * escala) / 2) / escala;
+    if (x < 0 || y < 0 || x > w || y > h) return;
+    const geo = puntoAGeo(mapa, x, y);
+    const muni = municipioEnPunto(svg, mapa, x, y);
+    setAviso("");
+    onCambio({
+      lat: Math.round(geo.lat * 1e6) / 1e6,
+      lng: Math.round(geo.lng * 1e6) / 1e6,
+      municipio: muni ? muni.nombre : ""
+    });
+  };
+  const alTocar = e => {
+    const t = e.touches && e.touches[0] || e.changedTouches && e.changedTouches[0];
+    if (t) marcar(t.clientX, t.clientY);
+  };
+  const usarMiUbicacion = () => {
+    if (!navigator.geolocation) {
+      setAviso("Este navegador no puede darnos tu ubicación.");
+      return;
+    }
+    setBuscando(true);
+    setAviso("");
+    navigator.geolocation.getCurrentPosition(pos => {
+      setBuscando(false);
+      const la = pos.coords.latitude,
+        lo = pos.coords.longitude;
+      if (la < 0.2 || la > 2.9 || lo < -79.3 || lo > -76.5) {
+        setAviso("Tu ubicación actual está fuera de Nariño. Marca el punto en el mapa.");
+        return;
+      }
+      const p = geoAPunto(mapa, la, lo);
+      const muni = municipioEnPunto(svgRef.current, mapa, p.x, p.y);
+      onCambio({
+        lat: Math.round(la * 1e6) / 1e6,
+        lng: Math.round(lo * 1e6) / 1e6,
+        municipio: muni ? muni.nombre : ""
+      });
+    }, err => {
+      setBuscando(false);
+      setAviso(err && err.code === 1 ? "No diste permiso para usar tu ubicación. Marca el punto en el mapa." : "No pudimos obtener tu ubicación. Marca el punto en el mapa.");
+    }, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000
+    });
+  };
+  const activo = municipio ? normMuniSimple(municipio) : "";
+  return React.createElement("div", null, React.createElement("div", {
+    style: {
+      position: "relative",
+      background: "var(--paper-2)",
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      overflow: "hidden"
+    }
+  }, React.createElement("svg", {
+    ref: svgRef,
+    viewBox: mapa.viewBox,
+    preserveAspectRatio: "xMidYMid meet",
+    role: soloLectura ? "img" : "application",
+    "aria-label": soloLectura ? "Ubicación del stand en Nariño" : "Mapa de Nariño: toca para marcar la ubicación",
+    onClick: e => marcar(e.clientX, e.clientY),
+    onTouchEnd: alTocar,
+    style: {
+      display: "block",
+      width: "100%",
+      height: alto,
+      maxHeight: "70dvh",
+      cursor: soloLectura ? "default" : "crosshair",
+      touchAction: "manipulation"
+    }
+  }, mapa.municipios.map(m => {
+    const esActivo = activo && normMuniSimple(m.nombre) === activo;
+    return React.createElement("path", {
+      key: m.id,
+      d: m.d,
+      "data-muni": m.id,
+      fill: esActivo ? "color-mix(in oklch, var(--galeras) 26%, var(--paper))" : "var(--paper)",
+      stroke: "var(--line-2)",
+      strokeWidth: "1",
+      strokeLinejoin: "round"
+    }, React.createElement("title", null, m.nombre));
+  }), punto && React.createElement("g", {
+    transform: `translate(${punto.x} ${punto.y})`,
+    style: {
+      pointerEvents: "none"
+    }
+  }, React.createElement("circle", {
+    r: "26",
+    fill: "var(--galeras)",
+    opacity: "0.18"
+  }), React.createElement("circle", {
+    r: "9",
+    fill: "var(--galeras)",
+    stroke: "var(--paper)",
+    strokeWidth: "3"
+  })))), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap",
+      alignItems: "center",
+      marginTop: 10
+    }
+  }, !soloLectura && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: usarMiUbicacion,
+    disabled: buscando,
+    style: {
+      fontSize: 13,
+      padding: "8px 14px"
+    }
+  }, buscando ? "Buscando…" : "Usar mi ubicación actual"), tienePunto && !soloLectura && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: () => onCambio({
+      lat: null,
+      lng: null,
+      municipio
+    }),
+    style: {
+      fontSize: 13,
+      padding: "8px 14px"
+    }
+  }, "Quitar el punto"), React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)"
+    }
+  }, tienePunto ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "sin ubicación marcada")), aviso && React.createElement(Aviso, {
+    tipo: "info"
+  }, aviso));
+};
+const normMuniSimple = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+Object.assign(window, {
+  SelectorUbicacion,
+  geoAPunto,
+  puntoAGeo,
+  normMuniSimple
+});
+})();
+
 /* components/Admin.jsx */
 (function () {
 const AdminShell = ({
@@ -546,9 +793,14 @@ const AdminShell = ({
     sub: "Caracterización",
     path: "/admin/caracterizacion"
   }, {
+    id: "correo",
+    label: "Correo",
+    sub: "Envío y pruebas",
+    path: "/admin/correo"
+  }, {
     id: "correos",
-    label: "Correos",
-    sub: "Bitácora",
+    label: "Bitácora",
+    sub: "Mensajes enviados",
     path: "/admin/correos"
   }].concat(user && user.rol === "propietario" ? [{
     id: "cuentas",
@@ -878,6 +1130,10 @@ const AdminPage = ({
     active: "correos",
     user: user
   }, React.createElement(AdminCorreos, null));
+  if (section === "correo") return React.createElement(AdminShell, {
+    active: "correo",
+    user: user
+  }, React.createElement(AdminCorreoConfig, null));
   if (section === "caracterizacion") return React.createElement(AdminShell, {
     active: "caracterizacion",
     user: user
@@ -1087,6 +1343,9 @@ const StandEditor = ({
     propietario_documento: "",
     nit: "",
     sitio_web: "",
+    telefono: "",
+    lat: null,
+    lng: null,
     logo: "",
     votos: {
       bueno: 0,
@@ -1102,10 +1361,20 @@ const StandEditor = ({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [almacen, setAlmacen] = React.useState(null);
   const update = (k, v) => setForm(f => ({
     ...f,
     [k]: v
   }));
+  React.useEffect(() => {
+    let vivo = true;
+    window.LMTApi.infoUploads().then(d => {
+      if (vivo) setAlmacen(d);
+    }).catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
   const save = async () => {
     setError("");
     setBusy(true);
@@ -1122,6 +1391,9 @@ const StandEditor = ({
         propietario_documento: form.propietario_documento,
         nit: form.nit,
         sitio_web: form.sitio_web,
+        telefono: form.telefono,
+        lat: form.lat,
+        lng: form.lng,
         logo: form.logo || null,
         coords: form.coords,
         color: form.color
@@ -1226,6 +1498,11 @@ const StandEditor = ({
     onChange: e => update("direccion", e.target.value),
     maxLength: 255
   })), React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 20
+    }
+  }, React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Correo de contacto"), React.createElement("input", {
     type: "email",
@@ -1233,6 +1510,13 @@ const StandEditor = ({
     onChange: e => update("correo", e.target.value),
     maxLength: 254
   })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", null, "Tel\xE9fono"), React.createElement("input", {
+    value: form.telefono,
+    onChange: e => update("telefono", e.target.value),
+    maxLength: 32,
+    inputMode: "tel"
+  }))), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Descripci\xF3n corta"), React.createElement("textarea", {
     value: form.descripcion,
@@ -1281,8 +1565,39 @@ const StandEditor = ({
     actual: urlImagen(form.logo),
     etiqueta: "Logo del producto",
     cuadrada: true,
+    ruta: form.logo,
+    almacen: almacen && almacen.dir,
     onSubir: subirLogo
-  }), React.createElement("div", null, React.createElement("div", {
+  }), almacen && React.createElement("div", {
+    className: "ruta",
+    style: {
+      marginTop: -8
+    }
+  }, "Las im\xE1genes se guardan en ", React.createElement("strong", null, almacen.dir), " · ", "se sirven desde ", React.createElement("strong", null, almacen.url_base), !almacen.escribible && React.createElement("span", {
+    style: {
+      color: "var(--bad)"
+    }
+  }, React.createElement("br", null), "Esa carpeta NO tiene permiso de escritura: las subidas fallar\xE1n."), !almacen.protegida && React.createElement("span", {
+    style: {
+      color: "var(--meh)"
+    }
+  }, React.createElement("br", null), "Falta el .htaccess que impide ejecutar c\xF3digo ah\xED; se crear\xE1 con la pr\xF3xima subida.")), React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "Ubicaci\xF3n en Nari\xF1o"), React.createElement(SelectorUbicacion, {
+    lat: form.lat,
+    lng: form.lng,
+    municipio: form.municipio,
+    alto: 300,
+    onCambio: u => setForm(f => ({
+      ...f,
+      lat: u.lat,
+      lng: u.lng,
+      municipio: u.municipio || f.municipio
+    }))
+  })), React.createElement("div", null, React.createElement("div", {
     className: "mono",
     style: {
       marginBottom: 12
@@ -4244,6 +4559,10 @@ const PromotorRegistroPage = () => {
     stand_sitio_web: ""
   };
   const [form, setForm] = React.useState(vacio);
+  const [ubicacion, setUbicacion] = React.useState({
+    lat: null,
+    lng: null
+  });
   const [logo, setLogo] = React.useState("");
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -4284,6 +4603,8 @@ const PromotorRegistroPage = () => {
         stand_nombre: form.stand_nombre.trim() || form.empresa.trim(),
         email: sec.normalizeEmail(form.email),
         logo: logo || null,
+        lat: ubicacion.lat,
+        lng: ubicacion.lng,
         acepta_datos: true
       });
       setEnviado(true);
@@ -4526,7 +4847,23 @@ const PromotorRegistroPage = () => {
     actual: logo ? urlImagen(logo) : "",
     etiqueta: "Logo de tu producto",
     cuadrada: true,
+    ruta: logo,
     onSubir: subirLogo
+  })), React.createElement(BloqueForm, {
+    titulo: "\xBFD\xF3nde est\xE1s?",
+    nota: "Toca el mapa de Nari\xF1o donde queda tu finca o tu negocio. Al marcarlo se completa solo el municipio. Es opcional, pero ayuda a los visitantes a encontrarte y al festival a saber de qu\xE9 zonas viene el caf\xE9."
+  }, React.createElement(SelectorUbicacion, {
+    lat: ubicacion.lat,
+    lng: ubicacion.lng,
+    municipio: form.municipio,
+    alto: 320,
+    onCambio: u => {
+      setUbicacion({
+        lat: u.lat,
+        lng: u.lng
+      });
+      if (u.municipio) set("municipio", u.municipio);
+    }
   })), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
@@ -5295,6 +5632,7 @@ const EmpresaEditor = ({
     actual: logoUrl,
     etiqueta: "Logo del producto o de la empresa",
     cuadrada: true,
+    ruta: empresa && empresa.logo,
     onSubir: onLogo
   }) : React.createElement(Aviso, {
     tipo: "info"
@@ -7206,6 +7544,481 @@ Object.assign(window, {
 });
 })();
 
+/* components/Correo.jsx */
+(function () {
+const CLAVE_OCULTA = "__sin_cambios__";
+const NIVEL_COLOR = {
+  critico: "var(--bad)",
+  alto: "var(--bad)",
+  medio: "var(--meh)",
+  bajo: "var(--ink-3)"
+};
+const AvisoDiagnostico = ({
+  nivel,
+  children
+}) => {
+  const color = NIVEL_COLOR[nivel] || "var(--ink-2)";
+  return React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+      padding: "12px 14px",
+      borderRadius: "var(--r-sm)",
+      border: `1px solid ${color}`,
+      color,
+      background: `color-mix(in oklch, ${color} 6%, var(--paper))`,
+      fontSize: 13,
+      lineHeight: 1.6
+    }
+  }, React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      flex: "0 0 auto",
+      fontWeight: 700
+    }
+  }, nivel === "critico" ? "!" : nivel === "alto" ? "!" : "·"), React.createElement("span", null, children));
+};
+const TRANSPORTES = [{
+  id: "smtp",
+  titulo: "SMTP autenticado",
+  nota: "Recomendado. El correo sale desde el buzón institucional, autenticado, y no acaba en spam."
+}, {
+  id: "mail",
+  titulo: "Función mail() de PHP",
+  nota: "Depende del servidor de correo local del hosting. Da éxito aunque el mensaje se pierda después."
+}, {
+  id: "log",
+  titulo: "Sólo registrar en un archivo",
+  nota: "NO envía nada. Sirve para probar plantillas sin molestar a nadie."
+}];
+const AdminCorreoConfig = () => {
+  const [datos, setDatos] = React.useState(null);
+  const [form, setForm] = React.useState(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [guardando, setGuardando] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [ok, setOk] = React.useState("");
+  const [destino, setDestino] = React.useState("");
+  const [probando, setProbando] = React.useState(false);
+  const [resultado, setResultado] = React.useState(null);
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    try {
+      const d = await window.LMTApi.getCorreoConfig();
+      setDatos(d);
+      setForm(d.config);
+      setError("");
+    } catch (e) {
+      setError(mensajeError(e, "No fue posible leer la configuración de correo."));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+  React.useEffect(() => {
+    cargar();
+  }, [cargar]);
+  React.useEffect(() => {
+    const u = window.LMTApi.user && window.LMTApi.user();
+    if (u && u.email && !destino) setDestino(u.email);
+  }, [destino]);
+  const set = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  const setSmtp = (k, v) => setForm(f => ({
+    ...f,
+    smtp: {
+      ...f.smtp,
+      [k]: v
+    }
+  }));
+  const guardar = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    setOk("");
+    setGuardando(true);
+    try {
+      const d = await window.LMTApi.guardarCorreoConfig(form);
+      setDatos(x => ({
+        ...x,
+        ...d,
+        sobrescrito: x ? x.sobrescrito : []
+      }));
+      setForm(d.config);
+      setOk("Configuración guardada. Manda una prueba para confirmar que sale.");
+      await cargar();
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible guardar la configuración."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const restablecer = async () => {
+    if (!window.confirm("Se descarta lo configurado desde el panel y vuelve a mandar api/config.php. ¿Continuar?")) return;
+    setGuardando(true);
+    setError("");
+    setOk("");
+    try {
+      const d = await window.LMTApi.olvidarCorreoConfig();
+      setForm(d.config);
+      setOk("Se restableció la configuración del archivo.");
+      await cargar();
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible restablecer."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const probar = async () => {
+    setResultado(null);
+    setError("");
+    setProbando(true);
+    try {
+      setResultado(await window.LMTApi.probarCorreo(destino));
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible ejecutar la prueba."));
+    } finally {
+      setProbando(false);
+    }
+  };
+  if (cargando || !form) return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    className: "splash"
+  }, "Cargando\u2026"));
+  const diag = datos && datos.diagnostico || {
+    avisos: [],
+    historico: []
+  };
+  const sobrescrito = datos && datos.sobrescrito || [];
+  return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Correo saliente"), React.createElement("h1", {
+    className: "titulo-xl"
+  }, "Env\xEDo de correo"), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.6,
+      margin: "10px 0 24px",
+      maxWidth: 680
+    }
+  }, "De aqu\xED salen las contrase\xF1as de los promotores, el QR de su stand y los enlaces del perfil de los visitantes. Si esto no funciona, no funciona la inscripci\xF3n."), diag.avisos.length > 0 && React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      marginBottom: 24
+    }
+  }, diag.avisos.map((a, i) => React.createElement(AvisoDiagnostico, {
+    key: i,
+    nivel: a.nivel
+  }, a.texto))), React.createElement("div", {
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: 20,
+      background: "var(--paper)",
+      marginBottom: 24
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 12
+    }
+  }, "Probar el env\xEDo"), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12,
+      flexWrap: "wrap",
+      alignItems: "flex-end"
+    }
+  }, React.createElement("div", {
+    className: "field",
+    style: {
+      flex: 1,
+      minWidth: 240
+    }
+  }, React.createElement("label", {
+    htmlFor: "co-destino"
+  }, "Mandar un correo de prueba a"), React.createElement("input", {
+    id: "co-destino",
+    type: "email",
+    value: destino,
+    onChange: e => setDestino(e.target.value),
+    maxLength: 254
+  })), React.createElement("button", {
+    className: "btn btn-primary",
+    onClick: probar,
+    disabled: probando || !destino
+  }, probando ? "Enviando…" : "Enviar prueba")), resultado && React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, React.createElement(AvisoDiagnostico, {
+    nivel: resultado.entregado ? "bajo" : resultado.aceptado ? "medio" : "critico"
+  }, React.createElement("strong", null, resultado.entregado ? "El servidor de correo aceptó el mensaje." : resultado.aceptado ? "Aceptado, pero no se entregó a nadie." : "No se pudo enviar."), React.createElement("br", null), resultado.pista), resultado.traza && resultado.traza.length > 0 && React.createElement("details", {
+    style: {
+      marginTop: 12
+    },
+    open: !resultado.entregado
+  }, React.createElement("summary", {
+    className: "mono",
+    style: {
+      cursor: "pointer"
+    }
+  }, "Di\xE1logo con el servidor (", resultado.traza.length, " l\xEDneas)"), React.createElement("pre", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      background: "var(--paper-2)",
+      borderRadius: "var(--r-sm)",
+      border: "1px solid var(--line)",
+      fontSize: 12,
+      lineHeight: 1.6,
+      overflowX: "auto",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word"
+    }
+  }, resultado.traza.join("\n"))))), React.createElement("form", {
+    onSubmit: guardar,
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 20
+    }
+  }, React.createElement(BloqueForm, {
+    titulo: "C\xF3mo se env\xEDa"
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, TRANSPORTES.map(t => React.createElement("label", {
+    key: t.id,
+    style: {
+      display: "flex",
+      gap: 12,
+      alignItems: "flex-start",
+      padding: 12,
+      cursor: "pointer",
+      border: "1px solid " + (form.transport === t.id ? "var(--ink)" : "var(--line)"),
+      borderRadius: "var(--r-md)",
+      background: form.transport === t.id ? "var(--paper-2)" : "transparent"
+    }
+  }, React.createElement("input", {
+    type: "radio",
+    name: "transporte",
+    value: t.id,
+    checked: form.transport === t.id,
+    onChange: () => set("transport", t.id),
+    style: {
+      marginTop: 3
+    }
+  }), React.createElement("span", null, React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: form.transport === t.id ? 600 : 400
+    }
+  }, t.titulo), React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 12,
+      color: "var(--ink-3)",
+      lineHeight: 1.5,
+      marginTop: 2
+    }
+  }, t.nota)))))), React.createElement(BloqueForm, {
+    titulo: "Qui\xE9n firma los mensajes"
+  }, React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-from"
+  }, "Direcci\xF3n del remitente"), React.createElement("input", {
+    id: "co-from",
+    type: "email",
+    value: form.from,
+    onChange: e => set("from", e.target.value),
+    maxLength: 254,
+    required: true
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-fromname"
+  }, "Nombre visible"), React.createElement("input", {
+    id: "co-fromname",
+    value: form.from_name,
+    onChange: e => set("from_name", e.target.value),
+    maxLength: 80
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-replyto"
+  }, "Responder a (opcional)"), React.createElement("input", {
+    id: "co-replyto",
+    type: "email",
+    value: form.reply_to,
+    onChange: e => set("reply_to", e.target.value),
+    maxLength: 254
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Si un promotor contesta, su respuesta ir\xE1 a esta direcci\xF3n."))), form.transport === "smtp" && React.createElement(BloqueForm, {
+    titulo: "Servidor SMTP",
+    nota: "P\xEDdeselos a quien administra el correo institucional."
+  }, React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-host"
+  }, "Servidor"), React.createElement("input", {
+    id: "co-host",
+    value: form.smtp.host,
+    onChange: e => setSmtp("host", e.target.value),
+    maxLength: 253,
+    placeholder: "smtp.narino.gov.co"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-port"
+  }, "Puerto"), React.createElement("input", {
+    id: "co-port",
+    type: "number",
+    min: "1",
+    max: "65535",
+    value: form.smtp.port,
+    onChange: e => setSmtp("port", parseInt(e.target.value, 10) || 587)
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "587 con TLS, o 465 con SSL."))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-secure"
+  }, "Cifrado"), React.createElement("select", {
+    id: "co-secure",
+    value: form.smtp.secure,
+    onChange: e => setSmtp("secure", e.target.value)
+  }, React.createElement("option", {
+    value: "tls"
+  }, "STARTTLS (puerto 587)"), React.createElement("option", {
+    value: "ssl"
+  }, "SSL directo (puerto 465)"), React.createElement("option", {
+    value: ""
+  }, "Sin cifrar \u2014 s\xF3lo para un servidor de la propia red"))), React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-user"
+  }, "Usuario del buz\xF3n"), React.createElement("input", {
+    id: "co-user",
+    value: form.smtp.user,
+    onChange: e => setSmtp("user", e.target.value),
+    maxLength: 254,
+    autoComplete: "off"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "co-pass"
+  }, "Contrase\xF1a del buz\xF3n"), React.createElement("input", {
+    id: "co-pass",
+    type: "password",
+    autoComplete: "new-password",
+    value: form.smtp.password === CLAVE_OCULTA ? "" : form.smtp.password,
+    placeholder: form.smtp.password === CLAVE_OCULTA ? "Guardada — escribe sólo si la cambias" : "",
+    onChange: e => setSmtp("password", e.target.value === "" ? CLAVE_OCULTA : e.target.value),
+    maxLength: 200
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Se guarda cifrada y no vuelve a mostrarse.")))), React.createElement(Aviso, {
+    tipo: "ok"
+  }, ok), React.createElement(Aviso, null, error), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: guardando
+  }, guardando ? "Guardando…" : "Guardar configuración"), sobrescrito.length > 0 && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: restablecer,
+    disabled: guardando
+  }, "Volver a la del archivo")), React.createElement("p", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      lineHeight: 1.7
+    }
+  }, sobrescrito.length > 0 ? "Esta configuración está guardada en la base de datos y pisa a la de api/config.php." : "Ahora mismo manda la configuración de api/config.php.")), diag.historico && diag.historico.length > 0 && React.createElement("div", {
+    style: {
+      marginTop: 28
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 10
+    }
+  }, "Lo enviado hasta ahora"), React.createElement("div", {
+    className: "tabla-scroll",
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper)"
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 80px",
+      padding: "10px 16px",
+      borderBottom: "1px solid var(--line)",
+      background: "var(--paper-2)"
+    }
+  }, ["Transporte", "Resultado", "Mensajes"].map(h => React.createElement("div", {
+    key: h,
+    className: "mono"
+  }, h))), diag.historico.map((h, i) => React.createElement("div", {
+    key: i,
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 80px",
+      padding: "12px 16px",
+      borderTop: i ? "1px solid var(--line)" : "none",
+      fontSize: 13
+    }
+  }, React.createElement("div", null, h.transporte), React.createElement("div", {
+    style: {
+      color: h.estado === "enviado" ? h.transporte === "log" ? "var(--meh)" : "var(--good)" : "var(--bad)"
+    }
+  }, h.transporte === "log" && h.estado === "enviado" ? "sólo registrado, no salió" : h.estado), React.createElement("div", {
+    className: "mono"
+  }, h.n))))), React.createElement("p", {
+    style: {
+      marginTop: 12
+    }
+  }, React.createElement("a", {
+    href: "/admin/correos",
+    "data-route": true,
+    style: {
+      fontSize: 13,
+      color: "var(--grano)"
+    }
+  }, "Ver la bit\xE1cora mensaje a mensaje \u2192"))));
+};
+Object.assign(window, {
+  AdminCorreoConfig
+});
+})();
+
 /* components/App.jsx */
 (function () {
 const PALETTES = {
@@ -7378,6 +8191,13 @@ const App = () => {
       stands: stands
     });
   }
+  if (route.path === "/admin/correo") {
+    return React.createElement(AdminPage, {
+      section: "correo",
+      user: user,
+      stands: stands
+    });
+  }
   if (route.path === "/admin/caracterizacion") {
     return React.createElement(AdminPage, {
       section: "caracterizacion",
@@ -7431,7 +8251,7 @@ const NotFound = ({
 window.NotFound = NotFound;
 window.Splash = Splash;
 const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion"];
+  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion", "AdminCorreoConfig"];
   if (needed.every(k => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
   } else {

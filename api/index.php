@@ -19,6 +19,7 @@ require __DIR__ . '/lib/Validate.php';
 require __DIR__ . '/lib/RateLimit.php';
 require __DIR__ . '/lib/Security.php';
 require __DIR__ . '/lib/QrCode.php';
+require __DIR__ . '/lib/Ajustes.php';
 require __DIR__ . '/lib/Mailer.php';
 require __DIR__ . '/lib/Correos.php';
 require __DIR__ . '/lib/Uploads.php';
@@ -91,6 +92,7 @@ require __DIR__ . '/routes/qr.php';
 require __DIR__ . '/routes/promotores.php';
 require __DIR__ . '/routes/administradores.php';
 require __DIR__ . '/routes/visitantes.php';
+require __DIR__ . '/routes/correo.php';
 
 \register_routes_health($router);
 \register_routes_auth($router);
@@ -103,5 +105,6 @@ require __DIR__ . '/routes/visitantes.php';
 \register_routes_promotores($router);
 \register_routes_administradores($router);
 \register_routes_visitantes($router);
+\register_routes_correo($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);
