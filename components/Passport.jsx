@@ -272,6 +272,17 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
         <div className="mono" style={{ textAlign: "center", color: "var(--paper-3)", marginTop: 14, lineHeight: 1.6 }}>
           {visitados.length} / {stands.length} stands sellados
         </div>
+        {/* Segunda puerta al perfil: quien no lo completó justo tras votar
+            vuelve aquí a ver sus sellos, y es donde tiene sentido ofrecérselo
+            otra vez sin insistir. */}
+        {window.LMTPerfil && window.LMTPerfil.tieneTestigo() && (
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <a href="/perfil" data-route className="mono"
+              style={{ color: "var(--paper-3)", textDecoration: "underline", lineHeight: 2 }}>
+              Completar mi perfil de visitante
+            </a>
+          </div>
+        )}
         </div>
       </div>
     </div>

@@ -281,11 +281,36 @@
     const payload = window.LMTSecurity.buildVotePayload(raw);
     if (!window.LMTSecurity.canVote(payload.stand)) throw new Error("rate_limited");
     await ensureCsrf();
-    await request("/votos", { method: "POST", body: payload });
+    const res = await request("/votos", { method: "POST", body: payload });
     window.LMTSecurity.markVote(payload.stand);
     pollDashboard();
-    return payload;
+    // Se devuelve la respuesta del servidor (trae el testigo del perfil) junto
+    // con lo enviado, que es lo que esperaban los llamadores anteriores.
+    return Object.assign({}, payload, res || {});
   }
+
+  // -----------------------------------------------------------------------
+  // Perfil del visitante
+  // -----------------------------------------------------------------------
+
+  async function getPerfilVisitante(correo, token) {
+    return request("/visitantes/perfil?correo=" + encodeURIComponent(correo) + "&t=" + encodeURIComponent(token));
+  }
+  async function guardarPerfilVisitante(correo, token, body) {
+    await ensureCsrf();
+    return request("/visitantes/perfil", { method: "PUT", body: Object.assign({ correo, token }, body) });
+  }
+  async function borrarPerfilVisitante(correo, token) {
+    await ensureCsrf();
+    return request("/visitantes/perfil", { method: "DELETE", body: { correo, token } });
+  }
+  async function pedirEnlacePerfil(correo) {
+    await ensureCsrf();
+    return request("/visitantes/enlace", { method: "POST", body: { correo } });
+  }
+  async function opcionesVisitante()        { return request("/visitantes/opciones"); }
+  async function resumenVisitantes()        { return request("/admin/visitantes/resumen"); }
+  async function expectativasVisitantes()   { return request("/admin/visitantes/expectativas"); }
 
   async function getPasaporte(correo) {
     return request("/pasaportes/" + correo);   // urlFor codifica; no duplicar
@@ -338,6 +363,13 @@
     borrarAdmin,
     cambiarClaveAdmin,
     submitVote,
+    getPerfilVisitante,
+    guardarPerfilVisitante,
+    borrarPerfilVisitante,
+    pedirEnlacePerfil,
+    opcionesVisitante,
+    resumenVisitantes,
+    expectativasVisitantes,
     getPasaporte,
     listStands,
     getStand,
@@ -345,6 +377,41 @@
     updateStand,
     deleteStand,
     pollDashboard,
+  };
+
+  /**
+   * Testigo del perfil del visitante, guardado en este navegador.
+   *
+   * No es una sesión: es la prueba —emitida por el servidor al votar— de que
+   * quien está delante controla ese correo. Vive en localStorage porque el
+   * visitante no tiene cuenta y volverá desde el mismo teléfono; quien cambie
+   * de dispositivo pide el enlace a su buzón.
+   */
+  window.LMTPerfil = {
+    guardar(correo, token) {
+      try {
+        localStorage.setItem("lmt.perfil.correo", String(correo || "").toLowerCase());
+        localStorage.setItem("lmt.perfil.token", String(token || ""));
+      } catch (_) { /* navegación privada: el perfil se abre por el enlace del correo */ }
+    },
+    leer() {
+      try {
+        return {
+          correo: localStorage.getItem("lmt.perfil.correo") || "",
+          token:  localStorage.getItem("lmt.perfil.token")  || "",
+        };
+      } catch (_) { return { correo: "", token: "" }; }
+    },
+    tieneTestigo() {
+      const c = window.LMTPerfil.leer();
+      return !!(c.correo && c.token);
+    },
+    olvidar() {
+      try {
+        localStorage.removeItem("lmt.perfil.correo");
+        localStorage.removeItem("lmt.perfil.token");
+      } catch (_) {}
+    },
   };
 
   // Arranque automático

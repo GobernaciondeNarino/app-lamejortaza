@@ -47,7 +47,10 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
     try {
       const payload = { stand: stand.id, emoji: emojiId, correo, compra: data.compra, texto: data.texto };
       if (window.LMTApi && window.LMTApi.enabled) {
-        await window.LMTApi.submitVote(payload);
+        // El voto devuelve el testigo del perfil: es el único momento en que
+        // alguien demuestra, en el mismo acto, que ese correo es suyo.
+        const res = await window.LMTApi.submitVote(payload);
+        if (res && res.perfil_token) window.LMTPerfil.guardar(correo, res.perfil_token);
       } else if (sec) {
         sec.buildVotePayload(payload);
       }
@@ -262,6 +265,24 @@ const VoteConfirm = ({ stand, onGoPassport, onGoDashboard }) => {
           Ver ranking del festival
         </button>
       </div>
+
+      {/* Invitación al perfil. Va después del sello y como enlace discreto:
+          es voluntaria y no debe estorbar a quien sólo quería votar. */}
+      {window.LMTPerfil && window.LMTPerfil.tieneTestigo() && (
+        <div style={{
+          marginTop: 22, padding: "14px 16px", border: "1px dashed var(--line-2)",
+          borderRadius: "var(--r-md)", background: "var(--paper-2)",
+        }}>
+          <div className="mono" style={{ marginBottom: 6 }}>Opcional</div>
+          <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--ink-2)", margin: "0 0 12px" }}>
+            ¿Nos cuentas de dónde nos visitas? Nos ayuda a saber quién viene al festival y a
+            preparar mejor la próxima edición. Son dos minutos y ningún dato es obligatorio.
+          </p>
+          <a href="/perfil" data-route className="btn btn-ghost" style={{ justifyContent: "center", width: "100%" }}>
+            Completar mi perfil
+          </a>
+        </div>
+      )}
     </div>
   );
 };

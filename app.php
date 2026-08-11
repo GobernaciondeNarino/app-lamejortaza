@@ -76,7 +76,7 @@ $bundle      = __DIR__ . '/js/components.build.js';
 $usarBundle  = is_file($bundle);
 $bundleVersion = $usarBundle ? (string) filemtime($bundle) : '';
 
-$componentes = ['Shared', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'Cuentas', 'App'];
+$componentes = ['Shared', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'Cuentas', 'Perfil', 'Caracterizacion', 'App'];
 
 // ¿El bundle quedó viejo respecto a algún .jsx? Es el único fallo de este
 // esquema y es silencioso, así que lo detectamos explícitamente.

@@ -261,6 +261,47 @@ HTML);
         ];
     }
 
+    /**
+     * Enlace al perfil del visitante.
+     *
+     * Es la vía de recuperación: quien votó desde otro teléfono no lleva el
+     * testigo encima, y el buzón es la única prueba real de que ese correo es
+     * suyo. El enlace no caduca por sí mismo, así que el texto avisa de que no
+     * conviene reenviarlo.
+     */
+    public static function enlacePerfil(string $email, string $url): array
+    {
+        $e = self::h($email);
+        $u = self::h($url);
+        $html = self::envoltura('Tu perfil de visitante', <<<HTML
+<p style="font-size:16px;margin:0 0 14px;">Hola,</p>
+<p style="font-size:15px;line-height:1.65;margin:0 0 18px;">
+  Aquí tienes el enlace para completar o modificar tus datos como visitante del
+  <strong>Festival del Café de Nariño</strong>. Todo lo que nos cuentes es voluntario y nos
+  sirve para saber quién nos visita y mejorar las próximas ediciones.
+</p>
+<p style="margin:0 0 20px;">
+  <a href="{$u}" style="display:inline-block;background:#2c2620;color:#f2ece0;text-decoration:none;padding:13px 24px;border-radius:999px;font-size:15px;">Abrir mi perfil</a>
+</p>
+<p style="font-size:12px;color:#8a7c68;word-break:break-all;margin:0 0 18px;">{$u}</p>
+<p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0 0 8px;">
+  Este enlace abre <strong>tu</strong> perfil ({$e}) sin pedir contraseña: no lo reenvíes a nadie.
+  Desde ahí también puedes borrar tus datos cuando quieras.
+</p>
+<p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0;">
+  Si no pediste este enlace, ignora este mensaje: no se ha modificado nada.
+</p>
+HTML);
+        $texto = "Hola,\n\n"
+            . "Aquí tienes el enlace para completar o modificar tus datos como visitante del\n"
+            . "Festival del Café de Nariño. Todo es voluntario.\n\n"
+            . $url . "\n\n"
+            . "Este enlace abre TU perfil ({$email}) sin pedir contraseña: no lo reenvíes.\n"
+            . "Desde ahí también puedes borrar tus datos cuando quieras.\n\n"
+            . "Si no pediste este enlace, ignora este mensaje: no se ha modificado nada.\n";
+        return ['asunto' => 'Tu perfil de visitante — La Mejor Taza', 'html' => $html, 'texto' => $texto];
+    }
+
     /** Aviso al administrador de que hay una solicitud esperando. */
     public static function avisoAdmin(string $nombreProm, string $emailProm, string $municipio): array
     {

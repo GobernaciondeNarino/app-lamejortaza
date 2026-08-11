@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 2a03564ce9a5be7f
+// Huella de las fuentes: c8fd73531f74b925
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -539,6 +539,11 @@ const AdminShell = ({
     sub: "En vivo",
     path: "/admin/live"
   }, {
+    id: "caracterizacion",
+    label: "Visitantes",
+    sub: "Caracterización",
+    path: "/admin/caracterizacion"
+  }, {
     id: "correos",
     label: "Correos",
     sub: "Bitácora",
@@ -871,6 +876,10 @@ const AdminPage = ({
     active: "correos",
     user: user
   }, React.createElement(AdminCorreos, null));
+  if (section === "caracterizacion") return React.createElement(AdminShell, {
+    active: "caracterizacion",
+    user: user
+  }, React.createElement(AdminCaracterizacion, null));
   if (section === "cuentas") return React.createElement(AdminShell, {
     active: "cuentas",
     user: user
@@ -2097,7 +2106,8 @@ const VoteForm = ({
         texto: data.texto
       };
       if (window.LMTApi && window.LMTApi.enabled) {
-        await window.LMTApi.submitVote(payload);
+        const res = await window.LMTApi.submitVote(payload);
+        if (res && res.perfil_token) window.LMTPerfil.guardar(correo, res.perfil_token);
       } else if (sec) {
         sec.buildVotePayload(payload);
       }
@@ -2463,7 +2473,35 @@ const VoteConfirm = ({
       justifyContent: "center",
       padding: 14
     }
-  }, "Ver ranking del festival")));
+  }, "Ver ranking del festival")), window.LMTPerfil && window.LMTPerfil.tieneTestigo() && React.createElement("div", {
+    style: {
+      marginTop: 22,
+      padding: "14px 16px",
+      border: "1px dashed var(--line-2)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper-2)"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 6
+    }
+  }, "Opcional"), React.createElement("p", {
+    style: {
+      fontSize: 13,
+      lineHeight: 1.6,
+      color: "var(--ink-2)",
+      margin: "0 0 12px"
+    }
+  }, "\xBFNos cuentas de d\xF3nde nos visitas? Nos ayuda a saber qui\xE9n viene al festival y a preparar mejor la pr\xF3xima edici\xF3n. Son dos minutos y ning\xFAn dato es obligatorio."), React.createElement("a", {
+    href: "/perfil",
+    "data-route": true,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      width: "100%"
+    }
+  }, "Completar mi perfil")));
 };
 const MobileVotePage = ({
   stand
@@ -2941,7 +2979,21 @@ const PassportBook = ({
       marginTop: 14,
       lineHeight: 1.6
     }
-  }, visitados.length, " / ", stands.length, " stands sellados"))));
+  }, visitados.length, " / ", stands.length, " stands sellados"), window.LMTPerfil && window.LMTPerfil.tieneTestigo() && React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginTop: 16
+    }
+  }, React.createElement("a", {
+    href: "/perfil",
+    "data-route": true,
+    className: "mono",
+    style: {
+      color: "var(--paper-3)",
+      textDecoration: "underline",
+      lineHeight: 2
+    }
+  }, "Completar mi perfil de visitante")))));
 };
 const PassportPage_Page = ({
   pageData,
@@ -6271,6 +6323,855 @@ Object.assign(window, {
 });
 })();
 
+/* components/Perfil.jsx */
+(function () {
+const PERFIL_ETIQUETAS = {
+  genero: {
+    hombre: "Hombre",
+    mujer: "Mujer",
+    otro: "Otro",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  rango_edad: {
+    menor_18: "Menor de 18",
+    "18_25": "18 a 25",
+    "26_35": "26 a 35",
+    "36_45": "36 a 45",
+    "46_60": "46 a 60",
+    mayor_60: "Mayor de 60",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  tipo_visitante: {
+    publica: "Entidad pública",
+    privada: "Empresa privada",
+    academica: "Institución académica",
+    gremio: "Gremio o asociación",
+    particular: "A título personal",
+    otro: "Otro",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  grupo_etnico: {
+    indigena: "Indígena",
+    afrodescendiente: "Negro, afrocolombiano o afrodescendiente",
+    raizal: "Raizal del archipiélago",
+    palenquero: "Palenquero de San Basilio",
+    rrom: "Rrom (gitano)",
+    ninguno: "Ninguno",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  discapacidad: {
+    fisica: "Física o motriz",
+    visual: "Visual",
+    auditiva: "Auditiva",
+    intelectual: "Intelectual",
+    psicosocial: "Psicosocial",
+    multiple: "Múltiple",
+    ninguna: "Ninguna",
+    prefiero_no_decir: "Prefiero no decir"
+  },
+  como_se_entero: {
+    redes: "Redes sociales",
+    radio: "Radio",
+    television: "Televisión",
+    prensa: "Prensa",
+    voz_a_voz: "Un amigo o familiar",
+    institucion: "Una institución",
+    otro: "Otro medio"
+  }
+};
+const PERFIL_VACIO = {
+  nombre: "",
+  telefono: "",
+  genero: "",
+  rango_edad: "",
+  pais: "Colombia",
+  departamento: "",
+  municipio: "",
+  tipo_visitante: "",
+  entidad: "",
+  grupo_etnico: "",
+  discapacidad: "",
+  expectativa: "",
+  como_se_entero: "",
+  primera_visita: null
+};
+const CampoOpcion = ({
+  id,
+  label,
+  valor,
+  opciones,
+  etiquetas,
+  ayuda,
+  onChange
+}) => React.createElement("div", {
+  className: "field"
+}, React.createElement("label", {
+  htmlFor: id
+}, label), React.createElement("select", {
+  id: id,
+  value: valor || "",
+  onChange: e => onChange(e.target.value)
+}, React.createElement("option", {
+  value: ""
+}, "Sin responder"), (opciones || []).map(o => React.createElement("option", {
+  key: o,
+  value: o
+}, etiquetas && etiquetas[o] || o))), ayuda && React.createElement("span", {
+  className: "ayuda"
+}, ayuda));
+const PerfilSinAcceso = () => {
+  const [correo, setCorreo] = React.useState("");
+  const [enviado, setEnviado] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const pedir = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    const sec = window.LMTSecurity;
+    if (!sec || !sec.isEmail(correo.trim())) {
+      setError("Escribe un correo válido.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.LMTApi.pedirEnlacePerfil(sec.normalizeEmail(correo));
+      setEnviado(true);
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible enviar el enlace."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return React.createElement("div", {
+    className: "mobile-page"
+  }, React.createElement("div", {
+    className: "mobile-inner"
+  }, React.createElement("a", {
+    href: "/festival",
+    "data-route": true,
+    style: {
+      color: "var(--ink-3)",
+      fontSize: 13
+    }
+  }, "\u2190 Volver"), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 22
+    }
+  }, "Perfil del visitante"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 34,
+      fontWeight: 400,
+      margin: "6px 0 12px",
+      lineHeight: 1.05
+    }
+  }, "Te enviamos el", React.createElement("br", null), "enlace por correo."), enviado ? React.createElement(React.Fragment, null, React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.65
+    }
+  }, "Si ese correo particip\xF3 en el festival, en unos minutos recibir\xE1s un enlace para abrir tu perfil. Revisa tambi\xE9n la carpeta de correo no deseado."), React.createElement("a", {
+    href: "/festival",
+    "data-route": true,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      marginTop: 22
+    }
+  }, "Volver al festival")) : React.createElement("form", {
+    onSubmit: pedir
+  }, React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.65,
+      marginBottom: 22
+    }
+  }, "Tu perfil se abre desde el tel\xE9fono con el que votaste. Si est\xE1s en otro dispositivo, escribe tu correo y te mandamos el enlace."), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-correo"
+  }, "Tu correo"), React.createElement("input", {
+    id: "pf-correo",
+    type: "email",
+    inputMode: "email",
+    autoComplete: "email",
+    value: correo,
+    onChange: e => setCorreo(e.target.value),
+    maxLength: 254,
+    required: true
+  })), React.createElement(Aviso, null, error), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: busy,
+    style: {
+      justifyContent: "center",
+      padding: 14,
+      width: "100%",
+      marginTop: 20
+    }
+  }, busy ? "Enviando…" : "Enviarme el enlace"))));
+};
+const PerfilVisitantePage = () => {
+  const params = new URLSearchParams(window.location.search);
+  const guardado = window.LMTPerfil && window.LMTPerfil.leer() || {
+    correo: "",
+    token: ""
+  };
+  const correo = (params.get("correo") || guardado.correo || "").toLowerCase();
+  const token = params.get("t") || guardado.token || "";
+  const [form, setForm] = React.useState(PERFIL_VACIO);
+  const [opciones, setOpciones] = React.useState(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [acepta, setAcepta] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [ok, setOk] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [existia, setExistia] = React.useState(false);
+  const set = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  React.useEffect(() => {
+    if (!correo || !token) {
+      setCargando(false);
+      return;
+    }
+    if (window.LMTPerfil) window.LMTPerfil.guardar(correo, token);
+    let vivo = true;
+    (async () => {
+      try {
+        const datos = await window.LMTApi.getPerfilVisitante(correo, token);
+        if (!vivo) return;
+        setOpciones(datos.opciones || null);
+        if (datos.perfil) {
+          setForm(Object.assign({}, PERFIL_VACIO, datos.perfil));
+          setExistia(true);
+          setAcepta(true);
+        }
+      } catch (err) {
+        if (vivo) setError(mensajeError(err, "No fue posible abrir tu perfil."));
+      } finally {
+        if (vivo) setCargando(false);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [correo, token]);
+  const guardar = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    setOk("");
+    if (!acepta) {
+      setError("Necesitamos tu autorización para guardar estos datos.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await window.LMTApi.guardarPerfilVisitante(correo, token, Object.assign({}, form, {
+        acepta_datos: true
+      }));
+      setExistia(true);
+      setOk("Tus datos quedaron guardados. Gracias por ayudarnos a conocer al público del festival.");
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible guardar tus datos."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const borrar = async () => {
+    if (!window.confirm("Se borrarán todos los datos de tu perfil. Tu voto y tu pasaporte no se tocan. ¿Continuar?")) return;
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      await window.LMTApi.borrarPerfilVisitante(correo, token);
+      setForm(PERFIL_VACIO);
+      setExistia(false);
+      setAcepta(false);
+      setOk("Tus datos fueron borrados.");
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible borrar tus datos."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!correo || !token) return React.createElement(PerfilSinAcceso, null);
+  if (cargando) return React.createElement(Splash, null);
+  const ops = opciones || {};
+  return React.createElement("div", {
+    className: "mobile-page"
+  }, React.createElement("div", {
+    className: "mobile-inner"
+  }, React.createElement("a", {
+    href: "/pasaporte",
+    "data-route": true,
+    style: {
+      color: "var(--ink-3)",
+      fontSize: 13
+    }
+  }, "\u2190 Mi pasaporte"), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 22
+    }
+  }, "Perfil del visitante"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 34,
+      fontWeight: 400,
+      margin: "6px 0 10px",
+      lineHeight: 1.05
+    }
+  }, existia ? "Tus datos." : "Cuéntanos\nquién nos visita."), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.65,
+      marginBottom: 8
+    }
+  }, "Con esto sabemos qui\xE9n viene al festival y podemos preparar mejor la pr\xF3xima edici\xF3n.", React.createElement("strong", null, " Ning\xFAn dato es obligatorio"), ": responde s\xF3lo lo que quieras."), React.createElement("p", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      marginBottom: 24,
+      wordBreak: "break-all"
+    }
+  }, correo), React.createElement(Aviso, {
+    tipo: "ok"
+  }, ok), React.createElement(Aviso, null, error), React.createElement("form", {
+    onSubmit: guardar,
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 20,
+      marginTop: 8
+    }
+  }, React.createElement(BloqueForm, {
+    titulo: "Sobre ti"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-nombre"
+  }, "Nombre"), React.createElement("input", {
+    id: "pf-nombre",
+    value: form.nombre,
+    onChange: e => set("nombre", e.target.value),
+    maxLength: 120,
+    autoComplete: "name"
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-tel"
+  }, "Tel\xE9fono"), React.createElement("input", {
+    id: "pf-tel",
+    value: form.telefono,
+    onChange: e => set("telefono", e.target.value),
+    maxLength: 32,
+    inputMode: "tel",
+    autoComplete: "tel"
+  })), React.createElement(CampoOpcion, {
+    id: "pf-genero",
+    label: "G\xE9nero",
+    valor: form.genero,
+    opciones: ops.genero,
+    etiquetas: PERFIL_ETIQUETAS.genero,
+    onChange: v => set("genero", v)
+  }), React.createElement(CampoOpcion, {
+    id: "pf-edad",
+    label: "Rango de edad",
+    valor: form.rango_edad,
+    opciones: ops.rango_edad,
+    etiquetas: PERFIL_ETIQUETAS.rango_edad,
+    onChange: v => set("rango_edad", v)
+  })), React.createElement(BloqueForm, {
+    titulo: "De d\xF3nde nos visitas"
+  }, React.createElement("div", {
+    className: "grid-2"
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-pais"
+  }, "Pa\xEDs"), React.createElement("input", {
+    id: "pf-pais",
+    value: form.pais,
+    onChange: e => set("pais", e.target.value),
+    maxLength: 80
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-dep"
+  }, "Departamento"), React.createElement("input", {
+    id: "pf-dep",
+    value: form.departamento,
+    onChange: e => set("departamento", e.target.value),
+    maxLength: 80,
+    placeholder: "Nari\xF1o"
+  }))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-mun"
+  }, "Municipio"), React.createElement("input", {
+    id: "pf-mun",
+    value: form.municipio,
+    onChange: e => set("municipio", e.target.value),
+    maxLength: 80,
+    placeholder: "Pasto"
+  }))), React.createElement(BloqueForm, {
+    titulo: "Tu visita"
+  }, React.createElement(CampoOpcion, {
+    id: "pf-tipo",
+    label: "Vienes en representaci\xF3n de",
+    valor: form.tipo_visitante,
+    opciones: ops.tipo_visitante,
+    etiquetas: PERFIL_ETIQUETAS.tipo_visitante,
+    onChange: v => set("tipo_visitante", v)
+  }), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-entidad"
+  }, "Nombre de la entidad o empresa"), React.createElement("input", {
+    id: "pf-entidad",
+    value: form.entidad,
+    onChange: e => set("entidad", e.target.value),
+    maxLength: 120
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "S\xF3lo si vienes por una instituci\xF3n.")), React.createElement(CampoOpcion, {
+    id: "pf-medio",
+    label: "\xBFC\xF3mo te enteraste del festival?",
+    valor: form.como_se_entero,
+    opciones: ops.como_se_entero,
+    etiquetas: PERFIL_ETIQUETAS.como_se_entero,
+    onChange: v => set("como_se_entero", v)
+  }), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-primera"
+  }, "\xBFEs tu primera vez en el festival?"), React.createElement("select", {
+    id: "pf-primera",
+    value: form.primera_visita === null || form.primera_visita === undefined ? "" : form.primera_visita ? "si" : "no",
+    onChange: e => set("primera_visita", e.target.value === "" ? null : e.target.value === "si")
+  }, React.createElement("option", {
+    value: ""
+  }, "Sin responder"), React.createElement("option", {
+    value: "si"
+  }, "S\xED, es la primera"), React.createElement("option", {
+    value: "no"
+  }, "Ya hab\xEDa venido"))), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-exp"
+  }, "\xBFQu\xE9 esperas del festival?"), React.createElement("textarea", {
+    id: "pf-exp",
+    rows: 3,
+    value: form.expectativa,
+    onChange: e => set("expectativa", e.target.value),
+    maxLength: 500,
+    style: {
+      border: "1px solid var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 12
+    }
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Lo leemos: nos sirve para armar la programaci\xF3n."))), React.createElement(BloqueForm, {
+    titulo: "Enfoque diferencial",
+    nota: "Estas dos preguntas son datos sensibles seg\xFAn la Ley 1581 de 2012. Las hacemos porque la Gobernaci\xF3n debe reportar con enfoque diferencial, y responderlas es siempre voluntario: puedes dejarlas sin responder o elegir \xABPrefiero no decir\xBB."
+  }, React.createElement(CampoOpcion, {
+    id: "pf-etnia",
+    label: "\xBFPerteneces a alg\xFAn grupo \xE9tnico?",
+    valor: form.grupo_etnico,
+    opciones: ops.grupo_etnico,
+    etiquetas: PERFIL_ETIQUETAS.grupo_etnico,
+    onChange: v => set("grupo_etnico", v)
+  }), React.createElement(CampoOpcion, {
+    id: "pf-discapacidad",
+    label: "\xBFTienes alguna discapacidad?",
+    valor: form.discapacidad,
+    opciones: ops.discapacidad,
+    etiquetas: PERFIL_ETIQUETAS.discapacidad,
+    ayuda: "Nos ayuda a preparar el recinto y la atenci\xF3n.",
+    onChange: v => set("discapacidad", v)
+  })), React.createElement("label", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+      fontSize: 13,
+      color: "var(--ink-2)",
+      lineHeight: 1.55
+    }
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: acepta,
+    onChange: e => setAcepta(e.target.checked),
+    style: {
+      marginTop: 3
+    }
+  }), React.createElement("span", null, "Autorizo a la Gobernaci\xF3n de Nari\xF1o a tratar estos datos con fines estad\xEDsticos y de caracterizaci\xF3n del p\xFAblico del festival, conforme a la Ley 1581 de 2012. Puedo consultarlos, corregirlos o borrarlos cuando quiera desde esta misma p\xE1gina.")), React.createElement(Aviso, null, error), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: busy,
+    style: {
+      justifyContent: "center",
+      padding: 14,
+      opacity: busy ? 0.6 : 1
+    }
+  }, busy ? "Guardando…" : existia ? "Guardar cambios" : "Guardar mis datos"), existia && React.createElement("button", {
+    type: "button",
+    onClick: borrar,
+    disabled: busy,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      color: "var(--bad)"
+    }
+  }, "Borrar mis datos"), React.createElement("a", {
+    href: "/pasaporte",
+    "data-route": true,
+    className: "mono",
+    style: {
+      textAlign: "center",
+      color: "var(--ink-3)",
+      marginBottom: 8
+    }
+  }, "Volver a mi pasaporte"))));
+};
+Object.assign(window, {
+  PerfilVisitantePage,
+  PerfilSinAcceso,
+  PERFIL_ETIQUETAS
+});
+})();
+
+/* components/Caracterizacion.jsx */
+(function () {
+const BarraDimension = ({
+  filas,
+  etiquetas,
+  total
+}) => {
+  if (!filas || filas.length === 0) {
+    return React.createElement("p", {
+      style: {
+        fontSize: 13,
+        color: "var(--ink-3)",
+        margin: 0
+      }
+    }, "Nadie ha respondido todav\xEDa.");
+  }
+  const max = Math.max(...filas.map(f => f.n), 1);
+  return React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, filas.map(f => {
+    const pct = total > 0 ? Math.round(f.n * 100 / total) : 0;
+    return React.createElement("div", {
+      key: f.valor
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 10,
+        fontSize: 13,
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      style: {
+        minWidth: 0
+      }
+    }, etiquetas && etiquetas[f.valor] || f.valor), React.createElement("span", {
+      className: "mono",
+      style: {
+        flex: "0 0 auto"
+      }
+    }, f.n, " \xB7 ", pct, "%")), React.createElement("div", {
+      style: {
+        height: 6,
+        borderRadius: 999,
+        background: "var(--paper-2)",
+        overflow: "hidden"
+      }
+    }, React.createElement("div", {
+      style: {
+        width: `${f.n * 100 / max}%`,
+        height: "100%",
+        background: "var(--grano)"
+      }
+    })));
+  }));
+};
+const TarjetaDimension = ({
+  titulo,
+  nota,
+  children
+}) => React.createElement("div", {
+  style: {
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-md)",
+    padding: 20,
+    background: "var(--paper)"
+  }
+}, React.createElement("div", {
+  className: "mono",
+  style: {
+    marginBottom: nota ? 4 : 14
+  }
+}, titulo), nota && React.createElement("p", {
+  style: {
+    fontSize: 12,
+    color: "var(--ink-3)",
+    lineHeight: 1.5,
+    margin: "0 0 14px"
+  }
+}, nota), children);
+const AdminCaracterizacion = () => {
+  const [datos, setDatos] = React.useState(null);
+  const [expectativas, setExpectativas] = React.useState([]);
+  const [error, setError] = React.useState("");
+  const [cargando, setCargando] = React.useState(true);
+  React.useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const [r, e] = await Promise.all([window.LMTApi.resumenVisitantes(), window.LMTApi.expectativasVisitantes()]);
+        if (!vivo) return;
+        setDatos(r);
+        setExpectativas(e || []);
+      } catch (err) {
+        if (vivo) setError(mensajeError(err, "No fue posible cargar la caracterización."));
+      } finally {
+        if (vivo) setCargando(false);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  if (cargando) return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    className: "splash"
+  }, "Cargando\u2026"));
+  const d = datos || {
+    total: 0,
+    votantes: 0,
+    dimensiones: {},
+    municipios: [],
+    primera_visita: [],
+    etiquetas: {}
+  };
+  const eti = d.etiquetas || {};
+  const total = d.total || 0;
+  const cobertura = d.votantes > 0 ? Math.round(total * 100 / d.votantes) : 0;
+  const csv = window.LMTApi.urlFor("/export/visitantes.csv");
+  const primera = (d.primera_visita || []).map(f => ({
+    valor: String(f.valor),
+    n: f.n
+  }));
+  return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      gap: 12,
+      flexWrap: "wrap",
+      marginBottom: 22
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    className: "mono"
+  }, "Visitantes \xB7 ", total, " perfiles"), React.createElement("h1", {
+    className: "titulo-xl"
+  }, "Caracterizaci\xF3n")), React.createElement("a", {
+    className: "btn btn-ghost",
+    href: csv
+  }, "Descargar CSV")), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.6,
+      margin: "0 0 24px",
+      maxWidth: 640
+    }
+  }, "Lo que los visitantes respondieron por su cuenta despu\xE9s de votar. Todo es voluntario, as\xED que las cifras describen a quien quiso contestar, no al total del p\xFAblico. El CSV lleva datos personales: gu\xE1rdalo donde corresponda y no lo reenv\xEDes por correo."), React.createElement(Aviso, null, error), React.createElement("div", {
+    className: "grid-3",
+    style: {
+      marginBottom: 24
+    }
+  }, [{
+    k: "Perfiles",
+    v: total,
+    sub: "completados"
+  }, {
+    k: "Votantes",
+    v: d.votantes || 0,
+    sub: "correos distintos"
+  }, {
+    k: "Cobertura",
+    v: cobertura + "%",
+    sub: "de los votantes"
+  }].map(m => React.createElement("div", {
+    key: m.k,
+    style: {
+      padding: 20,
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper)"
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, m.k), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontSize: 40,
+      fontStyle: "italic",
+      lineHeight: 1,
+      marginTop: 8
+    }
+  }, m.v), React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "var(--ink-3)",
+      marginTop: 4
+    }
+  }, m.sub)))), total === 0 ? React.createElement("div", {
+    style: {
+      padding: 50,
+      border: "1px dashed var(--line-2)",
+      borderRadius: "var(--r-md)",
+      textAlign: "center",
+      color: "var(--ink-3)"
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Sin perfiles"), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 26,
+      color: "var(--ink)",
+      margin: "8px 0 4px"
+    }
+  }, "Todav\xEDa nadie ha completado su perfil."), React.createElement("div", {
+    style: {
+      fontSize: 13
+    }
+  }, "Se les propone al terminar de votar, y es opcional.")) : React.createElement("div", {
+    className: "grid-2",
+    style: {
+      gap: 18,
+      alignItems: "start"
+    }
+  }, React.createElement(TarjetaDimension, {
+    titulo: "G\xE9nero"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.genero,
+    etiquetas: eti.genero,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Rango de edad"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.rango_edad,
+    etiquetas: eti.rango_edad,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Tipo de visitante"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.tipo_visitante,
+    etiquetas: eti.tipo_visitante,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "C\xF3mo se enteraron"
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.como_se_entero,
+    etiquetas: eti.como_se_entero,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Grupo \xE9tnico",
+    nota: "Dato sensible, de respuesta voluntaria."
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.grupo_etnico,
+    etiquetas: eti.grupo_etnico,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Discapacidad",
+    nota: "Dato sensible, de respuesta voluntaria."
+  }, React.createElement(BarraDimension, {
+    filas: d.dimensiones.discapacidad,
+    etiquetas: eti.discapacidad,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Municipio de origen",
+    nota: "Los 25 m\xE1s frecuentes."
+  }, React.createElement(BarraDimension, {
+    filas: d.municipios,
+    etiquetas: null,
+    total: total
+  })), React.createElement(TarjetaDimension, {
+    titulo: "Primera visita"
+  }, React.createElement(BarraDimension, {
+    filas: primera,
+    etiquetas: {
+      "1": "Es su primera vez",
+      "0": "Ya había venido"
+    },
+    total: total
+  }))), expectativas.length > 0 && React.createElement("div", {
+    style: {
+      marginTop: 28
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 12
+    }
+  }, "Qu\xE9 esperan del festival \xB7 ", expectativas.length, " respuestas"), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, expectativas.map((e, i) => React.createElement("div", {
+    key: i,
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: "14px 16px",
+      background: "var(--paper)"
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 14,
+      lineHeight: 1.6
+    }
+  }, e.texto), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 6,
+      color: "var(--ink-3)"
+    }
+  }, e.municipio || "sin municipio", " \xB7 ", e.hora))))));
+};
+Object.assign(window, {
+  AdminCaracterizacion
+});
+})();
+
 /* components/App.jsx */
 (function () {
 const PALETTES = {
@@ -6382,6 +7283,9 @@ const App = () => {
   if (route.path === "/promotor" || route.path === "/promotor/") {
     return React.createElement(PromotorPage, null);
   }
+  if (route.path === "/perfil" || route.path === "/perfil/") {
+    return React.createElement(PerfilVisitantePage, null);
+  }
   if (route.path === "/admin/login") {
     return React.createElement(LoginAdmin, {
       onLogin: () => window.LMTRouter.go("/admin")
@@ -6440,6 +7344,13 @@ const App = () => {
       stands: stands
     });
   }
+  if (route.path === "/admin/caracterizacion") {
+    return React.createElement(AdminPage, {
+      section: "caracterizacion",
+      user: user,
+      stands: stands
+    });
+  }
   if (route.path === "/admin/cuentas") {
     if (user.rol !== "propietario") return React.createElement(NotFound, {
       back: "/admin"
@@ -6486,7 +7397,7 @@ const NotFound = ({
 window.NotFound = NotFound;
 window.Splash = Splash;
 const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave"];
+  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion"];
   if (needed.every(k => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
   } else {

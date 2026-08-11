@@ -33,6 +33,8 @@ const ARCHIVOS = [
   'components/Dashboard.jsx',
   'components/Promotores.jsx',
   'components/Cuentas.jsx',
+  'components/Perfil.jsx',
+  'components/Caracterizacion.jsx',
   'components/App.jsx',
 ];
 

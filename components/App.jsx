@@ -110,6 +110,11 @@ const App = () => {
     return <PromotorPage/>;
   }
 
+  // 4c. Perfil del visitante: caracterización voluntaria tras votar.
+  if (route.path === "/perfil" || route.path === "/perfil/") {
+    return <PerfilVisitantePage/>;
+  }
+
   // 5. Admin login
   if (route.path === "/admin/login") {
     return <LoginAdmin onLogin={() => window.LMTRouter.go("/admin")}/>;
@@ -138,6 +143,9 @@ const App = () => {
   if (route.path === "/admin/correos") {
     return <AdminPage section="correos" user={user} stands={stands}/>;
   }
+  if (route.path === "/admin/caracterizacion") {
+    return <AdminPage section="caracterizacion" user={user} stands={stands}/>;
+  }
   if (route.path === "/admin/cuentas") {
     if (user.rol !== "propietario") return <NotFound back="/admin"/>;
     return <AdminPage section="cuentas" user={user} stands={stands}/>;
@@ -163,7 +171,8 @@ window.Splash = Splash;
 
 const waitForGlobals = () => {
   const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail",
-                  "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave"];
+                  "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave",
+                  "PerfilVisitantePage", "AdminCaracterizacion"];
   if (needed.every((k) => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
   } else {
