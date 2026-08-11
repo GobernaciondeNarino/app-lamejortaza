@@ -393,7 +393,8 @@ function head(string $title, int $current = 0): void { ?>
   .alert-ok { background: oklch(0.95 0.05 145); color: var(--good); border: 1px solid oklch(0.85 0.08 145); }
   .alert-info { background: var(--paper-2); color: var(--ink-2); border: 1px solid var(--line); }
   .checks { font-family: var(--font-mono); font-size: 12px; }
-  .checks li { list-style: none; padding: 8px 0; border-bottom: 1px dashed var(--line); display: flex; justify-content: space-between; }
+  .checks li { list-style: none; padding: 8px 0; border-bottom: 1px dashed var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  .checks li > span:last-child { text-align: right; overflow-wrap: anywhere; }
   .checks .ok { color: var(--good); }
   .checks .ko { color: var(--bad); }
   .driver-toggle { display: flex; gap: 8px; margin-bottom: 20px; }
@@ -596,6 +597,22 @@ if ($method === 'POST') {
             }
             $stepLog[] = '✓ Esquema creado';
 
+            // 2.bis) Migración de una base que YA existía.
+            //
+            // CREATE TABLE IF NOT EXISTS crea las tablas que faltan pero no
+            // añade ni una columna a las que ya están. Reinstalar sobre la base
+            // del año pasado dejaba el esquema a medias y la aplicación
+            // fallando con errores de SQL opacos. Es la misma rutina que
+            // db/migrate.php, así que no hay dos versiones de la verdad.
+            require_once LMT_ROOT . '/db/migraciones.php';
+            $mig = lmt_migrar($pdo);
+            if ($mig['columnas'] > 0) {
+                $stepLog[] = '✓ Esquema actualizado (' . $mig['columnas'] . ' columnas añadidas a tablas existentes)';
+            }
+            foreach ($mig['errores'] as $errMig) {
+                $stepLog[] = '! ' . $errMig;
+            }
+
             // 3) Seed opcional (sólo si tabla vacía)
             if (!empty($_SESSION['seed'])) {
                 $count = (int) $pdo->query('SELECT COUNT(*) FROM stands')->fetchColumn();
@@ -621,20 +638,31 @@ if ($method === 'POST') {
             $stepLog[] = '✓ Hash de contraseña generado (' . strlen($hash) . ' bytes)';
 
             // 5) Insertar / actualizar administrador.
+            //
+            // Con perfil de PROPIETARIO y sin obligación de cambiar la clave:
+            // quien está ejecutando el instalador acaba de elegirla, y es quien
+            // debe poder crear las demás cuentas. Sobre una base que ya existía,
+            // la migración habrá marcado propietario al administrador más
+            // antiguo; esto añade a quien instala, no se lo quita a nadie.
             if ($db['driver'] === 'mysql') {
                 $st = $pdo->prepare(
-                    'INSERT INTO admins (email, password_hash, is_admin) VALUES (:e, :h, 1)
-                     ON DUPLICATE KEY UPDATE password_hash = :h2, is_admin = 1'
+                    "INSERT INTO admins (email, password_hash, is_admin, rol, must_change_password)
+                     VALUES (:e, :h, 1, 'propietario', 0)
+                     ON DUPLICATE KEY UPDATE password_hash = :h2, is_admin = 1,
+                                             rol = 'propietario', must_change_password = 0"
                 );
                 $st->execute([':e' => $admin['email'], ':h' => $hash, ':h2' => $hash]);
             } else {
                 $st = $pdo->prepare(
-                    'INSERT INTO admins (email, password_hash, is_admin) VALUES (:e, :h, 1)
-                     ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash, is_admin = 1'
+                    "INSERT INTO admins (email, password_hash, is_admin, rol, must_change_password)
+                     VALUES (:e, :h, 1, 'propietario', 0)
+                     ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash,
+                                                      is_admin = 1, rol = 'propietario',
+                                                      must_change_password = 0"
                 );
                 $st->execute([':e' => $admin['email'], ':h' => $hash]);
             }
-            $stepLog[] = '✓ Insert/upsert admin ejecutado';
+            $stepLog[] = '✓ Insert/upsert admin ejecutado (perfil propietario)';
 
             // 6) VERIFICAR — si esto falla, avisamos al usuario en lugar de
             //    dejarlo "instalado" sin admin como pasó antes.
@@ -786,7 +814,9 @@ if ($step === 1) {
     <p>Este asistente te guiará en pocos pasos: comprobaremos el entorno, conectaremos la base de datos, crearemos el administrador y dejaremos el sitio listo para servir tu festival.</p>
 
     <?php
-    // Comprobaciones
+    // Imprescindibles: sin esto no arranca nada.
+    $uploads = LMT_ROOT . '/uploads';
+    $uploadsOk = is_dir($uploads) ? is_writable($uploads) : (is_writable(LMT_ROOT));
     $checks = [
         ['PHP ≥ 8.1',                version_compare(PHP_VERSION, '8.1.0', '>='), PHP_VERSION],
         ['Extensión pdo',            extension_loaded('pdo'), extension_loaded('pdo') ? 'sí' : 'no'],
@@ -804,12 +834,42 @@ if ($step === 1) {
         // pdo_mysql O pdo_sqlite — basta uno
     }
     if (!extension_loaded('pdo_mysql') && !extension_loaded('pdo_sqlite')) $blocked = true;
+
+    // Recomendables: la instalación sigue, pero conviene saber qué se pierde.
+    // Cada línea dice qué módulo se queda cojo, que es lo único que importa
+    // cuando esto se lee con prisa la semana del festival.
+    $avisos = [
+        ['Extensión gd (imágenes)', extension_loaded('gd'),
+         'Sin gd, los logos que suben los promotores se guardan tal cual: no se reducen de tamaño ni se limpian sus metadatos (las fotos de móvil llevan coordenadas GPS dentro).'],
+        ['Cifrado disponible (sodium u openssl)', function_exists('sodium_crypto_secretbox') || function_exists('openssl_encrypt'),
+         'Sin ninguno de los dos no se puede guardar la contraseña del SMTP desde el panel; habría que ponerla a mano en api/config.php.'],
+        ['Carpeta uploads/ escribible', $uploadsOk,
+         'Sin permiso de escritura, ningún promotor podrá subir el logo de su producto.'],
+        ['Función mail() disponible', function_exists('mail'), 
+         'No es grave: lo recomendado es SMTP, que se configura en el paso 5.'],
+    ];
     ?>
     <ul class="checks">
       <?php foreach ($checks as $c): ?>
         <li><span><?= h($c[0]) ?></span><span class="<?= $c[1] ? 'ok' : 'ko' ?>"><?= h($c[2]) ?></span></li>
       <?php endforeach; ?>
     </ul>
+
+    <?php $pendientes = array_values(array_filter($avisos, fn($a) => !$a[1])); ?>
+    <?php if ($pendientes): ?>
+      <div class="alert alert-info" style="margin-top:18px;">
+        <strong>Se puede instalar igual, pero ten en cuenta:</strong>
+        <ul style="margin:8px 0 0 18px;padding:0;">
+          <?php foreach ($pendientes as $a): ?>
+            <li style="margin-bottom:6px;"><strong><?= h($a[0]) ?>:</strong> <?= h($a[2]) ?></li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+    <?php else: ?>
+      <div class="alert alert-ok" style="margin-top:18px;">
+        El entorno tiene todo lo recomendado: imágenes, cifrado de secretos y carpeta de subidas escribible.
+      </div>
+    <?php endif; ?>
 
     <?php if ($blocked): ?>
       <div class="alert alert-error" style="margin-top:20px;">El entorno no cumple los requisitos mínimos. Ajusta tu PHP / extensiones y recarga.</div>
@@ -1094,36 +1154,92 @@ if ($step === 6) {
     $done = $_SESSION['done'] ?? null;
     if (!$done) go(1);
     head('Listo', 6);
+
+    $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
+    $urlBase = ($_SERVER['REQUEST_SCHEME'] ?? (empty($_SERVER['HTTPS']) ? 'http' : 'https'))
+             . '://' . ($_SERVER['HTTP_HOST'] ?? '') . $base;
+
+    // Estado real del correo, que es lo que más se olvida.
+    $correoEstado = null;
+    try {
+        instalar_runtime();
+        $cfgCorreo = \LMT\Mailer::cfg();
+        $correoEstado = [
+            'transporte' => (string) $cfgCorreo['transport'],
+            'entrega'    => \LMT\Mailer::entregaDeVerdad((string) $cfgCorreo['transport']),
+            'probado'    => (int) \LMT\Db::pdo()->query("SELECT COUNT(*) FROM emails_log WHERE tipo = 'prueba_instalacion' AND estado = 'enviado'")->fetchColumn(),
+        ];
+    } catch (\Throwable $e) { /* la pantalla final no depende de esto */ }
     ?>
     <h2>¡Listo! El festival está servido.</h2>
     <div class="alert alert-ok">
-      Cuenta de administrador creada para <strong><?= h($done['email']) ?></strong>.
+      Cuenta de administrador creada para <strong><?= h($done['email']) ?></strong>, con perfil de
+      <strong>propietario</strong>: es la única que puede crear y quitar otras cuentas.
     </div>
-    <p>Para reforzar la seguridad, borra ahora el archivo <code>install.php</code> del servidor. Mientras exista, está protegido por la cookie + token CSRF y por la marca <code>installed</code> en <code>api/config.php</code>, pero lo limpio es eliminarlo.</p>
+
+    <h3 style="font-size:15px;margin:26px 0 10px;">Antes de dar el sitio por bueno</h3>
+    <ul class="checks">
+      <li>
+        <span>Borra <code>install.php</code> del servidor</span>
+        <span class="ko">pendiente</span>
+      </li>
+      <li>
+        <span>El correo sale de verdad</span>
+        <?php if ($correoEstado && $correoEstado['entrega'] && $correoEstado['probado'] > 0): ?>
+          <span class="ok">probado con «<?= h($correoEstado['transporte']) ?>»</span>
+        <?php elseif ($correoEstado && !$correoEstado['entrega']): ?>
+          <span class="ko">transporte «<?= h($correoEstado['transporte']) ?>»: no envía</span>
+        <?php else: ?>
+          <span class="ko">sin probar</span>
+        <?php endif; ?>
+      </li>
+      <li>
+        <span>Las URLs limpias funcionan</span>
+        <span><a href="<?= h($urlBase) ?>/api/auth/me" target="_blank" rel="noopener">comprobar ahora ↗</a></span>
+      </li>
+    </ul>
+
+    <?php if ($correoEstado && (!$correoEstado['entrega'] || $correoEstado['probado'] === 0)): ?>
+      <div class="alert alert-error" style="margin-top:16px;">
+        <strong>El correo todavía no está confirmado.</strong>
+        De ahí salen las contraseñas de los promotores y el QR de su stand: si no funciona, nadie
+        puede entrar a cargar su información. Puedes arreglarlo ahora
+        <a href="install.php?step=5">volviendo al paso de correo</a>, o más tarde desde
+        <strong>Panel → Correo</strong>.
+      </div>
+    <?php endif; ?>
+
+    <div class="alert alert-info" style="margin-top:16px;">
+      <strong>Si <code><?= h($urlBase) ?>/api/auth/me</code> te devuelve 404</strong>, tu Apache necesita
+      <code>mod_rewrite</code> habilitado y <code>AllowOverride All</code> sobre esta carpeta.
+      La aplicación funciona igual sin ellos —el cliente llama a <code>api/index.php?path=…</code>—,
+      pero los enlaces limpios del navegador sí los necesitan.
+    </div>
+
+    <h3 style="font-size:15px;margin:26px 0 10px;">Por dónde empezar</h3>
+    <ul class="checks">
+      <li><span>Registrar los stands o abrir las inscripciones</span><span><a href="<?= h($base) ?>/admin/stands">Panel → Stands</a></span></li>
+      <li><span>Compartir el enlace de inscripción con los caficultores</span><span><code><?= h($urlBase) ?>/inscripcion</code></span></li>
+      <li><span>Imprimir los carteles QR para pegar en cada stand</span><span><a href="<?= h($base) ?>/admin/qr">Panel → Códigos QR</a></span></li>
+      <li><span>Crear cuentas para el resto del equipo</span><span><a href="<?= h($base) ?>/admin/cuentas">Panel → Administradores</a></span></li>
+    </ul>
+
     <div class="footer-note">
       <strong>Token de reinstalación</strong><br>
       Si alguna vez necesitas reabrir el asistente sin borrar <code>api/config.php</code>, usa esta URL una sola vez:
       <div class="copy" style="margin-top:8px;">install.php?reinstall=<?= h($done['reinstall_token']) ?></div>
       Está guardado dentro de <code>api/config.php</code>; cámbialo si te preocupa.
     </div>
-    <?php
-      $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
-      $base = $base === '' ? '' : $base;
-    ?>
-    <div class="alert alert-info" style="margin-top:18px;">
-      <strong>Verifica que las URLs limpias funcionan.</strong><br>
-      Antes de cerrar este asistente, abre en otra pestaña:<br>
-      <code><?= h(($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . $base) ?>/api/auth/me</code><br>
-      Debe responder un JSON con <code>"ok": true</code>. Si te devuelve 404, tu Apache necesita
-      <code>mod_rewrite</code> habilitado y <code>AllowOverride All</code> sobre esta carpeta
-      (consulta a tu hosting o revisa el README).
-    </div>
+
     <div class="actions" style="margin-top:24px;">
+      <a class="btn btn-ghost" href="install.php?step=5">← Volver al correo</a>
       <a class="btn btn-primary" href="<?= h($base) ?>/">Ir al sitio →</a>
     </div>
     <?php
-    // Limpiar el flag para que un reload no muestre datos viejos.
-    unset($_SESSION['done']);
+    // El dato de la instalación se conserva a propósito: desde aquí se puede
+    // volver al paso del correo, que es lo que más gente deja a medias. Se
+    // borra al cerrar la sesión del instalador —o al borrar install.php, que es
+    // lo que pide la primera línea de la lista.
     tail();
     exit;
 }

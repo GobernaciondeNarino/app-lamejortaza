@@ -301,10 +301,10 @@ falta instalar nada con npm.
 
 ### 4.1. Asistente de instalación web (recomendado)
 
-`install.php` es un asistente al estilo WordPress: pide los datos de la
-base de datos y del administrador, prueba la conexión, escribe
-`api/config.php`, crea las tablas, hace un seed opcional y se autobloquea
-al terminar.
+`install.php` es un asistente al estilo WordPress: comprueba el entorno, pide
+los datos de la base y del administrador, escribe `api/config.php`, crea (o
+**actualiza**) las tablas, configura y **prueba el correo**, y se autobloquea al
+terminar.
 
 ```bash
 git clone https://github.com/GobernaciondeNarino/la-mejor-taza.git
@@ -317,20 +317,32 @@ php -S 127.0.0.1:8000 router.php
 Abre <http://127.0.0.1:8000/install.php> (o entra a `/`, que redirige
 automáticamente cuando no hay `api/config.php`). Pasos:
 
-1. **Bienvenida** — comprueba versión de PHP, extensiones (`pdo`,
-   `pdo_mysql`/`pdo_sqlite`, `mbstring`, `json`), Argon2id y permisos
-   de `api/` y `db/`.
-2. **Base de datos** — selecciona MySQL/MariaDB o SQLite. Para MySQL
-   piden host, puerto, **nombre de la base**, **usuario** y
-   **contraseña**; si la base no existe, la crea con `utf8mb4`.
-3. **Administrador** — URL del sitio, correo y contraseña (mínimo 12).
-   Aquí también puedes desmarcar el seed de los 8 stands de ejemplo.
-4. **Instalación** — genera `pepper` y `app_secret` aleatorios,
-   escribe `api/config.php` con `'installed' => true` y un
-   `reinstall_token`, ejecuta el esquema y crea el admin.
-5. **Listo** — muestra el `reinstall_token` por si en el futuro
-   necesitas reabrir el asistente sin borrar el config, y sugiere
-   borrar `install.php`.
+1. **Entorno** — versión de PHP, extensiones (`pdo`, `pdo_mysql`/`pdo_sqlite`,
+   `mbstring`, `json`), Argon2id y permisos de `api/` y `db/`. Aparte, avisa de
+   lo que no bloquea pero se echa en falta, diciendo **qué módulo se queda
+   cojo**: sin `gd` los logos no se reducen ni se les quitan los EXIF (las fotos
+   de móvil llevan GPS dentro), sin `sodium`/`openssl` no se puede guardar la
+   contraseña del SMTP desde el panel, y sin `uploads/` escribible ningún
+   promotor podrá subir su logo.
+2. **Base de datos** — MySQL/MariaDB o SQLite. Para MySQL pide host, puerto,
+   **nombre de la base**, **usuario** y **contraseña**; si la base no existe, la
+   crea con `utf8mb4`.
+3. **Administrador** — URL del sitio, correo y contraseña (mínimo 12). Aquí
+   también puedes desmarcar el seed de los 8 stands de ejemplo. La cuenta que se
+   crea aquí queda con perfil **propietario**: es quien podrá crear las demás.
+4. **Instalando** — genera `pepper` y `app_secret` aleatorios, escribe
+   `api/config.php` con `'installed' => true` y un `reinstall_token`, aplica el
+   esquema, **actualiza una base que ya existiera** (misma rutina que
+   `db/migrate.php`: añade las columnas que falten a las tablas que ya están, que
+   es lo que `CREATE TABLE IF NOT EXISTS` no hace) y crea el administrador.
+5. **Correo** — transporte, remitente y credenciales del SMTP, y **envía una
+   prueba de verdad**. Es el único paso que comprueba algo que no se puede
+   comprobar solo: descubrir el día del festival que las contraseñas de los
+   promotores nunca salieron no es una opción. Se puede saltar y hacerlo después
+   desde *Panel → Correo*.
+6. **Listo** — lista de verificación con lo que falta (borrar `install.php`, si
+   el correo quedó probado, si las URLs limpias responden), enlaces a por dónde
+   empezar y el `reinstall_token`.
 
 > Mientras `api/config.php` no exista, `install.php` se ejecuta libremente.
 > En cuanto existe, el asistente se autobloquea — la única forma de
@@ -339,8 +351,13 @@ automáticamente cuando no hay `api/config.php`). Pasos:
 > - llamar `install.php?reinstall={token}` con el token guardado en el
 >   propio config.
 
-Cuando termines, **borra** `install.php` del servidor (no hace falta
-en producción).
+Cuando termines, **borra** `install.php` del servidor (no hace falta en
+producción).
+
+**Para actualizar una instalación que ya está en marcha** puedes volver a pasar
+el asistente con `install.php?reinstall={token}` —conserva los datos y sólo
+añade lo que falte— o ejecutar `php db/migrate.php` desde la consola, que hace
+exactamente lo mismo sin tocar la configuración ni el administrador.
 
 ### 4.2. Instalación manual (sin wizard)
 
