@@ -32,6 +32,8 @@
     "--ink": "#38322c", "--ink-2": "#5f574d", "--ink-3": "#8b8175",
     "--line": "#ddd4c4", "--line-2": "#c9bda8",
     "--grano": "#6b4f3a", "--galeras": "#a8593a", "--cafeto": "#5a7a4a",
+    // Calificaciones, para la hoja del recorrido.
+    "--good": "#3f8a4e", "--meh": "#c19a3d", "--bad": "#b34a35",
   };
 
   // ---------------------------------------------------------------------
@@ -365,9 +367,11 @@
     // Todas las demás páginas comparten el papel.
     ctx.fillStyle = pal["--paper"]; ctx.fillRect(0, 0, W, H);
     grano(ctx, W, H);
-    // La hoja de datos no lleva renglones: es una ficha, no una página para
-    // escribir. Con ellos parecía un cuaderno y no el documento que imita.
-    if (tipo !== "contraportada" && tipo !== "indice") renglones(ctx, W, H, pal["--line"], k);
+    // Ni la hoja de datos ni la del recorrido llevan renglones: son fichas, no
+    // páginas para escribir. Con ellos parecían un cuaderno.
+    if (tipo !== "contraportada" && tipo !== "indice" && tipo !== "travesia") {
+      renglones(ctx, W, H, pal["--line"], k);
+    }
 
     if (tipo === "indice") {
       // Hoja de datos, como la página del titular en un pasaporte de verdad:
@@ -450,6 +454,54 @@
 
       ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("display", 19 * k);
       parrafo(ctx, "“" + (s.descripcion || "") + "”", W * 0.09, H * 0.845, W * 0.82, 24 * k, 3);
+    } else if (tipo === "travesia") {
+      // Hoja del recorrido, al final: número, stand y la calificación que le
+      // puso. Las filas vienen ya resueltas desde Passport.jsx para que esta
+      // vista y la de CSS no puedan decir cosas distintas.
+      var filas = Array.isArray(pagina.filas) ? pagina.filas : [];
+
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
+      textoEspaciado(ctx, "RECORRIDO", W * 0.09, H * 0.09, 1.6 * k);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 34 * k);
+      ctx.fillText("Tu travesía.", W * 0.085, H * 0.135);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * k);
+      parrafo(ctx, filas.length === 1 ? "El stand que sellaste." : "Los " + filas.length + " stands que sellaste.",
+              W * 0.09, H * 0.172, W * 0.82, 17 * k, 2);
+
+      var y = H * 0.225;
+      var pasoF = Math.min(46 * k, (H * 0.63) / Math.max(1, filas.length));
+      for (var f = 0; f < filas.length; f++) {
+        var fila = filas[f];
+        if (y > H * 0.86) {                       // no cabe: se dice cuántas faltan
+          ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
+          ctx.fillText("+" + (filas.length - f) + " más", W * 0.13, y);
+          break;
+        }
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
+        ctx.fillText(fila.n, W * 0.09, y);
+        ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 16 * k);
+        ctx.fillText(recortar(ctx, fila.nombre, W * 0.52), W * 0.16, y);
+        if (fila.municipio) {
+          ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * k);
+          ctx.fillText(recortar(ctx, fila.municipio.toUpperCase(), W * 0.52), W * 0.16, y + 14 * k);
+        }
+        if (fila.valoracion) {
+          ctx.fillStyle = pal[fila.colorPal] || pal["--ink-3"];
+          ctx.font = familia("mono", 10 * k);
+          ctx.textAlign = "right";
+          ctx.fillText(fila.valoracion.toUpperCase(), W * 0.91, y);
+          ctx.textAlign = "left";
+        }
+        y += pasoF;
+      }
+
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
+      ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.915); ctx.lineTo(W * 0.91, H * 0.915); ctx.stroke();
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
+      textoEspaciado(ctx, filas.length + " SELLADOS", W * 0.09, H * 0.955, 1.4 * k);
+      ctx.textAlign = "right";
+      ctx.fillText(Math.max(0, (pagina.totalStands | 0) - filas.length) + " FALTANTES", W * 0.91, H * 0.955);
+      ctx.textAlign = "left";
     } else if (tipo === "final") {
       ctx.textAlign = "center";
       ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
