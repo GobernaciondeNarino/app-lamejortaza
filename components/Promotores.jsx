@@ -155,14 +155,12 @@ const PromotorRegistroPage = () => {
               <span className="ayuda">Déjalo vacío para usar el nombre de la empresa.</span>
             </div>
             <div className="grid-2">
-              <div className="field">
-                <label htmlFor="in-mun">Municipio *</label>
-                <input id="in-mun" value={form.municipio} onChange={(e) => set("municipio", e.target.value)} maxLength={80} required placeholder="Sandoná"/>
-              </div>
-              <div className="field">
-                <label htmlFor="in-region">Región</label>
-                <input id="in-region" value={form.stand_region} onChange={(e) => set("stand_region", e.target.value)} maxLength={80} placeholder="Occidente"/>
-              </div>
+              <SelectorMunicipio id="in-mun" valor={form.municipio} requerido
+                onCambio={(municipio, region) => setForm((f) => ({
+                  ...f, municipio, stand_region: region || f.stand_region,
+                }))}/>
+              <SelectorSubregion id="in-region" valor={form.stand_region} municipio={form.municipio}
+                onCambio={(v) => set("stand_region", v)}/>
             </div>
             <div className="field">
               <label htmlFor="in-dir">Dirección</label>
@@ -204,9 +202,11 @@ const PromotorRegistroPage = () => {
               alto={320}
               onCambio={(u) => {
                 setUbicacion({ lat: u.lat, lng: u.lng });
-                // El municipio sale del propio mapa: es más fiable que
-                // escribirlo a mano y evita «Pasto» / «San Juan de Pasto».
-                if (u.municipio) set("municipio", u.municipio);
+                // El municipio sale del propio mapa: es más fiable que elegirlo
+                // de la lista y arrastra consigo su subregión.
+                if (u.municipio) setForm((f) => ({
+                  ...f, municipio: u.municipio, stand_region: subregionDe(u.municipio) || f.stand_region,
+                }));
               }}/>
           </BloqueForm>
 
@@ -606,10 +606,8 @@ const EmpresaEditor = ({ empresa, logoUrl, onGuardar, onLogo }) => {
           <label>NIT</label>
           <input value={form.nit || ""} onChange={(e) => set("nit", e.target.value)} maxLength={32}/>
         </div>
-        <div className="field">
-          <label>Municipio</label>
-          <input value={form.municipio || ""} onChange={(e) => set("municipio", e.target.value)} maxLength={80}/>
-        </div>
+        <SelectorMunicipio id="emp-mun" valor={form.municipio || ""} requerido
+          onCambio={(municipio) => set("municipio", municipio)}/>
       </div>
       <div className="field">
         <label>Dirección</label>
@@ -689,10 +687,9 @@ const PerfilEditor = ({ promotor, onGuardar }) => {
           <input value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32} inputMode="numeric"/>
         </div>
       </div>
-      <div className="field">
-        <label>Municipio</label>
-        <input value={form.municipio} onChange={(e) => set("municipio", e.target.value)} maxLength={80}/>
-      </div>
+      <SelectorMunicipio id="pr-mun" valor={form.municipio} requerido
+        onCambio={(municipio) => set("municipio", municipio)}/>
+      <p className="ayuda">Tu municipio define la región del stand en el mapa del festival.</p>
       <Aviso>{error}</Aviso>
       <Aviso tipo="ok">{ok}</Aviso>
       <button className="btn btn-primary" type="submit" disabled={busy} style={{ alignSelf: "flex-start", opacity: busy ? 0.6 : 1 }}>

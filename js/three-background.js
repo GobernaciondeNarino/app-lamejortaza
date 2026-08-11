@@ -46,6 +46,12 @@
       return null;
     }
     if (container.dataset.threeMounted === "1") return null;
+    // Sin WebGL utilizable, `new THREE.WebGLRenderer()` LANZA. Este fondo es
+    // decoración: si revienta aquí, el error sube sin recoger y se lleva por
+    // delante el render de React que lo está montando. Se comprueba antes y,
+    // por si el navegador dice que sí y luego falla, se envuelve. La página
+    // se queda con el color de papel, que es exactamente lo que debe pasar.
+    if (typeof window.threeSoportado === "function" && !window.threeSoportado()) return null;
     container.dataset.threeMounted = "1";
 
     const scene = new THREE.Scene();
@@ -59,7 +65,13 @@
     const camera = new THREE.PerspectiveCamera(55, Math.max(w, 1) / Math.max(h, 1), 0.1, 100);
     camera.position.set(0, 0, estrecho ? 22 : 14);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch (_) {
+      delete container.dataset.threeMounted;
+      return null;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
     renderer.setClearColor(0x000000, 0); // transparente para mostrar var(--paper)

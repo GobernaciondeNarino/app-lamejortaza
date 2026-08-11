@@ -236,11 +236,13 @@ function stand_payload(array $b, bool $needsId): array
     if ($needsId && !$id) Response::error(400, 'bad_id');
 
     $nombre    = trim((string)($b['nombre'] ?? ''));
-    $municipio = trim((string)($b['municipio'] ?? ''));
-    if ($nombre === '' || mb_strlen($nombre, 'UTF-8') > 80)    Response::error(422, 'bad_nombre');
-    if ($municipio === '' || mb_strlen($municipio, 'UTF-8') > 80) Response::error(422, 'bad_municipio');
+    if ($nombre === '' || mb_strlen($nombre, 'UTF-8') > 80) Response::error(422, 'bad_nombre');
 
-    $region    = mb_substr(trim((string)($b['region']    ?? '')), 0, 80, 'UTF-8');
+    // Municipio contra el catálogo del DANE y región DEDUCIDA de él: así no
+    // pueden contradecirse, que era el problema de tenerlos como texto libre.
+    $municipio = \LMT\Territorio::municipio($b['municipio'] ?? null);
+    if ($municipio === null) Response::error(422, 'bad_municipio');
+    $region    = (string) \LMT\Territorio::subregion($municipio);
     $direccion = mb_substr(trim((string)($b['direccion'] ?? '')), 0, 255, 'UTF-8');
     $descripcion = Validate::comment((string)($b['descripcion'] ?? ''), 800);
     $correo    = Validate::email($b['correo'] ?? null) ?? '';

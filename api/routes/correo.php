@@ -189,6 +189,26 @@ function correo_diagnostico(array $c): array
     if ($transporte === 'smtp') {
         $s = (array) ($c['smtp'] ?? []);
         $host = (string) ($s['host'] ?? '');
+        $esGmail = $host !== '' && (bool) preg_match('/(^|\.)(gmail\.com|googlemail\.com)$/i', $host);
+
+        if ($esGmail) {
+            $avisos[] = [
+                'nivel' => 'medio',
+                'texto' => 'Gmail no acepta la contraseña normal del buzón: hay que crear una '
+                         . '«contraseña de aplicación» de 16 caracteres en la cuenta de Google '
+                         . '(Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones) '
+                         . 'y pegarla aquí. Con la contraseña de siempre el servidor responde 535.',
+            ];
+            $usuario = strtolower((string) ($s['user'] ?? ''));
+            if ($usuario !== '' && $dominioFrom !== '' && strtolower($from) !== $usuario) {
+                $avisos[] = [
+                    'nivel' => 'alto',
+                    'texto' => "Gmail reescribe el remitente si no coincide con el buzón autenticado: "
+                             . "el correo saldría como «{$usuario}» y no como «{$from}». Pon la misma "
+                             . 'dirección en los dos sitios, o dala de alta como alias verificado en Gmail.',
+                ];
+            }
+        }
         if ($host === '') {
             $avisos[] = ['nivel' => 'critico', 'texto' => 'SMTP sin servidor configurado.'];
         } else {
@@ -273,7 +293,15 @@ function correo_pista(string $transporte, ?string $error, bool $ok, array $cfg):
     }
     $e = (string) $error;
     if (str_contains($e, 'smtp_conexion'))        return 'No se pudo conectar con el servidor SMTP. Comprueba el nombre y el puerto, y si el hosting bloquea la salida.';
-    if (str_contains($e, 'smtp_auth'))            return 'El servidor rechazó el usuario o la contraseña del buzón.';
+    if (str_contains($e, 'smtp_auth')) {
+        $host = strtolower((string) (($cfg['smtp'] ?? [])['host'] ?? ''));
+        if (str_contains($host, 'gmail') || str_contains($host, 'google')) {
+            return 'Gmail rechazó las credenciales. Casi siempre es porque se puso la contraseña '
+                 . 'normal de la cuenta: hace falta una «contraseña de aplicación» de 16 caracteres '
+                 . '(cuenta de Google → Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones).';
+        }
+        return 'El servidor rechazó el usuario o la contraseña del buzón.';
+    }
     if (str_contains($e, 'smtp_tls'))             return 'Falló el cifrado. Prueba con el puerto 465 y «ssl», o con 587 y «tls».';
     if (str_contains($e, 'smtp_mailfrom') || str_contains($e, 'smtp_rcpt'))
         return 'El servidor no acepta ese remitente o ese destinatario. Suele ser que el buzón autenticado no puede enviar en nombre de esa dirección.';

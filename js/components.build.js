@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 9089d38806e8cb35
+// Huella de las fuentes: 89fc7520c2096897
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -472,6 +472,8 @@ const ERRORES = {
   estado_invalido: "Ese cambio de estado no es válido.",
   estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
   bad_id: "El identificador no es válido. Recarga la página.",
+  municipio_invalido: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
+  bad_municipio: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_json: "Los datos enviados no son válidos. Recarga la página.",
   password_invalida: "La contraseña no es válida.",
   payload_too_large: "El contenido es demasiado grande.",
@@ -752,11 +754,104 @@ const SelectorUbicacion = ({
   }, aviso));
 };
 const normMuniSimple = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const MUNICIPIOS = () => (MAPA_NARINO() || {}).municipios || [];
+const SUBREGIONES = () => (MAPA_NARINO() || {}).subregiones || [];
+const subregionDe = municipio => {
+  const clave = normMuniSimple(municipio);
+  if (!clave) return "";
+  const m = MUNICIPIOS().find(x => normMuniSimple(x.nombre) === clave);
+  return m ? m.subregion : "";
+};
+const OTRO_MUNICIPIO = "__otro__";
+const SelectorMunicipio = ({
+  id,
+  valor,
+  onCambio,
+  permitirOtro = false,
+  requerido = false,
+  etiqueta = "Municipio"
+}) => {
+  const munis = MUNICIPIOS();
+  const enCatalogo = !!valor && munis.some(m => normMuniSimple(m.nombre) === normMuniSimple(valor));
+  const [otro, setOtro] = React.useState(!!valor && !enCatalogo);
+  const grupos = {};
+  munis.forEach(m => {
+    (grupos[m.subregion] = grupos[m.subregion] || []).push(m);
+  });
+  const elegir = v => {
+    if (v === OTRO_MUNICIPIO) {
+      setOtro(true);
+      onCambio("", "");
+      return;
+    }
+    setOtro(false);
+    onCambio(v, subregionDe(v));
+  };
+  return React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: id
+  }, etiqueta, requerido ? " *" : ""), React.createElement("select", {
+    id: id,
+    required: requerido && !otro,
+    value: otro ? OTRO_MUNICIPIO : enCatalogo ? valor : "",
+    onChange: e => elegir(e.target.value)
+  }, React.createElement("option", {
+    value: ""
+  }, "Selecciona un municipio"), SUBREGIONES().map(sub => React.createElement("optgroup", {
+    key: sub,
+    label: sub
+  }, (grupos[sub] || []).map(m => React.createElement("option", {
+    key: m.divipola,
+    value: m.nombre
+  }, m.nombre)))), permitirOtro && React.createElement("option", {
+    value: OTRO_MUNICIPIO
+  }, "Otro municipio (fuera de Nari\xF1o)")), otro && React.createElement("input", {
+    id: id + "-otro",
+    value: enCatalogo ? "" : valor || "",
+    onChange: e => onCambio(e.target.value, ""),
+    maxLength: 80,
+    placeholder: "Escribe el municipio",
+    style: {
+      marginTop: 8
+    }
+  }));
+};
+const SelectorSubregion = ({
+  id,
+  valor,
+  municipio,
+  onCambio,
+  etiqueta = "Región"
+}) => {
+  const derivada = subregionDe(municipio);
+  return React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: id
+  }, etiqueta), React.createElement("select", {
+    id: id,
+    value: valor || "",
+    onChange: e => onCambio(e.target.value)
+  }, React.createElement("option", {
+    value: ""
+  }, "Sin especificar"), SUBREGIONES().map(s => React.createElement("option", {
+    key: s,
+    value: s
+  }, s))), React.createElement("span", {
+    className: "ayuda"
+  }, derivada ? `Se completa sola con el municipio: ${municipio} está en ${derivada}.` : "Las 13 subregiones en que se agrupa el departamento."));
+};
 Object.assign(window, {
   SelectorUbicacion,
   geoAPunto,
   puntoAGeo,
-  normMuniSimple
+  normMuniSimple,
+  SelectorMunicipio,
+  SelectorSubregion,
+  subregionDe,
+  MUNICIPIOS,
+  SUBREGIONES
 });
 })();
 
@@ -1476,22 +1571,21 @@ const StandEditor = ({
     style: {
       gap: 20
     }
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Municipio"), React.createElement("input", {
-    value: form.municipio,
-    onChange: e => update("municipio", e.target.value),
-    placeholder: "La Uni\xF3n",
-    maxLength: 80,
-    required: true
+  }, React.createElement(SelectorMunicipio, {
+    id: "st-municipio",
+    valor: form.municipio,
+    requerido: true,
+    onCambio: (municipio, region) => setForm(f => ({
+      ...f,
+      municipio,
+      region: region || f.region
+    }))
+  }), React.createElement(SelectorSubregion, {
+    id: "st-region",
+    valor: form.region,
+    municipio: form.municipio,
+    onCambio: v => update("region", v)
   })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Regi\xF3n"), React.createElement("input", {
-    value: form.region,
-    onChange: e => update("region", e.target.value),
-    placeholder: "Norte de Nari\xF1o",
-    maxLength: 80
-  }))), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Direcci\xF3n"), React.createElement("input", {
     value: form.direccion,
@@ -1595,7 +1689,8 @@ const StandEditor = ({
       ...f,
       lat: u.lat,
       lng: u.lng,
-      municipio: u.municipio || f.municipio
+      municipio: u.municipio || f.municipio,
+      region: u.municipio && subregionDe(u.municipio) || f.region
     }))
   })), React.createElement("div", null, React.createElement("div", {
     className: "mono",
@@ -2928,6 +3023,7 @@ const PassportPage = ({
     }
   });
   const [data, setData] = React.useState(null);
+  const [perfil, setPerfil] = React.useState(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [page, setPage] = React.useState(0);
@@ -2962,6 +3058,26 @@ const PassportPage = ({
       window.removeEventListener("lmt:auth", intentar);
     };
   }, [email, load]);
+  React.useEffect(() => {
+    if (!email || !window.LMTPerfil) return;
+    const guardado = window.LMTPerfil.leer();
+    if (!guardado.token || guardado.correo !== String(email).toLowerCase()) {
+      setPerfil(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      try {
+        const res = await window.LMTApi.getPerfilVisitante(guardado.correo, guardado.token);
+        if (!cancelado) setPerfil(res && res.perfil || null);
+      } catch (_) {
+        if (!cancelado) setPerfil(null);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [email, data]);
   if (askingEmail) {
     return React.createElement("div", {
       className: "mobile-page"
@@ -3088,10 +3204,12 @@ const PassportPage = ({
   const visitados = visitadosIds.map(id => stands.find(s => s.id === id)).filter(Boolean);
   if (!visitados.length) return React.createElement(PassportEmpty, null);
   const passport = {
-    nombre: data.nombre || "Visitante",
+    nombre: perfil && perfil.nombre || data.nombre || "Visitante",
     correo: data.correo || email,
+    numero: data.numero || "",
     inicio: data.inicio || "",
-    visitados: visitadosIds
+    visitados: visitadosIds,
+    perfil: perfil
   };
   const pages = [{
     type: "cover"
@@ -3131,29 +3249,31 @@ const PassportBook = ({
   const libroRef = React.useRef(null);
   const [book3d, setBook3d] = React.useState(false);
   const pagesKey = React.useMemo(() => visitadosIds.join(",") + "|" + stands.length, [visitadosIds, stands.length]);
+  const paginasLibro = React.useMemo(() => [{
+    tipo: "portada",
+    nombre: passport.nombre,
+    correo: passport.correo,
+    inicio: passport.inicio
+  }, Object.assign({
+    tipo: "indice",
+    visitados: visitados.length,
+    totalStands: stands.length
+  }, datosPagina(passport, stands.length)), ...visitados.map((s, i) => ({
+    tipo: "sello",
+    indice: i,
+    stand: s
+  })), {
+    tipo: "final",
+    visitados: visitados.length,
+    totalStands: stands.length
+  }], [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero, passport.perfil]);
+  const paginasRef = React.useRef(paginasLibro);
+  paginasRef.current = paginasLibro;
   React.useEffect(() => {
     const cont = wrapRef.current;
     if (!cont || !window.LMTPassportBook || !window.LMTPassportBook.soportado()) return;
     const libro = window.LMTPassportBook.mount(cont, {
-      paginas: [{
-        tipo: "portada",
-        nombre: passport.nombre,
-        correo: passport.correo,
-        inicio: passport.inicio
-      }, {
-        tipo: "indice",
-        visitados: visitados.length,
-        totalSlots: Math.max(8, visitados.length),
-        totalStands: stands.length
-      }, ...visitados.map((s, i) => ({
-        tipo: "sello",
-        indice: i,
-        stand: s
-      })), {
-        tipo: "final",
-        visitados: visitados.length,
-        totalStands: stands.length
-      }],
+      paginas: paginasRef.current,
       paginaInicial: 0,
       onReady: () => setBook3d(true),
       onPageChange: i => setPage(i),
@@ -3166,6 +3286,12 @@ const PassportBook = ({
       setBook3d(false);
     };
   }, [pagesKey]);
+  React.useEffect(() => {
+    const libro = libroRef.current;
+    if (libro && libro.setPaginas) libro.setPaginas(paginasLibro, {
+      mantenerIndice: true
+    });
+  }, [paginasLibro]);
   const go = dir => {
     const libro = libroRef.current;
     if (libro && book3d) {
@@ -3183,7 +3309,7 @@ const PassportBook = ({
   };
   const total = book3d && libroRef.current ? libroRef.current.totalPaginas() : pages.length;
   const actual = pages[Math.min(page, pages.length - 1)] || pages[0];
-  const resumen = actual.type === "stamp" ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}` : actual.type === "cover" ? "Portada del pasaporte" : actual.type === "index" ? "Índice de la travesía" : "Fin del pasaporte";
+  const resumen = actual.type === "stamp" ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}` : actual.type === "cover" ? "Portada del pasaporte" : actual.type === "index" ? `Página de datos de ${passport.nombre}` : "Fin del pasaporte";
   return React.createElement("div", {
     className: "pasaporte-vista",
     style: {
@@ -3205,6 +3331,7 @@ const PassportBook = ({
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
+      gap: 10,
       padding: "0 4px",
       color: "var(--paper-3)"
     }
@@ -3213,12 +3340,19 @@ const PassportBook = ({
     "data-route": true,
     style: {
       color: "var(--paper-3)",
-      fontSize: 13
+      fontSize: 13,
+      whiteSpace: "nowrap"
     }
   }, "\u2190 Salir"), React.createElement("div", {
     className: "mono",
     style: {
-      color: "var(--paper-3)"
+      color: "var(--paper-3)",
+      minWidth: 0,
+      flex: 1,
+      textAlign: "center",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
     }
   }, "Pasaporte \xB7 ", passport.nombre), React.createElement("button", {
     onClick: () => {
@@ -3229,7 +3363,8 @@ const PassportBook = ({
     },
     style: {
       color: "var(--paper-3)",
-      fontSize: 12
+      fontSize: 12,
+      whiteSpace: "nowrap"
     }
   }, "Cerrar")), React.createElement("div", {
     className: "pasaporte-horizontal"
@@ -3344,6 +3479,258 @@ const PassportBook = ({
     }
   }, "Completar mi perfil de visitante")))));
 };
+const DATO_VACIO = "——";
+const etiquetaPerfil = (campo, valor) => {
+  if (!valor) return DATO_VACIO;
+  const tabla = (window.PERFIL_ETIQUETAS || {})[campo] || {};
+  return tabla[valor] || valor;
+};
+const fechaCorta = iso => {
+  if (!iso) return DATO_VACIO;
+  const d = new Date(String(iso).replace(" ", "T"));
+  if (isNaN(d)) return DATO_VACIO;
+  const meses = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+  return String(d.getDate()).padStart(2, "0") + " " + meses[d.getMonth()] + " " + d.getFullYear();
+};
+const MRZ_ANCHO = 31;
+const bandaMecanica = passport => {
+  const limpia = (s, n) => String(s || "").toUpperCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^A-Z0-9]/g, "<").slice(0, n).padEnd(n, "<");
+  const p = passport.perfil || {};
+  const l1 = ("PC<COL" + limpia(passport.nombre, 25)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
+  const l2 = (limpia(passport.numero, 12) + "COL" + limpia(p.municipio || "NARINO", 16)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
+  return [l1, l2];
+};
+const datosPagina = (passport, totalStands) => {
+  const p = passport.perfil || {};
+  const [mrz1, mrz2] = bandaMecanica(passport);
+  return {
+    nombre: passport.nombre,
+    correo: passport.correo,
+    numero: passport.numero || DATO_VACIO,
+    sexo: etiquetaPerfil("genero", p.genero),
+    edad: etiquetaPerfil("rango_edad", p.rango_edad),
+    procedencia: [p.municipio, p.departamento].filter(Boolean).join(", ") || p.pais || DATO_VACIO,
+    visitante: p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante),
+    expedido: fechaCorta(passport.inicio),
+    conPerfil: !!passport.perfil,
+    totalStands: totalStands,
+    mrz1,
+    mrz2
+  };
+};
+const CampoDato = ({
+  etiqueta,
+  valor,
+  ancho
+}) => React.createElement("div", {
+  style: {
+    flex: ancho || 1,
+    minWidth: 0
+  }
+}, React.createElement("div", {
+  className: "mono",
+  style: {
+    fontSize: 8,
+    color: "var(--ink-3)",
+    lineHeight: 1.4
+  }
+}, etiqueta), React.createElement("div", {
+  style: {
+    fontSize: 12,
+    lineHeight: 1.25,
+    marginTop: 1,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
+  }
+}, valor));
+const PaginaDatos = ({
+  passport,
+  totalStands
+}) => {
+  const p = passport.perfil || {};
+  const procedencia = [p.municipio, p.departamento].filter(Boolean).join(", ") || p.pais || DATO_VACIO;
+  const entidad = p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante);
+  const [mrz1, mrz2] = bandaMecanica(passport);
+  const sellos = passport.visitados.length;
+  return React.createElement("div", {
+    style: {
+      height: "100%",
+      padding: "18px 18px 0",
+      display: "flex",
+      flexDirection: "column"
+    }
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 9
+    }
+  }, "REP\xDABLICA DE COLOMBIA \xB7 NARI\xD1O"), React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 9,
+      color: "var(--ink-3)"
+    }
+  }, "P\xB7CAF\xC9")), React.createElement("div", {
+    style: {
+      height: 1,
+      background: "var(--line-2)",
+      margin: "8px 0 12px"
+    }
+  }), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 14
+    }
+  }, React.createElement("div", {
+    style: {
+      width: 74,
+      height: 92,
+      flexShrink: 0,
+      border: "1px solid var(--line-2)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "var(--paper-2, transparent)"
+    }
+  }, React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 30,
+      lineHeight: 1
+    }
+  }, (passport.nombre || "V").trim().charAt(0).toUpperCase()), React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 8,
+      color: "var(--ink-3)",
+      marginTop: 8
+    }
+  }, "SELLOS"), React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 14
+    }
+  }, String(sellos).padStart(2, "0"))), React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      display: "flex",
+      flexDirection: "column",
+      gap: 7
+    }
+  }, React.createElement(CampoDato, {
+    etiqueta: "PORTADOR / BEARER",
+    valor: passport.nombre
+  }), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, React.createElement(CampoDato, {
+    etiqueta: "SEXO",
+    valor: etiquetaPerfil("genero", p.genero)
+  }), React.createElement(CampoDato, {
+    etiqueta: "EDAD",
+    valor: etiquetaPerfil("rango_edad", p.rango_edad),
+    ancho: 1.4
+  })), React.createElement(CampoDato, {
+    etiqueta: "PROCEDENCIA",
+    valor: procedencia
+  }), React.createElement(CampoDato, {
+    etiqueta: "N\xBA DE PASAPORTE",
+    valor: passport.numero || DATO_VACIO
+  }))), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 10
+    }
+  }, React.createElement(CampoDato, {
+    etiqueta: "EXPEDIDO",
+    valor: fechaCorta(passport.inicio)
+  }), React.createElement(CampoDato, {
+    etiqueta: "VISITANTE",
+    valor: entidad,
+    ancho: 1.6
+  })), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 7
+    }
+  }, React.createElement(CampoDato, {
+    etiqueta: "CONTACTO",
+    valor: passport.correo,
+    ancho: 2
+  }), React.createElement(CampoDato, {
+    etiqueta: "AVANCE",
+    valor: sellos + " / " + totalStands
+  })), !passport.perfil && React.createElement("p", {
+    style: {
+      fontSize: 10,
+      color: "var(--ink-3)",
+      lineHeight: 1.5,
+      marginTop: 12
+    }
+  }, "Completa tu perfil de visitante y esta hoja se llena con tus datos."), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-end",
+      marginTop: 16
+    }
+  }, React.createElement(CampoDato, {
+    etiqueta: "AUTORIDAD EXPEDIDORA",
+    valor: "Gobernaci\xF3n de Nari\xF1o",
+    ancho: 1.5
+  }), React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 8,
+      color: "var(--ink-3)",
+      lineHeight: 1.4
+    }
+  }, "FIRMA"), React.createElement("div", {
+    style: {
+      borderBottom: "1px dotted var(--line-2)",
+      height: 16
+    }
+  }))), React.createElement("div", {
+    style: {
+      marginTop: "auto"
+    }
+  }, React.createElement("div", {
+    style: {
+      height: 1,
+      background: "var(--line-2)"
+    }
+  }), React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 9,
+      letterSpacing: "0.08em",
+      lineHeight: 1.7,
+      padding: "8px 0 14px",
+      color: "var(--ink-2)",
+      whiteSpace: "nowrap",
+      overflow: "hidden"
+    }
+  }, mrz1, React.createElement("br", null), mrz2)));
+};
 const PassportPage_Page = ({
   pageData,
   passport,
@@ -3426,79 +3813,10 @@ const PassportPage_Page = ({
     }, passport.correo)));
   }
   if (pageData.type === "index") {
-    return React.createElement("div", {
-      style: {
-        height: "100%",
-        padding: 22,
-        ...lineBg
-      }
-    }, React.createElement("div", {
-      className: "mono",
-      style: {
-        marginBottom: 6
-      }
-    }, "\xCDndice"), React.createElement("h2", {
-      style: {
-        fontFamily: "var(--font-display)",
-        fontStyle: "italic",
-        fontSize: 28,
-        fontWeight: 400,
-        margin: "0 0 16px",
-        lineHeight: 1
-      }
-    }, "Tu traves\xEDa."), React.createElement("p", {
-      style: {
-        fontSize: 12,
-        color: "var(--ink-2)",
-        marginBottom: 16,
-        lineHeight: 1.5
-      }
-    }, "Cada stand visitado sella una p\xE1gina. Colecci\xF3nalos todos."), React.createElement("div", {
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        gap: 8
-      }
-    }, [...Array(totalSlots)].map((_, i) => {
-      const visitado = i < passport.visitados.length;
-      return React.createElement("div", {
-        key: i,
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          fontSize: 13
-        }
-      }, React.createElement("span", {
-        className: "mono",
-        style: {
-          width: 20
-        }
-      }, String(i + 1).padStart(2, "0")), React.createElement("span", {
-        style: {
-          flex: 1,
-          borderBottom: "1px dotted var(--line-2)",
-          height: 14
-        }
-      }), React.createElement("span", {
-        style: {
-          fontSize: 16
-        }
-      }, visitado ? "●" : "○"));
-    })), React.createElement("div", {
-      className: "mono",
-      style: {
-        position: "absolute",
-        bottom: 22,
-        left: 22,
-        right: 22
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between"
-      }
-    }, React.createElement("span", null, passport.visitados.length, " sellados"), React.createElement("span", null, Math.max(0, totalStands - passport.visitados.length), " faltantes"))));
+    return React.createElement(PaginaDatos, {
+      passport: passport,
+      totalStands: totalStands
+    });
   }
   if (pageData.type === "stamp") {
     const s = pageData.stand;
@@ -3596,7 +3914,8 @@ const PassportPage_Page = ({
   return null;
 };
 Object.assign(window, {
-  PassportPage
+  PassportPage,
+  datosPagina
 });
 })();
 
@@ -4769,28 +5088,21 @@ const PromotorRegistroPage = () => {
     className: "ayuda"
   }, "D\xE9jalo vac\xEDo para usar el nombre de la empresa.")), React.createElement("div", {
     className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", {
-    htmlFor: "in-mun"
-  }, "Municipio *"), React.createElement("input", {
+  }, React.createElement(SelectorMunicipio, {
     id: "in-mun",
-    value: form.municipio,
-    onChange: e => set("municipio", e.target.value),
-    maxLength: 80,
-    required: true,
-    placeholder: "Sandon\xE1"
-  })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", {
-    htmlFor: "in-region"
-  }, "Regi\xF3n"), React.createElement("input", {
+    valor: form.municipio,
+    requerido: true,
+    onCambio: (municipio, region) => setForm(f => ({
+      ...f,
+      municipio,
+      stand_region: region || f.stand_region
+    }))
+  }), React.createElement(SelectorSubregion, {
     id: "in-region",
-    value: form.stand_region,
-    onChange: e => set("stand_region", e.target.value),
-    maxLength: 80,
-    placeholder: "Occidente"
-  }))), React.createElement("div", {
+    valor: form.stand_region,
+    municipio: form.municipio,
+    onCambio: v => set("stand_region", v)
+  })), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "in-dir"
@@ -4862,7 +5174,11 @@ const PromotorRegistroPage = () => {
         lat: u.lat,
         lng: u.lng
       });
-      if (u.municipio) set("municipio", u.municipio);
+      if (u.municipio) setForm(f => ({
+        ...f,
+        municipio: u.municipio,
+        stand_region: subregionDe(u.municipio) || f.stand_region
+      }));
     }
   })), React.createElement("div", {
     className: "field"
@@ -5587,13 +5903,12 @@ const EmpresaEditor = ({
     value: form.nit || "",
     onChange: e => set("nit", e.target.value),
     maxLength: 32
+  })), React.createElement(SelectorMunicipio, {
+    id: "emp-mun",
+    valor: form.municipio || "",
+    requerido: true,
+    onCambio: municipio => set("municipio", municipio)
   })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Municipio"), React.createElement("input", {
-    value: form.municipio || "",
-    onChange: e => set("municipio", e.target.value),
-    maxLength: 80
-  }))), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Direcci\xF3n"), React.createElement("input", {
     value: form.direccion || "",
@@ -5733,13 +6048,14 @@ const PerfilEditor = ({
     onChange: e => set("documento", e.target.value),
     maxLength: 32,
     inputMode: "numeric"
-  }))), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Municipio"), React.createElement("input", {
-    value: form.municipio,
-    onChange: e => set("municipio", e.target.value),
-    maxLength: 80
-  })), React.createElement(Aviso, null, error), React.createElement(Aviso, {
+  }))), React.createElement(SelectorMunicipio, {
+    id: "pr-mun",
+    valor: form.municipio,
+    requerido: true,
+    onCambio: municipio => set("municipio", municipio)
+  }), React.createElement("p", {
+    className: "ayuda"
+  }, "Tu municipio define la regi\xF3n del stand en el mapa del festival."), React.createElement(Aviso, null, error), React.createElement(Aviso, {
     tipo: "ok"
   }, ok), React.createElement("button", {
     className: "btn btn-primary",
@@ -7088,17 +7404,12 @@ const PerfilVisitantePage = () => {
     onChange: e => set("departamento", e.target.value),
     maxLength: 80,
     placeholder: "Nari\xF1o"
-  }))), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", {
-    htmlFor: "pf-mun"
-  }, "Municipio"), React.createElement("input", {
+  }))), React.createElement(SelectorMunicipio, {
     id: "pf-mun",
-    value: form.municipio,
-    onChange: e => set("municipio", e.target.value),
-    maxLength: 80,
-    placeholder: "Pasto"
-  }))), React.createElement(BloqueForm, {
+    valor: form.municipio,
+    permitirOtro: true,
+    onCambio: municipio => set("municipio", municipio)
+  })), React.createElement(BloqueForm, {
     titulo: "Tu visita"
   }, React.createElement(CampoOpcion, {
     id: "pf-tipo",
@@ -7691,6 +8002,7 @@ const AdminCorreoConfig = () => {
     avisos: [],
     historico: []
   };
+  const esGmail = /(^|\.)(gmail|googlemail)\.com$/i.test(form.smtp && form.smtp.host || "");
   const sobrescrito = datos && datos.sobrescrito || [];
   return React.createElement("div", {
     className: "admin-page"
@@ -7872,6 +8184,36 @@ const AdminCorreoConfig = () => {
     titulo: "Servidor SMTP",
     nota: "P\xEDdeselos a quien administra el correo institucional."
   }, React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap",
+      alignItems: "center"
+    }
+  }, React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    style: {
+      fontSize: 13,
+      padding: "8px 14px"
+    },
+    onClick: () => setForm(f => ({
+      ...f,
+      smtp: {
+        ...f.smtp,
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: "tls",
+        user: f.from || f.smtp.user
+      }
+    }))
+  }, "Rellenar para Gmail"), React.createElement("span", {
+    className: "ayuda",
+    style: {
+      flex: 1,
+      minWidth: 200
+    }
+  }, "El buz\xF3n institucional funciona sobre Gmail: esto pone servidor, puerto y cifrado.")), React.createElement("div", {
     className: "grid-2"
   }, React.createElement("div", {
     className: "field"
@@ -7922,7 +8264,12 @@ const AdminCorreoConfig = () => {
     onChange: e => setSmtp("user", e.target.value),
     maxLength: 254,
     autoComplete: "off"
-  })), React.createElement("div", {
+  }), esGmail && form.smtp.user && form.from && form.smtp.user.toLowerCase() !== form.from.toLowerCase() && React.createElement("span", {
+    className: "ayuda",
+    style: {
+      color: "var(--bad)"
+    }
+  }, "Debe ser la misma direcci\xF3n que el remitente, o Gmail reescribir\xE1 el correo a nombre de este buz\xF3n.")), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "co-pass"
@@ -7936,7 +8283,7 @@ const AdminCorreoConfig = () => {
     maxLength: 200
   }), React.createElement("span", {
     className: "ayuda"
-  }, "Se guarda cifrada y no vuelve a mostrarse.")))), React.createElement(Aviso, {
+  }, "Se guarda cifrada y no vuelve a mostrarse.", esGmail && React.createElement(React.Fragment, null, " ", React.createElement("strong", null, "En Gmail no sirve la contrase\xF1a de la cuenta"), ": crea una \xABcontrase\xF1a de aplicaci\xF3n\xBB de 16 caracteres en cuenta de Google \u2192 Seguridad \u2192 Verificaci\xF3n en dos pasos \u2192 Contrase\xF1as de aplicaciones."))))), React.createElement(Aviso, {
     tipo: "ok"
   }, ok), React.createElement(Aviso, null, error), React.createElement("div", {
     style: {

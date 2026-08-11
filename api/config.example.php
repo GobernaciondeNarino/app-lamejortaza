@@ -62,7 +62,7 @@ return [
     //                       Para desarrollo y para probar plantillas.
     'mail' => [
         'transport' => 'mail',
-        'from'      => 'no-reply@narino.gov.co',
+        'from'      => 'hosting@narino.gov.co',
         'from_name' => 'La Mejor Taza — Festival',
         'reply_to'  => '',                    // vacío = sin Reply-To
         // Déjalo VACÍO: el fichero se crea entonces en el directorio temporal
@@ -71,10 +71,17 @@ return [
         // las contraseñas temporales de los promotores en claro.
         'log_file'  => '',
         'smtp' => [
-            'host'     => 'smtp.narino.gov.co',
+            // El buzón institucional funciona sobre Gmail (Google Workspace).
+            // OJO: 'password' NO es la contraseña de la cuenta, sino una
+            // «contraseña de aplicación» de 16 caracteres que se genera en
+            // cuenta de Google → Seguridad → Verificación en dos pasos →
+            // Contraseñas de aplicaciones. Con la normal, Gmail responde 535.
+            // Y 'user' debe ser la MISMA dirección que 'from': si no, Gmail
+            // reescribe el remitente.
+            'host'     => 'smtp.gmail.com',
             'port'     => 587,
             'secure'   => 'tls',              // 'tls' (STARTTLS), 'ssl' (puerto 465) o '' (sin cifrar)
-            'user'     => '',
+            'user'     => 'hosting@narino.gov.co',
             'password' => '',
             'timeout'  => 15,
         ],

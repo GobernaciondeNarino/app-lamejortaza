@@ -96,7 +96,10 @@ function register_routes_visitantes(\LMT\Router $r): void
             ':edad'=> visitante_opcion('rango_edad', $b['rango_edad'] ?? null),
             ':pais'=> visitante_texto($b['pais'] ?? null, 80),
             ':dep' => visitante_texto($b['departamento'] ?? null, 80),
-            ':mun' => visitante_texto($b['municipio'] ?? null, 80),
+            // Si el municipio es de Nariño se guarda con el nombre del DANE; si
+            // el visitante viene de fuera, se acepta tal cual (texto libre). Así
+            // el informe agregado no parte «Pasto» y «San Juan de Pasto» en dos.
+            ':mun' => visitante_municipio($b['municipio'] ?? null),
             ':tipo'=> visitante_opcion('tipo_visitante', $b['tipo_visitante'] ?? null),
             ':ent' => visitante_texto($b['entidad'] ?? null, 120),
             ':etn' => visitante_opcion('grupo_etnico', $b['grupo_etnico'] ?? null),
@@ -310,6 +313,18 @@ function visitante_texto($valor, int $max): ?string
     if (!is_string($valor)) return null;
     $v = Validate::texto($valor, $max);
     return $v === '' ? null : $v;
+}
+
+/**
+ * Municipio del visitante. A diferencia del promotor, aquí no es obligatorio
+ * que sea de Nariño —vienen visitantes de todo el país—, pero cuando sí lo es
+ * se normaliza al nombre oficial para que las cifras agregadas cuadren.
+ */
+function visitante_municipio($valor): ?string
+{
+    $libre = visitante_texto($valor, 80);
+    if ($libre === null) return null;
+    return \LMT\Territorio::municipio($libre) ?? $libre;
 }
 
 function visitante_publico(array $v): array

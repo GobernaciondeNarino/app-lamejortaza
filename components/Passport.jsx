@@ -22,6 +22,11 @@ const PassportPage = ({ stands }) => {
     try { return localStorage.getItem("lmt.email") || ""; } catch (_) { return ""; }
   });
   const [data, setData] = React.useState(null);
+  // Caracterización del visitante para la página de datos. Sólo se pide si
+  // este navegador guarda el testigo del perfil: es la prueba de que quien
+  // mira es el dueño del correo. Sin él, la página de datos se queda con lo
+  // que ya es público (nombre en iniciales y correo enmascarado).
+  const [perfil, setPerfil] = React.useState(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [page, setPage] = React.useState(0);
@@ -62,6 +67,22 @@ const PassportPage = ({ stands }) => {
     window.addEventListener("lmt:auth", intentar);
     return () => { cancelado = true; window.removeEventListener("lmt:auth", intentar); };
   }, [email, load]);
+
+  React.useEffect(() => {
+    if (!email || !window.LMTPerfil) return;
+    const guardado = window.LMTPerfil.leer();
+    // El testigo es de un correo concreto: si el pasaporte que se está mirando
+    // es de otro, no sirve y no se pide nada.
+    if (!guardado.token || guardado.correo !== String(email).toLowerCase()) { setPerfil(null); return; }
+    let cancelado = false;
+    (async () => {
+      try {
+        const res = await window.LMTApi.getPerfilVisitante(guardado.correo, guardado.token);
+        if (!cancelado) setPerfil((res && res.perfil) || null);
+      } catch (_) { if (!cancelado) setPerfil(null); }
+    })();
+    return () => { cancelado = true; };
+  }, [email, data]);
 
   if (askingEmail) {
     return (
@@ -120,10 +141,12 @@ const PassportPage = ({ stands }) => {
   if (!visitados.length) return <PassportEmpty/>;
 
   const passport = {
-    nombre: data.nombre || "Visitante",
+    nombre: (perfil && perfil.nombre) || data.nombre || "Visitante",
     correo: data.correo || email,
+    numero: data.numero || "",
     inicio: data.inicio || "",
     visitados: visitadosIds,
+    perfil: perfil,
   };
   const pages = [
     { type: "cover" },
@@ -163,17 +186,28 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
     [visitadosIds, stands.length]
   );
 
+  // Las páginas se arman aparte porque el perfil del visitante llega DESPUÉS
+  // de montar el libro: la hoja de datos se repinta con setPaginas y así no
+  // hay que tirar el contexto WebGL y volver a crearlo sólo por un nombre.
+  const paginasLibro = React.useMemo(() => [
+    { tipo: "portada", nombre: passport.nombre, correo: passport.correo, inicio: passport.inicio },
+    Object.assign(
+      { tipo: "indice", visitados: visitados.length, totalStands: stands.length },
+      datosPagina(passport, stands.length)
+    ),
+    ...visitados.map((s, i) => ({ tipo: "sello", indice: i, stand: s })),
+    { tipo: "final", visitados: visitados.length, totalStands: stands.length },
+  ], [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero, passport.perfil]);
+
+  const paginasRef = React.useRef(paginasLibro);
+  paginasRef.current = paginasLibro;
+
   React.useEffect(() => {
     const cont = wrapRef.current;
     if (!cont || !window.LMTPassportBook || !window.LMTPassportBook.soportado()) return;
 
     const libro = window.LMTPassportBook.mount(cont, {
-      paginas: [
-        { tipo: "portada", nombre: passport.nombre, correo: passport.correo, inicio: passport.inicio },
-        { tipo: "indice", visitados: visitados.length, totalSlots: Math.max(8, visitados.length), totalStands: stands.length },
-        ...visitados.map((s, i) => ({ tipo: "sello", indice: i, stand: s })),
-        { tipo: "final", visitados: visitados.length, totalStands: stands.length },
-      ],
+      paginas: paginasRef.current,
       paginaInicial: 0,
       onReady: () => setBook3d(true),
       onPageChange: (i) => setPage(i),
@@ -187,6 +221,14 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
       setBook3d(false);
     };
   }, [pagesKey]);
+
+  // El perfil llega por su cuenta, segundos después de que el libro esté en
+  // pantalla. Sin esto, la hoja de datos se quedaba con «Visitante» y los
+  // campos vacíos aunque React ya tuviera el nombre completo.
+  React.useEffect(() => {
+    const libro = libroRef.current;
+    if (libro && libro.setPaginas) libro.setPaginas(paginasLibro, { mantenerIndice: true });
+  }, [paginasLibro]);
 
   // Mientras el libro esté montado él es la fuente de verdad del índice:
   // React sólo lee (onPageChange) y escribe por los botones. Al revés se
@@ -209,19 +251,24 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
   const resumen = actual.type === "stamp"
     ? `Sello: ${actual.stand.nombre}, ${actual.stand.municipio}`
     : actual.type === "cover" ? "Portada del pasaporte"
-    : actual.type === "index" ? "Índice de la travesía"
+    : actual.type === "index" ? `Página de datos de ${passport.nombre}`
     : "Fin del pasaporte";
 
   return (
     <div className="pasaporte-vista" style={{ minHeight: "100dvh", background: "var(--ink)", color: "var(--paper)", padding: "12px 10px 24px" }}>
       <div className="mobile-inner" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", color: "var(--paper-3)" }}>
-          <a href="/festival" data-route style={{ color: "var(--paper-3)", fontSize: 13 }}>← Salir</a>
-          <div className="mono" style={{ color: "var(--paper-3)" }}>Pasaporte · {passport.nombre}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "0 4px", color: "var(--paper-3)" }}>
+          <a href="/festival" data-route style={{ color: "var(--paper-3)", fontSize: 13, whiteSpace: "nowrap" }}>← Salir</a>
+          {/* Con el perfil completo aquí va el nombre entero, que en un móvil
+              estrecho aplasta los dos botones de los lados. Se recorta él. */}
+          <div className="mono" style={{
+            color: "var(--paper-3)", minWidth: 0, flex: 1, textAlign: "center",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>Pasaporte · {passport.nombre}</div>
           <button onClick={() => {
             try { localStorage.removeItem("lmt.email"); } catch (_) {}
             window.LMTRouter.go("/");
-          }} style={{ color: "var(--paper-3)", fontSize: 12 }}>Cerrar</button>
+          }} style={{ color: "var(--paper-3)", fontSize: 12, whiteSpace: "nowrap" }}>Cerrar</button>
         </div>
 
         {/* El montador inserta su canvas como PRIMER hijo con z-index 0; el
@@ -289,6 +336,156 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
   );
 };
 
+// ── Página de datos ───────────────────────────────────────────────────────
+// La hoja que en un pasaporte de verdad lleva la foto y la ficha del titular.
+// Antes aquí había un índice de casillas vacías que no decía nada del
+// visitante; ahora lleva sus datos, con la misma retícula de etiqueta pequeña
+// y valor debajo que usan los documentos reales, y la banda de lectura
+// mecánica abajo.
+//
+// Qué NO aparece: grupo étnico y discapacidad. Se piden para caracterizar al
+// público del festival, pero son datos sensibles y esta hoja se enseña y se
+// fotografía. Viven en /perfil, que es de la persona y sólo suyo.
+const DATO_VACIO = "——";
+
+const etiquetaPerfil = (campo, valor) => {
+  if (!valor) return DATO_VACIO;
+  const tabla = (window.PERFIL_ETIQUETAS || {})[campo] || {};
+  return tabla[valor] || valor;
+};
+
+const fechaCorta = (iso) => {
+  if (!iso) return DATO_VACIO;
+  const d = new Date(String(iso).replace(" ", "T"));
+  if (isNaN(d)) return DATO_VACIO;
+  const meses = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+  return String(d.getDate()).padStart(2, "0") + " " + meses[d.getMonth()] + " " + d.getFullYear();
+};
+
+// Banda de lectura mecánica: el remate que hace que la hoja se lea como un
+// pasaporte. Va con los datos que ya están arriba, nada nuevo.
+const MRZ_ANCHO = 31;   // las dos líneas miden lo mismo o la banda se ve torcida
+
+const bandaMecanica = (passport) => {
+  const limpia = (s, n) => String(s || "")
+    .toUpperCase().normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .replace(/[^A-Z0-9]/g, "<").slice(0, n).padEnd(n, "<");
+  const p = passport.perfil || {};
+  const l1 = ("PC<COL" + limpia(passport.nombre, 25)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
+  const l2 = (limpia(passport.numero, 12) + "COL" + limpia(p.municipio || "NARINO", 16))
+    .slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
+  return [l1, l2];
+};
+
+// Los mismos valores que pinta <PaginaDatos>, en plano, para el libro 3D.
+// Uno solo los calcula y las dos vistas no pueden acabar diciendo cosas
+// distintas de la misma persona.
+const datosPagina = (passport, totalStands) => {
+  const p = passport.perfil || {};
+  const [mrz1, mrz2] = bandaMecanica(passport);
+  return {
+    nombre:      passport.nombre,
+    correo:      passport.correo,
+    numero:      passport.numero || DATO_VACIO,
+    sexo:        etiquetaPerfil("genero", p.genero),
+    edad:        etiquetaPerfil("rango_edad", p.rango_edad),
+    procedencia: [p.municipio, p.departamento].filter(Boolean).join(", ") || p.pais || DATO_VACIO,
+    visitante:   p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante),
+    expedido:    fechaCorta(passport.inicio),
+    conPerfil:   !!passport.perfil,
+    totalStands: totalStands,
+    mrz1, mrz2,
+  };
+};
+
+const CampoDato = ({ etiqueta, valor, ancho }) => (
+  <div style={{ flex: ancho || 1, minWidth: 0 }}>
+    <div className="mono" style={{ fontSize: 8, color: "var(--ink-3)", lineHeight: 1.4 }}>{etiqueta}</div>
+    <div style={{
+      fontSize: 12, lineHeight: 1.25, marginTop: 1,
+      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    }}>{valor}</div>
+  </div>
+);
+
+const PaginaDatos = ({ passport, totalStands }) => {
+  const p = passport.perfil || {};
+  const procedencia = [p.municipio, p.departamento].filter(Boolean).join(", ")
+    || p.pais || DATO_VACIO;
+  const entidad = p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante);
+  const [mrz1, mrz2] = bandaMecanica(passport);
+  const sellos = passport.visitados.length;
+
+  return (
+    <div style={{ height: "100%", padding: "18px 18px 0", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div className="mono" style={{ fontSize: 9 }}>REPÚBLICA DE COLOMBIA · NARIÑO</div>
+        <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)" }}>P·CAFÉ</div>
+      </div>
+      <div style={{ height: 1, background: "var(--line-2)", margin: "8px 0 12px" }}/>
+
+      <div style={{ display: "flex", gap: 14 }}>
+        {/* Donde va la foto: aquí, las iniciales y los sellos conseguidos. */}
+        <div style={{
+          width: 74, height: 92, flexShrink: 0, border: "1px solid var(--line-2)",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          background: "var(--paper-2, transparent)",
+        }}>
+          <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, lineHeight: 1 }}>
+            {(passport.nombre || "V").trim().charAt(0).toUpperCase()}
+          </div>
+          <div className="mono" style={{ fontSize: 8, color: "var(--ink-3)", marginTop: 8 }}>SELLOS</div>
+          <div className="mono" style={{ fontSize: 14 }}>{String(sellos).padStart(2, "0")}</div>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
+          <CampoDato etiqueta="PORTADOR / BEARER" valor={passport.nombre}/>
+          <div style={{ display: "flex", gap: 10 }}>
+            <CampoDato etiqueta="SEXO" valor={etiquetaPerfil("genero", p.genero)}/>
+            <CampoDato etiqueta="EDAD" valor={etiquetaPerfil("rango_edad", p.rango_edad)} ancho={1.4}/>
+          </div>
+          <CampoDato etiqueta="PROCEDENCIA" valor={procedencia}/>
+          <CampoDato etiqueta="Nº DE PASAPORTE" valor={passport.numero || DATO_VACIO}/>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+        <CampoDato etiqueta="EXPEDIDO" valor={fechaCorta(passport.inicio)}/>
+        <CampoDato etiqueta="VISITANTE" valor={entidad} ancho={1.6}/>
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 7 }}>
+        <CampoDato etiqueta="CONTACTO" valor={passport.correo} ancho={2}/>
+        <CampoDato etiqueta="AVANCE" valor={sellos + " / " + totalStands}/>
+      </div>
+
+      {!passport.perfil && (
+        <p style={{ fontSize: 10, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 12 }}>
+          Completa tu perfil de visitante y esta hoja se llena con tus datos.
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginTop: 16 }}>
+        <CampoDato etiqueta="AUTORIDAD EXPEDIDORA" valor="Gobernación de Nariño" ancho={1.5}/>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="mono" style={{ fontSize: 8, color: "var(--ink-3)", lineHeight: 1.4 }}>FIRMA</div>
+          <div style={{ borderBottom: "1px dotted var(--line-2)", height: 16 }}/>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "auto" }}>
+        <div style={{ height: 1, background: "var(--line-2)" }}/>
+        <div className="mono" style={{
+          fontSize: 9, letterSpacing: "0.08em", lineHeight: 1.7,
+          padding: "8px 0 14px", color: "var(--ink-2)",
+          whiteSpace: "nowrap", overflow: "hidden",
+        }}>
+          {mrz1}<br/>{mrz2}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
   const lineBg = { backgroundImage: "repeating-linear-gradient(var(--paper) 0, var(--paper) 26px, var(--line) 26px, var(--line) 27px)" };
 
@@ -319,35 +516,7 @@ const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
   }
 
   if (pageData.type === "index") {
-    return (
-      <div style={{ height: "100%", padding: 22, ...lineBg }}>
-        <div className="mono" style={{ marginBottom: 6 }}>Índice</div>
-        <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 28, fontWeight: 400, margin: "0 0 16px", lineHeight: 1 }}>
-          Tu travesía.
-        </h2>
-        <p style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 16, lineHeight: 1.5 }}>
-          Cada stand visitado sella una página. Colecciónalos todos.
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[...Array(totalSlots)].map((_, i) => {
-            const visitado = i < passport.visitados.length;
-            return (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                <span className="mono" style={{ width: 20 }}>{String(i + 1).padStart(2, "0")}</span>
-                <span style={{ flex: 1, borderBottom: "1px dotted var(--line-2)", height: 14 }}/>
-                <span style={{ fontSize: 16 }}>{visitado ? "●" : "○"}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mono" style={{ position: "absolute", bottom: 22, left: 22, right: 22 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>{passport.visitados.length} sellados</span>
-            <span>{Math.max(0, totalStands - passport.visitados.length)} faltantes</span>
-          </div>
-        </div>
-      </div>
-    );
+    return <PaginaDatos passport={passport} totalStands={totalStands}/>;
   }
 
   if (pageData.type === "stamp") {
@@ -392,4 +561,7 @@ const PassportPage_Page = ({ pageData, passport, totalSlots, totalStands }) => {
   return null;
 };
 
-Object.assign(window, { PassportPage });
+// `datosPagina` sale al exterior porque es el único sitio donde se decide qué
+// dice la hoja de datos, y las dos vistas (CSS y libro 3D) la comparten: poder
+// comprobarla directamente evita tener que leer píxeles de un canvas.
+Object.assign(window, { PassportPage, datosPagina });

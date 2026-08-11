@@ -86,8 +86,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
 }
 .field input:focus, .field textarea:focus { border-bottom-color: var(--ink); }
 .field textarea { resize: vertical; min-height: 60px; }
-/* Texto de ayuda bajo un campo: qué formato, qué tamaño, para qué sirve. */
-.field .ayuda {
+/* Texto de ayuda bajo un campo: qué formato, qué tamaño, para qué sirve.
+   Sirve dentro de .field y también suelto, justo debajo de uno. */
+.field .ayuda, .ayuda {
   font-size: 12px; line-height: 1.5; color: var(--ink-3);
   text-transform: none; letter-spacing: 0;
 }

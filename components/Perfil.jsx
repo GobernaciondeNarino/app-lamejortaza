@@ -237,10 +237,11 @@ const PerfilVisitantePage = () => {
                 <input id="pf-dep" value={form.departamento} onChange={(e) => set("departamento", e.target.value)} maxLength={80} placeholder="Nariño"/>
               </div>
             </div>
-            <div className="field">
-              <label htmlFor="pf-mun">Municipio</label>
-              <input id="pf-mun" value={form.municipio} onChange={(e) => set("municipio", e.target.value)} maxLength={80} placeholder="Pasto"/>
-            </div>
+            {/* Con salida para quien no es de Nariño: un visitante puede venir
+                de Cali o de Ecuador, y obligarle a elegir de la lista sería
+                pedirle que mienta. */}
+            <SelectorMunicipio id="pf-mun" valor={form.municipio} permitirOtro
+              onCambio={(municipio) => set("municipio", municipio)}/>
           </BloqueForm>
 
           <BloqueForm titulo="Tu visita">
