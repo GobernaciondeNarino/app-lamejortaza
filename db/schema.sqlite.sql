@@ -167,6 +167,12 @@ CREATE TABLE IF NOT EXISTS visitantes (
   correo         TEXT PRIMARY KEY,
   nombre         TEXT,
   telefono       TEXT,
+  -- Retrato del visitante. Dos formas, y sólo una a la vez: una foto que sube
+  -- (avatar_path) o un emoji que elige (avatar_emoji). El emoji existe porque
+  -- mucha gente no quiere poner su cara en un sitio público, y sin alternativa
+  -- lo que hacen es dejarlo vacío.
+  avatar_path    TEXT,
+  avatar_emoji   TEXT,
   genero         TEXT CHECK (genero IS NULL OR genero IN ('hombre','mujer','otro','prefiero_no_decir')),
   rango_edad     TEXT CHECK (rango_edad IS NULL OR rango_edad IN ('menor_18','18_25','26_35','36_45','46_60','mayor_60','prefiero_no_decir')),
   pais           TEXT,

@@ -423,6 +423,18 @@ const bandaMecanica = (passport) => {
 // Los mismos valores que pinta <PaginaDatos>, en plano, para el libro 3D.
 // Uno solo los calcula y las dos vistas no pueden acabar diciendo cosas
 // distintas de la misma persona.
+/**
+ * El retrato del portador: foto, emoji o nada.
+ *
+ * Vive aparte porque lo usan el recuadro de la hoja de datos y el libro 3D, y
+ * porque el orden importa: la foto manda sobre el emoji, y si no hay ninguna
+ * de las dos, quien pinta decide (la inicial en la hoja de datos).
+ */
+const retratoDe = (passport) => {
+  const p = passport.perfil || {};
+  return { foto: urlImagen(p.avatar) || "", emoji: p.avatar_emoji || "" };
+};
+
 const datosPagina = (passport, totalStands) => {
   const p = passport.perfil || {};
   const [mrz1, mrz2] = bandaMecanica(passport);
@@ -437,6 +449,8 @@ const datosPagina = (passport, totalStands) => {
     expedido:    fechaCorta(passport.inicio),
     conPerfil:   !!passport.perfil,
     totalStands: totalStands,
+    retrato_foto:  retratoDe(passport).foto,
+    retrato_emoji: retratoDe(passport).emoji,
     mrz1, mrz2,
   };
 };
@@ -461,6 +475,7 @@ const PaginaDatos = ({ passport, totalStands }) => {
   const entidad = p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante);
   const [mrz1, mrz2] = bandaMecanica(passport);
   const sellos = passport.visitados.length;
+  const retrato = retratoDe(passport);
 
   return (
     <div style={{ height: "100%", padding: "18px 18px 0", display: "flex", flexDirection: "column" }}>
@@ -476,12 +491,27 @@ const PaginaDatos = ({ passport, totalStands }) => {
           width: 86, height: 108, flexShrink: 0, border: "1px solid var(--line-2)",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           background: "var(--paper-2, transparent)",
+          position: "relative", overflow: "hidden",
         }}>
-          <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, lineHeight: 1 }}>
-            {(passport.nombre || "V").trim().charAt(0).toUpperCase()}
-          </div>
-          <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 10 }}>SELLOS</div>
-          <div className="mono" style={{ fontSize: 18 }}>{String(sellos).padStart(2, "0")}</div>
+          {/* Donde iría la foto en un pasaporte de verdad: la del visitante si
+              la subió, el emoji que eligió, o la inicial de su nombre. */}
+          {retrato.foto ? (
+            <img src={retrato.foto} alt="" style={{
+              position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover",
+            }}/>
+          ) : (
+            <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, lineHeight: 1 }}>
+              {retrato.emoji
+                ? <span style={{ fontStyle: "normal", fontSize: 38 }} aria-hidden="true">{retrato.emoji}</span>
+                : (passport.nombre || "V").trim().charAt(0).toUpperCase()}
+            </div>
+          )}
+          {!retrato.foto && (
+            <React.Fragment>
+              <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 10 }}>SELLOS</div>
+              <div className="mono" style={{ fontSize: 18 }}>{String(sellos).padStart(2, "0")}</div>
+            </React.Fragment>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>

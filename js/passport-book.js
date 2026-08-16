@@ -476,15 +476,36 @@
       // Recuadro de la foto: inicial y número de sellos.
       var fx = W * 0.09, fy = H * 0.118, fw = W * 0.26, fh = H * 0.215;
       ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1.5 * k;
-      ctx.strokeRect(fx, fy, fw, fh);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 58 * k);
-      ctx.textAlign = "center";
-      ctx.fillText(String(pagina.nombre || "V").trim().charAt(0).toUpperCase(), fx + fw / 2, fy + fh * 0.46);
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-      textoCentradoEspaciado(ctx, "SELLOS", fx + fw / 2, fy + fh * 0.72, 1.4 * k);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("mono", 24 * k);
-      ctx.fillText(("0" + sellados).slice(-2), fx + fw / 2, fy + fh * 0.94);
-      ctx.textAlign = "left";
+      // Donde iría la foto en un pasaporte de verdad: la del visitante si la
+      // subió, el emoji que eligió, o la inicial de su nombre.
+      var conFoto = false;
+      if (pagina.retrato_foto) {
+        var im = imagenCacheada(pagina.retrato_foto);
+        if (im) {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.clip();
+          var e2 = Math.max(fw / im.width, fh / im.height);   // «cover»
+          var iw = im.width * e2, ih = im.height * e2;
+          ctx.drawImage(im, fx + (fw - iw) / 2, fy + (fh - ih) / 2, iw, ih);
+          ctx.restore();
+          conFoto = true;
+        }
+      }
+      if (!conFoto) {
+        ctx.textAlign = "center";
+        if (pagina.retrato_emoji) {
+          ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 50 * k);
+          ctx.fillText(String(pagina.retrato_emoji), fx + fw / 2, fy + fh * 0.50);
+        } else {
+          ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 58 * k);
+          ctx.fillText(String(pagina.nombre || "V").trim().charAt(0).toUpperCase(), fx + fw / 2, fy + fh * 0.46);
+        }
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
+        textoCentradoEspaciado(ctx, "SELLOS", fx + fw / 2, fy + fh * 0.72, 1.4 * k);
+        ctx.fillStyle = pal["--ink"]; ctx.font = familia("mono", 24 * k);
+        ctx.fillText(("0" + sellados).slice(-2), fx + fw / 2, fy + fh * 0.94);
+        ctx.textAlign = "left";
+      }
 
       // Ficha: etiqueta pequeña arriba, valor grande debajo. En un teléfono
       // esta hoja se mira a un palmo: los cuerpos de 10-12 px no se leían.

@@ -40,6 +40,7 @@ const PERFIL_ETIQUETAS = {
 
 const PERFIL_VACIO = {
   nombre: "", telefono: "", genero: "", rango_edad: "", pais: "Colombia",
+  avatar: "", avatar_emoji: "",
   departamento: "", municipio: "", tipo_visitante: "", entidad: "",
   grupo_etnico: "", discapacidad: "", expectativa: "", como_se_entero: "",
   primera_visita: null,
@@ -58,6 +59,97 @@ const CampoOpcion = ({ id, label, valor, opciones, etiquetas, ayuda, onChange })
     {ayuda && <span className="ayuda">{ayuda}</span>}
   </div>
 );
+
+/**
+ * Retrato del visitante: una foto que sube o un emoji que elige.
+ *
+ * El emoji no es un adorno: mucha gente no quiere poner su cara en algo que se
+ * enseña en una pantalla en la plaza, y sin alternativa lo que hacen es dejarlo
+ * vacío. Con un emoji se identifican igual y nadie tiene que decidir entre su
+ * privacidad y aparecer.
+ *
+ * La foto se sube al momento —no espera al «Guardar»— porque es una petición
+ * aparte y porque ver el resultado enseguida es lo que dice si salió bien.
+ */
+const AvatarVisitante = ({ correo, token, foto, emoji, emojis, onFoto, onEmoji, onError }) => {
+  const [subiendo, setSubiendo] = React.useState(false);
+  const url = urlImagen(foto);
+
+  const subir = async (archivo) => {
+    onError("");
+    setSubiendo(true);
+    try {
+      const r = await window.LMTApi.subirFotoVisitante(correo, token, archivo);
+      onFoto(r.avatar || "");
+    } catch (e) {
+      onError(mensajeError(e, "No fue posible subir la foto."));
+    } finally { setSubiendo(false); }
+  };
+
+  const quitar = async () => {
+    onError("");
+    try {
+      await window.LMTApi.borrarFotoVisitante(correo, token);
+      onFoto("");
+    } catch (e) { onError(mensajeError(e, "No fue posible quitar la foto.")); }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+        <div style={{
+          width: 84, height: 84, flexShrink: 0, borderRadius: "50%", overflow: "hidden",
+          border: "1px solid var(--line-2)", background: "var(--paper-2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {url
+            ? <img src={url} alt="Tu foto" style={{ width: "100%", height: "100%", objectFit: "cover" }}/>
+            : <span style={{ fontSize: 40, lineHeight: 1 }} aria-hidden="true">{emoji || "🙂"}</span>}
+        </div>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          <label className="btn btn-ghost" style={{
+            justifyContent: "center", cursor: subiendo ? "wait" : "pointer", opacity: subiendo ? 0.6 : 1,
+          }}>
+            {subiendo ? "Subiendo…" : (url ? "Cambiar foto" : "Subir una foto")}
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={subiendo}
+              onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) subir(f); }}/>
+          </label>
+          {url && (
+            <button type="button" onClick={quitar} className="mono"
+              style={{ background: "none", border: "none", color: "var(--ink-3)", textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>
+              Quitar la foto y usar un emoji
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!url && (
+        <div style={{ marginTop: 14 }}>
+          <div className="mono" style={{ color: "var(--ink-3)", marginBottom: 8 }}>
+            O elige un emoji
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {(emojis || []).map((e) => (
+              <button key={e} type="button" aria-label={"Elegir " + e} aria-pressed={emoji === e}
+                onClick={() => onEmoji(emoji === e ? "" : e)}
+                style={{
+                  width: 44, height: 44, fontSize: 22, lineHeight: 1, cursor: "pointer",
+                  borderRadius: "50%", background: emoji === e ? "var(--paper-2)" : "transparent",
+                  border: emoji === e ? "2px solid var(--ink)" : "1px solid var(--line-2)",
+                }}>{e}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="ayuda" style={{ marginTop: 12 }}>
+        {url
+          ? "Tu foto se ve en tu pasaporte. Puedes quitarla cuando quieras."
+          : "Nada de esto es obligatorio. Si no eliges, tu pasaporte lleva la inicial de tu nombre."}
+      </p>
+    </div>
+  );
+};
 
 /** Pantalla para quien llega a /perfil sin testigo en este navegador. */
 const PerfilSinAcceso = () => {
@@ -130,6 +222,7 @@ const PerfilVisitantePage = () => {
 
   const [form, setForm] = React.useState(PERFIL_VACIO);
   const [opciones, setOpciones] = React.useState(null);
+  const [emojis, setEmojis] = React.useState([]);
   const [cargando, setCargando] = React.useState(true);
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -149,6 +242,7 @@ const PerfilVisitantePage = () => {
         const datos = await window.LMTApi.getPerfilVisitante(correo, token);
         if (!vivo) return;
         setOpciones(datos.opciones || null);
+        setEmojis(datos.emojis || []);
         if (datos.perfil) {
           setForm(Object.assign({}, PERFIL_VACIO, datos.perfil));
           setExistia(true);
@@ -213,6 +307,15 @@ const PerfilVisitantePage = () => {
         <Aviso>{error}</Aviso>
 
         <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 8 }}>
+          <BloqueForm titulo="Tu retrato">
+            <AvatarVisitante
+              correo={correo} token={token}
+              foto={form.avatar} emoji={form.avatar_emoji} emojis={emojis}
+              onFoto={(url) => setForm((f) => ({ ...f, avatar: url, avatar_emoji: "" }))}
+              onEmoji={(e) => setForm((f) => ({ ...f, avatar_emoji: e }))}
+              onError={setError}/>
+          </BloqueForm>
+
           <BloqueForm titulo="Sobre ti">
             <div className="field">
               <label htmlFor="pf-nombre">Nombre</label>
@@ -355,4 +458,4 @@ const PerfilVisitantePage = () => {
   );
 };
 
-Object.assign(window, { PerfilVisitantePage, PerfilSinAcceso, PERFIL_ETIQUETAS });
+Object.assign(window, { PerfilVisitantePage, PerfilSinAcceso, PERFIL_ETIQUETAS, AvatarVisitante });

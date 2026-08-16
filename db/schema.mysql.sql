@@ -193,6 +193,12 @@ CREATE TABLE IF NOT EXISTS visitantes (
   correo             VARCHAR(254) PRIMARY KEY,
   nombre             VARCHAR(120) DEFAULT NULL,
   telefono           VARCHAR(32)  DEFAULT NULL,
+  -- Retrato del visitante. Dos formas, y sólo una a la vez: una foto que sube
+  -- (avatar_path) o un emoji que elige (avatar_emoji). El emoji existe porque
+  -- mucha gente no quiere poner su cara en un sitio público, y sin alternativa
+  -- lo que hacen es dejarlo vacío.
+  avatar_path        VARCHAR(255) DEFAULT NULL,
+  avatar_emoji       VARCHAR(16)  DEFAULT NULL,
   genero             ENUM('hombre','mujer','otro','prefiero_no_decir') DEFAULT NULL,
   rango_edad         ENUM('menor_18','18_25','26_35','36_45','46_60','mayor_60','prefiero_no_decir') DEFAULT NULL,
   pais               VARCHAR(80)  DEFAULT NULL,

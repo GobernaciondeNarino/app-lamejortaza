@@ -109,6 +109,7 @@ return [
         'promotor_upload'   => ['window' => 3600, 'max' => 60], // 60 imágenes / hora / promotor
         'promotor_logo_publico' => ['window' => 3600, 'max' => 10], // logos en la inscripción (sin sesión)
         'perfil_visitante'  => ['window' => 600, 'max' => 30],  // perfil del visitante / 10 min / IP
+        'foto_visitante'    => ['window' => 3600, 'max' => 12], // fotos de perfil / hora / IP (sin sesión)
         'perfil_enlace'     => ['window' => 3600, 'max' => 10], // enlaces de perfil / hora / IP
         'perfil_enlace_correo' => ['window' => 3600, 'max' => 3], // por correo, para no usarlo de arma
         'correo_prueba'     => ['window' => 600, 'max' => 10],  // pruebas de envío desde el panel
