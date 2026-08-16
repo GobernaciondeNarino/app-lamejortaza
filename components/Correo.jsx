@@ -61,6 +61,8 @@ const AdminCorreoConfig = () => {
   const [destino, setDestino] = React.useState("");
   const [probando, setProbando] = React.useState(false);
   const [resultado, setResultado] = React.useState(null);
+  const [sonda, setSonda] = React.useState(null);
+  const [sondando, setSondando] = React.useState(false);
 
   const cargar = React.useCallback(async () => {
     setCargando(true);
@@ -139,6 +141,56 @@ const AdminCorreoConfig = () => {
           {diag.avisos.map((a, i) => <AvisoDiagnostico key={i} nivel={a.nivel}>{a.texto}</AvisoDiagnostico>)}
         </div>
       )}
+
+      {/* --- Sonda de salida ---
+          Antes el diagnóstico sólo sabía decir «no se puede abrir el puerto»,
+          y con eso el administrador se iba a discutir con el proveedor sin
+          saber si el problema era suyo. Esto prueba varios destinos y dice qué
+          hacer con lo que contestan. */}
+      <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 20, background: "var(--paper)", marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div className="mono">¿Este servidor puede salir a internet por SMTP?</div>
+          <button type="button" className="btn btn-ghost" disabled={sondando}
+            onClick={async () => {
+              setSondando(true); setSonda(null);
+              try { setSonda(await window.LMTApi.correoSonda()); }
+              catch (e) { setError(mensajeError(e)); }
+              finally { setSondando(false); }
+            }}>
+            {sondando ? "Probando…" : "Comprobar la salida"}
+          </button>
+        </div>
+
+        {sonda && (
+          <div style={{ marginTop: 14 }}>
+            <AvisoDiagnostico nivel={sonda.veredicto.nivel}>
+              <strong style={{ fontWeight: 500 }}>{sonda.veredicto.titulo}.</strong>{" "}
+              {sonda.veredicto.texto}
+            </AvisoDiagnostico>
+            <div className="tabla-scroll" style={{ marginTop: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <tbody>
+                  {sonda.resultados.map((x) => (
+                    <tr key={x.host + x.puerto} style={{ borderBottom: "1px solid var(--line)" }}>
+                      <td style={{ padding: "7px 8px", width: 26 }}>{x.ok ? "✓" : "✗"}</td>
+                      <td className="mono ruta" style={{ padding: "7px 8px", whiteSpace: "nowrap" }}>{x.host}:{x.puerto}</td>
+                      <td style={{ padding: "7px 8px", color: "var(--ink-2)" }}>{x.etiqueta}</td>
+                      <td style={{ padding: "7px 8px", textAlign: "right", color: x.ok ? "var(--good)" : "var(--bad)", whiteSpace: "nowrap" }}>
+                        {x.ok ? `${x.ms} ms` : `${x.error} (${x.errno})`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="ayuda" style={{ marginTop: 10 }}>
+              PHP corre como <strong style={{ fontWeight: 500 }}>{sonda.usuario}</strong>.
+              Un rechazo instantáneo («Connection refused») lo produce este mismo servidor;
+              una espera agotada es un descarte en la red del proveedor.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* --- Prueba: lo primero, porque es lo que la gente viene a hacer --- */}
       <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 20, background: "var(--paper)", marginBottom: 24 }}>
@@ -223,18 +275,31 @@ const AdminCorreoConfig = () => {
 
         {form.transport === "smtp" && (
           <BloqueForm titulo="Servidor SMTP" nota="Pídeselos a quien administra el correo institucional.">
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <button type="button" className="btn btn-ghost" style={{ fontSize: 13, padding: "8px 14px" }}
-                onClick={() => setForm((f) => ({
-                  ...f,
-                  smtp: { ...f.smtp, host: "smtp.gmail.com", port: 587, secure: "tls", user: f.from || f.smtp.user },
-                }))}>
-                Rellenar para Gmail
-              </button>
-              <span className="ayuda" style={{ flex: 1, minWidth: 200 }}>
-                El buzón institucional funciona sobre Gmail: esto pone servidor, puerto y cifrado.
-              </span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {[
+                { t: "Gmail · 587 TLS", h: "smtp.gmail.com", p: 587, s: "tls", usaCorreo: true },
+                { t: "Gmail · 465 SSL", h: "smtp.gmail.com", p: 465, s: "ssl", usaCorreo: true },
+                // Relé por el servidor de correo de la propia máquina: es una
+                // conexión local, así que ninguna regla de salida la toca. Es
+                // la salida cuando el hosting cierra el SMTP hacia fuera.
+                { t: "Servidor local · 25", h: "127.0.0.1", p: 25, s: "", usaCorreo: false },
+              ].map((o) => (
+                <button key={o.t} type="button" className="btn btn-ghost" style={{ fontSize: 13, padding: "8px 14px" }}
+                  onClick={() => setForm((f) => ({
+                    ...f,
+                    smtp: {
+                      ...f.smtp, host: o.h, port: o.p, secure: o.s,
+                      user: o.usaCorreo ? (f.from || f.smtp.user) : "",
+                    },
+                  }))}>
+                  {o.t}
+                </button>
+              ))}
             </div>
+            <span className="ayuda">
+              El buzón institucional funciona sobre Gmail. Si la salida está cerrada,
+              «Servidor local» entrega por el correo de esta misma máquina.
+            </span>
             <div className="grid-2">
               <div className="field">
                 <label htmlFor="co-host">Servidor</label>

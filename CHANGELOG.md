@@ -7,6 +7,34 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.1.0 — Retrato del visitante y diagnóstico de la salida SMTP
+
+**Punto de reversión (v2.0.0):** `436e69d`
+
+- **Retrato en el perfil**: foto propia o un emoji de una lista cerrada de 30.
+  Aparece en el recuadro de la hoja de datos del pasaporte, donde en un
+  documento real va la foto. Sin ninguno de los dos, la inicial del nombre.
+- **La contraseña de aplicación de Gmail se limpia sola**: Google la enseña en
+  cuatro grupos de cuatro y quien la copia se lleva los espacios; el SMTP espera
+  16 caracteres seguidos y con espacios responde 535.
+- **Sonda de salida SMTP** en el panel: prueba Gmail por 587, 465 y 25 y el
+  servidor de correo local, y distingue un rechazo del propio servidor
+  («Connection refused», inmediato) de un bloqueo del proveedor («timed out»).
+- **Relé por el servidor local** en un botón, como salida cuando el hosting
+  cierra el SMTP hacia fuera.
+- **Rate limits con valores de reserva en el código.** `api/config.php` es del
+  administrador y no gana claves al actualizar: un límite nuevo que sólo
+  estuviera en el ejemplo quedaba sin efecto, y sin efecto significaba **sin
+  límite ninguno**.
+
+Dos columnas nuevas en `visitantes` (`avatar_path`, `avatar_emoji`), opcionales.
+Las añade `php db/migrate.php`.
+
+Para revertir a la v2.0.0: `git checkout 436e69d -- .`. La base no se toca; las
+fotos quedan en `uploads/visitantes/` y pueden borrarse a mano.
+
+---
+
 ## v2.0.0 — Estrellas, recorrido y actividad económica
 
 **Empieza en:** el commit inmediatamente posterior a `6896fba`

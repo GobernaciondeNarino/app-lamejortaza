@@ -76,6 +76,13 @@ function register_routes_correo(\LMT\Router $r): void
         // un marcador de posición, y guardarlo tal cual borraría la buena.
         $clave = $smtp['password'] ?? null;
         if (is_string($clave) && $clave !== '' && $clave !== CORREO_CLAVE_OCULTA) {
+            // Google enseña la contraseña de aplicación en cuatro grupos de
+            // cuatro —«abcd efgh ijkl mnop»— y quien la copia se lleva los
+            // espacios. El servidor SMTP espera los 16 caracteres seguidos, así
+            // que con espacios responde 535 y parece que la clave está mal
+            // cuando lo único que sobra son tres blancos. Se limpian aquí en
+            // vez de pedirle a nadie que lo haga a mano.
+            $clave = preg_replace('/\s+/u', '', $clave) ?? $clave;
             try {
                 $valores['smtp']['password'] = Ajustes::cifrar($clave);
             } catch (\RuntimeException $e) {
@@ -104,6 +111,68 @@ function register_routes_correo(\LMT\Router $r): void
      * Prueba de envío. Es la única forma honesta de saber si el correo
      * funciona: se manda de verdad y se devuelve el diálogo con el servidor.
      */
+    /**
+     * Sonda de salida: ¿a dónde puede conectarse ESTE PHP?
+     *
+     * Existe porque el diagnóstico de antes sólo sabía decir «no se puede
+     * abrir el puerto», y con eso el administrador se iba a discutir con el
+     * proveedor sin saber si el problema era suyo. Probando varios destinos a
+     * la vez, la respuesta deja de ser una sospecha:
+     *
+     *   - Si falla Gmail pero el servidor de correo local sí acepta, la salida
+     *     está cerrada y la solución es relevar por el servidor local.
+     *   - Si «Connection refused» viene enseguida (no expira), el rechazo lo
+     *     produce el propio servidor —una regla de cortafuegos—, no la red del
+     *     proveedor. Esa se arregla en casa.
+     *   - Si expira, es un descarte silencioso en el camino: eso sí es el
+     *     proveedor.
+     */
+    $r->get('/admin/correo/sonda', function () {
+        Security::requireAdmin();
+
+        $destinos = [
+            ['smtp.gmail.com', 587, 'Gmail · STARTTLS (el recomendado)'],
+            ['smtp.gmail.com', 465, 'Gmail · SSL directo'],
+            ['smtp.gmail.com',  25, 'Gmail · sin cifrar (casi siempre bloqueado)'],
+            ['127.0.0.1',       25, 'Servidor de correo de esta máquina'],
+            ['127.0.0.1',      587, 'Envío autenticado de esta máquina'],
+        ];
+
+        $resultados = [];
+        foreach ($destinos as [$host, $puerto, $etiqueta]) {
+            $t0 = microtime(true);
+            $fp = @stream_socket_client(
+                'tcp://' . $host . ':' . $puerto,
+                $errno, $errstr, 5, STREAM_CLIENT_CONNECT
+            );
+            $ms = (int) round((microtime(true) - $t0) * 1000);
+            if ($fp) {
+                // Leer el saludo confirma que hay un SMTP de verdad y no un
+                // proxy que acepta la conexión y calla.
+                stream_set_timeout($fp, 3);
+                $saludo = trim((string) @fgets($fp, 256));
+                @fclose($fp);
+                $resultados[] = [
+                    'host' => $host, 'puerto' => $puerto, 'etiqueta' => $etiqueta,
+                    'ok' => true, 'ms' => $ms, 'saludo' => mb_substr($saludo, 0, 120),
+                    'errno' => 0, 'error' => '',
+                ];
+                continue;
+            }
+            $resultados[] = [
+                'host' => $host, 'puerto' => $puerto, 'etiqueta' => $etiqueta,
+                'ok' => false, 'ms' => $ms, 'saludo' => '',
+                'errno' => (int) $errno, 'error' => (string) $errstr,
+            ];
+        }
+
+        Response::ok([
+            'usuario'    => correo_usuario_php(),
+            'resultados' => $resultados,
+            'veredicto'  => correo_veredicto($resultados),
+        ]);
+    });
+
     $r->post('/admin/correo/prueba', function () {
         Security::requireAdmin();
         $b = Security::jsonBody();
@@ -282,6 +351,77 @@ function correo_puerto_abierto(string $host, int $puerto): ?bool
 }
 
 /** Traduce el fallo a lo siguiente que hay que hacer. */
+/** Con qué usuario del sistema corre PHP. Es la mitad de la respuesta. */
+function correo_usuario_php(): string
+{
+    if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+        $info = @posix_getpwuid(posix_geteuid());
+        if (is_array($info) && !empty($info['name'])) return (string) $info['name'];
+    }
+    return (string) (getenv('USER') ?: getenv('USERNAME') ?: 'desconocido');
+}
+
+/**
+ * Qué hacer, a la vista de lo que contestó cada destino.
+ *
+ * @param array<int, array<string, mixed>> $r
+ * @return array{nivel:string, titulo:string, texto:string}
+ */
+function correo_veredicto(array $r): array
+{
+    $por = function (string $host, int $puerto) use ($r) {
+        foreach ($r as $x) if ($x['host'] === $host && $x['puerto'] === $puerto) return $x;
+        return null;
+    };
+    $g587  = $por('smtp.gmail.com', 587);
+    $g465  = $por('smtp.gmail.com', 465);
+    $local = $por('127.0.0.1', 25);
+    $usuario = correo_usuario_php();
+
+    if ($g587 && $g587['ok']) {
+        return ['nivel' => 'ok', 'titulo' => 'La salida a Gmail funciona',
+                'texto' => 'Este servidor alcanza smtp.gmail.com por el puerto 587. Si el envío falla, '
+                         . 'ya no es la red: revisa el usuario y la contraseña de aplicación.'];
+    }
+    if ($g465 && $g465['ok']) {
+        return ['nivel' => 'medio', 'titulo' => 'Usa el puerto 465',
+                'texto' => 'El 587 está cerrado pero el 465 sí abre. Cambia el puerto a 465 y el cifrado a '
+                         . '«SSL directo»: Gmail acepta los dos por igual.'];
+    }
+
+    // Rechazo inmediato = alguien de esta máquina dice que no. Un descarte en
+    // la red del proveedor no contesta: expira.
+    $rechazado = $g587 && (int) $g587['errno'] === 111;
+    if ($rechazado) {
+        return ['nivel' => 'critico', 'titulo' => 'Lo bloquea este mismo servidor, no el proveedor',
+                'texto' => 'La conexión no expira: la rechazan al instante («Connection refused»), y eso sólo lo '
+                         . 'hace algo que corre aquí dentro. Lo habitual es una regla de cortafuegos que permite '
+                         . "la salida SMTP a root y se la niega al resto — PHP corre como «{$usuario}». "
+                         . 'Compruébalo con: iptables -L OUTPUT -n -v | grep -E "587|owner". '
+                         . 'Mientras se arregla, el envío puede salir por el servidor de correo de esta misma '
+                         . 'máquina, que es una conexión local y ninguna regla de salida la toca.'];
+    }
+    if ($local && $local['ok']) {
+        return ['nivel' => 'alto', 'titulo' => 'Sin salida a Gmail, pero hay servidor de correo local',
+                'texto' => 'Ningún puerto de Gmail responde desde aquí. El servidor de correo de esta máquina sí '
+                         . 'acepta conexiones: pon servidor 127.0.0.1, puerto 25 y cifrado «sin cifrar», y que él '
+                         . 'entregue. Pide además que el SPF del dominio autorice la IP de este servidor, o los '
+                         . 'mensajes llegarán a spam.'];
+    }
+    // Si PHP ya corre como root, la hipótesis del filtro por usuario no aplica
+    // y decirlo sería mandar a nadie a buscar donde no hay nada.
+    $porUsuario = $usuario !== 'root'
+        ? "PHP corre como «{$usuario}» y la consola como root, así que el filtro puede distinguir por usuario: "
+        . 'compruébalo con «su -s /bin/bash -c "nc -zv smtp.gmail.com 587" ' . $usuario . '». '
+        : 'PHP ya corre como root, así que no es un filtro por usuario: el bloqueo es de red. ';
+
+    return ['nivel' => 'critico', 'titulo' => 'No hay salida SMTP por ningún lado',
+            'texto' => 'Ni Gmail ni el servidor de correo local aceptan conexiones desde PHP. '
+                     . $porUsuario
+                     . 'Si «nc -zv smtp.gmail.com 587» sí conecta desde la consola, ese contraste es el dato que '
+                     . 'hay que llevarle a quien administra el servidor.'];
+}
+
 function correo_pista(string $transporte, ?string $error, bool $ok, array $cfg): string
 {
     if ($transporte === 'log') {

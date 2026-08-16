@@ -49,11 +49,24 @@ const VISITANTE_OPCIONES = [
     'como_se_entero' => ['redes', 'radio', 'television', 'prensa', 'voz_a_voz', 'institucion', 'otro'],
 ];
 
+/**
+ * Emojis que puede elegir el visitante como retrato.
+ *
+ * Es un catálogo cerrado a propósito: los que tienen que ver con el café, la
+ * montaña y la gente del festival. Suficiente para reconocerse sin abrir la
+ * puerta a cualquier carácter.
+ */
+const VISITANTE_EMOJIS = [
+    '☕', '🫖', '🍵', '🌱', '🌿', '🌰', '🏔️', '🌋', '🌄', '🌻',
+    '😀', '😎', '🤠', '🥸', '🤓', '🧑‍🌾', '👩‍🌾', '👨‍🌾', '🧑‍🍳', '👵',
+    '🐝', '🦜', '🐞', '🦋', '🐈', '🐕', '⭐', '🔥', '❤️', '🎒',
+];
+
 function register_routes_visitantes(\LMT\Router $r): void
 {
     /** Catálogos para pintar el formulario sin duplicar las listas en el JS. */
     $r->get('/visitantes/opciones', function () {
-        Response::ok(['opciones' => VISITANTE_OPCIONES]);
+        Response::ok(['opciones' => VISITANTE_OPCIONES, 'emojis' => VISITANTE_EMOJIS]);
     });
 
     $r->get('/visitantes/perfil', function () {
@@ -71,6 +84,7 @@ function register_routes_visitantes(\LMT\Router $r): void
             'correo'   => $correo,
             'perfil'   => $row ? visitante_publico($row) : null,
             'opciones' => VISITANTE_OPCIONES,
+            'emojis'   => VISITANTE_EMOJIS,
         ]);
     });
 
@@ -107,16 +121,20 @@ function register_routes_visitantes(\LMT\Router $r): void
             ':exp' => visitante_texto($b['expectativa'] ?? null, 500),
             ':como'=> visitante_opcion('como_se_entero', $b['como_se_entero'] ?? null),
             ':prim'=> ($p = Validate::bool($b['primera_visita'] ?? null)) === null ? null : ($p ? 1 : 0),
+            // Emoji del avatar. La foto NO se toca aquí: se sube por su propia
+            // ruta y guardarla en este PUT la borraría cada vez que alguien
+            // cambia cualquier otro campo del formulario.
+            ':emoji' => visitante_emoji($b['avatar_emoji'] ?? null),
         ];
 
         $pdo = Db::pdo();
         $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        $columnas = 'correo, nombre, telefono, genero, rango_edad, pais, departamento, municipio,
+        $columnas = 'correo, nombre, telefono, avatar_emoji, genero, rango_edad, pais, departamento, municipio,
                      tipo_visitante, entidad, grupo_etnico, discapacidad, expectativa,
                      como_se_entero, primera_visita, acepta_datos, updated_at';
-        $valores  = ':c, :nom, :tel, :gen, :edad, :pais, :dep, :mun, :tipo, :ent, :etn, :dis,
+        $valores  = ':c, :nom, :tel, :emoji, :gen, :edad, :pais, :dep, :mun, :tipo, :ent, :etn, :dis,
                      :exp, :como, :prim, 1, CURRENT_TIMESTAMP';
-        $asigna   = 'nombre=:nom, telefono=:tel, genero=:gen, rango_edad=:edad, pais=:pais,
+        $asigna   = 'nombre=:nom, telefono=:tel, avatar_emoji=:emoji, genero=:gen, rango_edad=:edad, pais=:pais,
                      departamento=:dep, municipio=:mun, tipo_visitante=:tipo, entidad=:ent,
                      grupo_etnico=:etn, discapacidad=:dis, expectativa=:exp,
                      como_se_entero=:como, primera_visita=:prim, acepta_datos=1,
@@ -128,7 +146,8 @@ function register_routes_visitantes(\LMT\Router $r): void
             // reutiliza con VALUES() lo que traía el INSERT.
             $sql = "INSERT INTO visitantes ($columnas) VALUES ($valores)
                     ON DUPLICATE KEY UPDATE
-                      nombre=VALUES(nombre), telefono=VALUES(telefono), genero=VALUES(genero),
+                      nombre=VALUES(nombre), telefono=VALUES(telefono),
+                      avatar_emoji=VALUES(avatar_emoji), genero=VALUES(genero),
                       rango_edad=VALUES(rango_edad), pais=VALUES(pais),
                       departamento=VALUES(departamento), municipio=VALUES(municipio),
                       tipo_visitante=VALUES(tipo_visitante), entidad=VALUES(entidad),
@@ -147,6 +166,76 @@ function register_routes_visitantes(\LMT\Router $r): void
         Response::ok(['perfil' => visitante_publico($stmt->fetch() ?: [])]);
     });
 
+    /**
+     * Foto del visitante.
+     *
+     * Va aparte del PUT del perfil por dos motivos: una subida es multipart y
+     * no cabe en el cuerpo JSON, y porque guardarla en cada guardado del
+     * formulario la borraría cada vez que alguien cambia otro campo.
+     *
+     * Sin sesión, así que además del testigo lleva su propio límite por IP: es
+     * el único punto donde un anónimo con un testigo válido puede escribir
+     * archivos en el servidor.
+     */
+    $r->post('/visitantes/foto', function () {
+        $correo = Validate::email($_POST['correo'] ?? null);
+        $token  = is_string($_POST['token'] ?? null) ? $_POST['token'] : '';
+        if (!$correo) Response::error(422, 'correo_invalido');
+        if (!RateLimit::hit('foto_visitante', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!visitante_token_valido($correo, $token)) Response::error(403, 'token_invalido');
+        if (empty($_FILES['archivo']) || !is_array($_FILES['archivo'])) {
+            Response::error(422, 'archivo_ausente');
+        }
+
+        try {
+            $ruta = \LMT\Uploads::imagen($_FILES['archivo'], 'visitantes');
+        } catch (\RuntimeException $e) {
+            Response::error(422, $e->getMessage());
+        }
+
+        $pdo = Db::pdo();
+        // La foto manda sobre el emoji: quien sube su cara ya eligió.
+        $anterior = $pdo->prepare('SELECT avatar_path FROM visitantes WHERE correo = :c');
+        $anterior->execute([':c' => $correo]);
+        $vieja = (string) ($anterior->fetchColumn() ?: '');
+
+        $upd = $pdo->prepare('UPDATE visitantes SET avatar_path = :p, avatar_emoji = NULL,
+                                                    updated_at = CURRENT_TIMESTAMP
+                              WHERE correo = :c');
+        $upd->execute([':p' => $ruta, ':c' => $correo]);
+        if ($upd->rowCount() === 0) {
+            // Todavía no hay fila: se crea con la foto y sin autorización, que
+            // es lo correcto —subir una foto no autoriza a tratar datos
+            // sensibles— y el formulario la pedirá cuando toque.
+            $pdo->prepare('INSERT INTO visitantes (correo, avatar_path, acepta_datos, updated_at)
+                           VALUES (:c, :p, 0, CURRENT_TIMESTAMP)')
+                ->execute([':c' => $correo, ':p' => $ruta]);
+        }
+
+        visitante_borrar_foto($vieja);
+        Response::ok(['avatar' => visitante_ruta_publica($ruta)]);
+    });
+
+    /** Quitar la foto y volver al emoji (o a la inicial). */
+    $r->delete('/visitantes/foto', function () {
+        $b = Security::jsonBody();
+        $correo = Validate::email($b['correo'] ?? null);
+        $token  = is_string($b['token'] ?? null) ? $b['token'] : '';
+        if (!$correo) Response::error(422, 'correo_invalido');
+        if (!RateLimit::hit('perfil_visitante', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!visitante_token_valido($correo, $token)) Response::error(403, 'token_invalido');
+
+        $pdo = Db::pdo();
+        $sel = $pdo->prepare('SELECT avatar_path FROM visitantes WHERE correo = :c');
+        $sel->execute([':c' => $correo]);
+        $vieja = (string) ($sel->fetchColumn() ?: '');
+
+        $pdo->prepare('UPDATE visitantes SET avatar_path = NULL, updated_at = CURRENT_TIMESTAMP
+                       WHERE correo = :c')->execute([':c' => $correo]);
+        visitante_borrar_foto($vieja);
+        Response::ok(null);
+    });
+
     /** Derecho de supresión (Ley 1581/2012, art. 8). */
     $r->delete('/visitantes/perfil', function () {
         $b = Security::jsonBody();
@@ -156,7 +245,17 @@ function register_routes_visitantes(\LMT\Router $r): void
         if (!RateLimit::hit('perfil_visitante', RateLimit::ipHash())) Response::error(429, 'rate_limited');
         if (!visitante_token_valido($correo, $token)) Response::error(403, 'token_invalido');
 
-        Db::pdo()->prepare('DELETE FROM visitantes WHERE correo = :c')->execute([':c' => $correo]);
+        // Borrar el perfil tiene que llevarse la foto del disco. Dejar el
+        // archivo huérfano sería incumplir el derecho de supresión con la
+        // excusa de que «en la base ya no está»: el retrato sigue siendo suyo
+        // y sigue estando accesible por su URL.
+        $pdo = Db::pdo();
+        $sel = $pdo->prepare('SELECT avatar_path FROM visitantes WHERE correo = :c');
+        $sel->execute([':c' => $correo]);
+        $foto = (string) ($sel->fetchColumn() ?: '');
+
+        $pdo->prepare('DELETE FROM visitantes WHERE correo = :c')->execute([':c' => $correo]);
+        visitante_borrar_foto($foto);
         Response::ok(null);
     });
 
@@ -338,11 +437,49 @@ function visitante_departamento($valor): ?string
     return \LMT\Territorio::departamento($libre) ?? $libre;
 }
 
+/**
+ * Emoji del avatar, o null.
+ *
+ * Sólo se aceptan los de la lista: un campo de texto libre aquí sería una vía
+ * para colar cualquier cosa en un sitio donde luego se pinta sin escapar en el
+ * canvas del pasaporte. Con un catálogo cerrado no hay nada que discutir.
+ */
+function visitante_emoji($valor): ?string
+{
+    if (!is_string($valor) || $valor === '') return null;
+    return in_array($valor, VISITANTE_EMOJIS, true) ? $valor : null;
+}
+
+/**
+ * Borra del disco una foto que ya no se usa.
+ *
+ * Sólo toca lo que está dentro de uploads/visitantes: la ruta viene de la base,
+ * pero comprobarlo cuesta tres líneas y evita que un valor manipulado en la
+ * base llegue a borrar cualquier archivo del servidor.
+ */
+function visitante_borrar_foto(?string $rel): void
+{
+    $rel = is_string($rel) ? trim($rel) : '';
+    if ($rel === '' || !preg_match('#^uploads/visitantes/[a-f0-9]{32}\.(jpg|png|webp)$#', $rel)) return;
+    $abs = dirname(__DIR__, 2) . '/' . $rel;
+    if (is_file($abs)) @unlink($abs);
+}
+
+/** Ruta pública de la foto, o cadena vacía. */
+function visitante_ruta_publica($rel): string
+{
+    $rel = is_string($rel) ? trim($rel) : '';
+    if ($rel === '') return '';
+    return ltrim($rel, '/');
+}
+
 function visitante_publico(array $v): array
 {
     return [
         'nombre'         => (string) ($v['nombre'] ?? ''),
         'telefono'       => (string) ($v['telefono'] ?? ''),
+        'avatar'         => visitante_ruta_publica($v['avatar_path'] ?? null),
+        'avatar_emoji'   => (string) ($v['avatar_emoji'] ?? ''),
         'genero'         => (string) ($v['genero'] ?? ''),
         'rango_edad'     => (string) ($v['rango_edad'] ?? ''),
         'pais'           => (string) ($v['pais'] ?? ''),

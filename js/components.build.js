@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: c19d8bdb35a55c41
+// Huella de las fuentes: 70b514bad9fbc4c7
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -3994,6 +3994,13 @@ const bandaMecanica = passport => {
   const l2 = (limpia(passport.numero, 12) + "COL" + limpia(p.municipio || "NARINO", 16)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
   return [l1, l2];
 };
+const retratoDe = passport => {
+  const p = passport.perfil || {};
+  return {
+    foto: urlImagen(p.avatar) || "",
+    emoji: p.avatar_emoji || ""
+  };
+};
 const datosPagina = (passport, totalStands) => {
   const p = passport.perfil || {};
   const [mrz1, mrz2] = bandaMecanica(passport);
@@ -4008,6 +4015,8 @@ const datosPagina = (passport, totalStands) => {
     expedido: fechaCorta(passport.inicio),
     conPerfil: !!passport.perfil,
     totalStands: totalStands,
+    retrato_foto: retratoDe(passport).foto,
+    retrato_emoji: retratoDe(passport).emoji,
     mrz1,
     mrz2
   };
@@ -4048,6 +4057,7 @@ const PaginaDatos = ({
   const entidad = p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante);
   const [mrz1, mrz2] = bandaMecanica(passport);
   const sellos = passport.visitados.length;
+  const retrato = retratoDe(passport);
   return React.createElement("div", {
     style: {
       height: "100%",
@@ -4093,16 +4103,34 @@ const PaginaDatos = ({
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      background: "var(--paper-2, transparent)"
+      background: "var(--paper-2, transparent)",
+      position: "relative",
+      overflow: "hidden"
     }
-  }, React.createElement("div", {
+  }, retrato.foto ? React.createElement("img", {
+    src: retrato.foto,
+    alt: "",
+    style: {
+      position: "absolute",
+      inset: 0,
+      width: "100%",
+      height: "100%",
+      objectFit: "cover"
+    }
+  }) : React.createElement("div", {
     style: {
       fontFamily: "var(--font-display)",
       fontStyle: "italic",
       fontSize: 40,
       lineHeight: 1
     }
-  }, (passport.nombre || "V").trim().charAt(0).toUpperCase()), React.createElement("div", {
+  }, retrato.emoji ? React.createElement("span", {
+    style: {
+      fontStyle: "normal",
+      fontSize: 38
+    },
+    "aria-hidden": "true"
+  }, retrato.emoji) : (passport.nombre || "V").trim().charAt(0).toUpperCase()), !retrato.foto && React.createElement(React.Fragment, null, React.createElement("div", {
     className: "mono",
     style: {
       fontSize: 9,
@@ -4114,7 +4142,7 @@ const PaginaDatos = ({
     style: {
       fontSize: 18
     }
-  }, String(sellos).padStart(2, "0"))), React.createElement("div", {
+  }, String(sellos).padStart(2, "0")))), React.createElement("div", {
     style: {
       flex: 1,
       minWidth: 0,
@@ -8066,6 +8094,8 @@ const PERFIL_VACIO = {
   genero: "",
   rango_edad: "",
   pais: "Colombia",
+  avatar: "",
+  avatar_emoji: "",
   departamento: "",
   municipio: "",
   tipo_visitante: "",
@@ -8100,6 +8130,148 @@ const CampoOpcion = ({
 }, etiquetas && etiquetas[o] || o))), ayuda && React.createElement("span", {
   className: "ayuda"
 }, ayuda));
+const AvatarVisitante = ({
+  correo,
+  token,
+  foto,
+  emoji,
+  emojis,
+  onFoto,
+  onEmoji,
+  onError
+}) => {
+  const [subiendo, setSubiendo] = React.useState(false);
+  const url = urlImagen(foto);
+  const subir = async archivo => {
+    onError("");
+    setSubiendo(true);
+    try {
+      const r = await window.LMTApi.subirFotoVisitante(correo, token, archivo);
+      onFoto(r.avatar || "");
+    } catch (e) {
+      onError(mensajeError(e, "No fue posible subir la foto."));
+    } finally {
+      setSubiendo(false);
+    }
+  };
+  const quitar = async () => {
+    onError("");
+    try {
+      await window.LMTApi.borrarFotoVisitante(correo, token);
+      onFoto("");
+    } catch (e) {
+      onError(mensajeError(e, "No fue posible quitar la foto."));
+    }
+  };
+  return React.createElement("div", null, React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 16,
+      alignItems: "center"
+    }
+  }, React.createElement("div", {
+    style: {
+      width: 84,
+      height: 84,
+      flexShrink: 0,
+      borderRadius: "50%",
+      overflow: "hidden",
+      border: "1px solid var(--line-2)",
+      background: "var(--paper-2)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, url ? React.createElement("img", {
+    src: url,
+    alt: "Tu foto",
+    style: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover"
+    }
+  }) : React.createElement("span", {
+    style: {
+      fontSize: 40,
+      lineHeight: 1
+    },
+    "aria-hidden": "true"
+  }, emoji || "🙂")), React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, React.createElement("label", {
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      cursor: subiendo ? "wait" : "pointer",
+      opacity: subiendo ? 0.6 : 1
+    }
+  }, subiendo ? "Subiendo…" : url ? "Cambiar foto" : "Subir una foto", React.createElement("input", {
+    type: "file",
+    accept: "image/jpeg,image/png,image/webp",
+    hidden: true,
+    disabled: subiendo,
+    onChange: e => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (f) subir(f);
+    }
+  })), url && React.createElement("button", {
+    type: "button",
+    onClick: quitar,
+    className: "mono",
+    style: {
+      background: "none",
+      border: "none",
+      color: "var(--ink-3)",
+      textDecoration: "underline",
+      cursor: "pointer",
+      padding: "6px 0"
+    }
+  }, "Quitar la foto y usar un emoji"))), !url && React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      marginBottom: 8
+    }
+  }, "O elige un emoji"), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6
+    }
+  }, (emojis || []).map(e => React.createElement("button", {
+    key: e,
+    type: "button",
+    "aria-label": "Elegir " + e,
+    "aria-pressed": emoji === e,
+    onClick: () => onEmoji(emoji === e ? "" : e),
+    style: {
+      width: 44,
+      height: 44,
+      fontSize: 22,
+      lineHeight: 1,
+      cursor: "pointer",
+      borderRadius: "50%",
+      background: emoji === e ? "var(--paper-2)" : "transparent",
+      border: emoji === e ? "2px solid var(--ink)" : "1px solid var(--line-2)"
+    }
+  }, e)))), React.createElement("p", {
+    className: "ayuda",
+    style: {
+      marginTop: 12
+    }
+  }, url ? "Tu foto se ve en tu pasaporte. Puedes quitarla cuando quieras." : "Nada de esto es obligatorio. Si no eliges, tu pasaporte lleva la inicial de tu nombre."));
+};
 const PerfilSinAcceso = () => {
   const [correo, setCorreo] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
@@ -8206,6 +8378,7 @@ const PerfilVisitantePage = () => {
   const token = params.get("t") || guardado.token || "";
   const [form, setForm] = React.useState(PERFIL_VACIO);
   const [opciones, setOpciones] = React.useState(null);
+  const [emojis, setEmojis] = React.useState([]);
   const [cargando, setCargando] = React.useState(true);
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -8228,6 +8401,7 @@ const PerfilVisitantePage = () => {
         const datos = await window.LMTApi.getPerfilVisitante(correo, token);
         if (!vivo) return;
         setOpciones(datos.opciones || null);
+        setEmojis(datos.emojis || []);
         if (datos.perfil) {
           setForm(Object.assign({}, PERFIL_VACIO, datos.perfil));
           setExistia(true);
@@ -8338,6 +8512,24 @@ const PerfilVisitantePage = () => {
       marginTop: 8
     }
   }, React.createElement(BloqueForm, {
+    titulo: "Tu retrato"
+  }, React.createElement(AvatarVisitante, {
+    correo: correo,
+    token: token,
+    foto: form.avatar,
+    emoji: form.avatar_emoji,
+    emojis: emojis,
+    onFoto: url => setForm(f => ({
+      ...f,
+      avatar: url,
+      avatar_emoji: ""
+    })),
+    onEmoji: e => setForm(f => ({
+      ...f,
+      avatar_emoji: e
+    })),
+    onError: setError
+  })), React.createElement(BloqueForm, {
     titulo: "Sobre ti"
   }, React.createElement("div", {
     className: "field"
@@ -8556,7 +8748,8 @@ const PerfilVisitantePage = () => {
 Object.assign(window, {
   PerfilVisitantePage,
   PerfilSinAcceso,
-  PERFIL_ETIQUETAS
+  PERFIL_ETIQUETAS,
+  AvatarVisitante
 });
 })();
 
@@ -9505,6 +9698,8 @@ const AdminCorreoConfig = () => {
   const [destino, setDestino] = React.useState("");
   const [probando, setProbando] = React.useState(false);
   const [resultado, setResultado] = React.useState(null);
+  const [sonda, setSonda] = React.useState(null);
+  const [sondando, setSondando] = React.useState(false);
   const cargar = React.useCallback(async () => {
     setCargando(true);
     try {
@@ -9621,6 +9816,97 @@ const AdminCorreoConfig = () => {
     key: i,
     nivel: a.nivel
   }, a.texto))), React.createElement("div", {
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: 20,
+      background: "var(--paper)",
+      marginBottom: 24
+    }
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 12,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, "\xBFEste servidor puede salir a internet por SMTP?"), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: sondando,
+    onClick: async () => {
+      setSondando(true);
+      setSonda(null);
+      try {
+        setSonda(await window.LMTApi.correoSonda());
+      } catch (e) {
+        setError(mensajeError(e));
+      } finally {
+        setSondando(false);
+      }
+    }
+  }, sondando ? "Probando…" : "Comprobar la salida")), sonda && React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, React.createElement(AvisoDiagnostico, {
+    nivel: sonda.veredicto.nivel
+  }, React.createElement("strong", {
+    style: {
+      fontWeight: 500
+    }
+  }, sonda.veredicto.titulo, "."), " ", sonda.veredicto.texto), React.createElement("div", {
+    className: "tabla-scroll",
+    style: {
+      marginTop: 12
+    }
+  }, React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: 12
+    }
+  }, React.createElement("tbody", null, sonda.resultados.map(x => React.createElement("tr", {
+    key: x.host + x.puerto,
+    style: {
+      borderBottom: "1px solid var(--line)"
+    }
+  }, React.createElement("td", {
+    style: {
+      padding: "7px 8px",
+      width: 26
+    }
+  }, x.ok ? "✓" : "✗"), React.createElement("td", {
+    className: "mono ruta",
+    style: {
+      padding: "7px 8px",
+      whiteSpace: "nowrap"
+    }
+  }, x.host, ":", x.puerto), React.createElement("td", {
+    style: {
+      padding: "7px 8px",
+      color: "var(--ink-2)"
+    }
+  }, x.etiqueta), React.createElement("td", {
+    style: {
+      padding: "7px 8px",
+      textAlign: "right",
+      color: x.ok ? "var(--good)" : "var(--bad)",
+      whiteSpace: "nowrap"
+    }
+  }, x.ok ? `${x.ms} ms` : `${x.error} (${x.errno})`)))))), React.createElement("p", {
+    className: "ayuda",
+    style: {
+      marginTop: 10
+    }
+  }, "PHP corre como ", React.createElement("strong", {
+    style: {
+      fontWeight: 500
+    }
+  }, sonda.usuario), ". Un rechazo instant\xE1neo (\xABConnection refused\xBB) lo produce este mismo servidor; una espera agotada es un descarte en la red del proveedor."))), React.createElement("div", {
     style: {
       border: "1px solid var(--line)",
       borderRadius: "var(--r-md)",
@@ -9778,11 +10064,30 @@ const AdminCorreoConfig = () => {
   }, React.createElement("div", {
     style: {
       display: "flex",
-      gap: 10,
+      gap: 8,
       flexWrap: "wrap",
       alignItems: "center"
     }
-  }, React.createElement("button", {
+  }, [{
+    t: "Gmail · 587 TLS",
+    h: "smtp.gmail.com",
+    p: 587,
+    s: "tls",
+    usaCorreo: true
+  }, {
+    t: "Gmail · 465 SSL",
+    h: "smtp.gmail.com",
+    p: 465,
+    s: "ssl",
+    usaCorreo: true
+  }, {
+    t: "Servidor local · 25",
+    h: "127.0.0.1",
+    p: 25,
+    s: "",
+    usaCorreo: false
+  }].map(o => React.createElement("button", {
+    key: o.t,
     type: "button",
     className: "btn btn-ghost",
     style: {
@@ -9793,19 +10098,15 @@ const AdminCorreoConfig = () => {
       ...f,
       smtp: {
         ...f.smtp,
-        host: "smtp.gmail.com",
-        port: 587,
-        secure: "tls",
-        user: f.from || f.smtp.user
+        host: o.h,
+        port: o.p,
+        secure: o.s,
+        user: o.usaCorreo ? f.from || f.smtp.user : ""
       }
     }))
-  }, "Rellenar para Gmail"), React.createElement("span", {
-    className: "ayuda",
-    style: {
-      flex: 1,
-      minWidth: 200
-    }
-  }, "El buz\xF3n institucional funciona sobre Gmail: esto pone servidor, puerto y cifrado.")), React.createElement("div", {
+  }, o.t))), React.createElement("span", {
+    className: "ayuda"
+  }, "El buz\xF3n institucional funciona sobre Gmail. Si la salida est\xE1 cerrada, \xABServidor local\xBB entrega por el correo de esta misma m\xE1quina."), React.createElement("div", {
     className: "grid-2"
   }, React.createElement("div", {
     className: "field"

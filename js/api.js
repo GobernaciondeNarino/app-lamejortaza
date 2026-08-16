@@ -227,6 +227,20 @@
     return request("/promotores/logo-inscripcion", { method: "POST", body: archivoFormData(file) });
   }
   // ── Festival: personalización y actividad económica ─────────────────────
+  async function correoSonda()              { return request("/admin/correo/sonda"); }
+
+  /** Foto del visitante. Va aparte del perfil: es multipart y sin sesión. */
+  async function subirFotoVisitante(correo, token, file) {
+    await ensureCsrf();
+    const fd = archivoFormData(file);
+    fd.append("correo", correo);
+    fd.append("token", token);
+    return request("/visitantes/foto", { method: "POST", body: fd });
+  }
+  async function borrarFotoVisitante(correo, token) {
+    await ensureCsrf();
+    return request("/visitantes/foto", { method: "DELETE", body: { correo, token } });
+  }
   async function economia()                 { return request("/admin/economia"); }
   async function festivalAjustes()          { return request("/festival/ajustes"); }
   async function guardarFestivalAjustes(b)  { await ensureCsrf(); return request("/admin/festival/ajustes", { method: "PUT", body: b }); }
@@ -401,6 +415,9 @@
     borrarAdmin,
     cambiarClaveAdmin,
     submitVote,
+    correoSonda,
+    subirFotoVisitante,
+    borrarFotoVisitante,
     economia,
     festivalAjustes,
     guardarFestivalAjustes,

@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.0.0.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.1.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -273,6 +273,24 @@ privada, académica, un gremio o a título personal, cómo se enteró del festiv
 si es su primera vez, qué espera del evento y —en un bloque aparte— grupo
 étnico y situación de discapacidad.
 
+**Retrato: foto o emoji.** El visitante puede subir su foto o elegir un emoji de
+una lista cerrada de 30. El emoji no es un adorno: mucha gente no quiere poner su
+cara en algo que se enseña en una pantalla en la plaza, y sin alternativa lo que
+hacen es dejarlo vacío. Con un emoji se identifican igual y nadie tiene que
+decidir entre su privacidad y aparecer. Sin ninguno de los dos, el pasaporte usa
+la inicial del nombre.
+
+La foto se sube por su propia ruta (`POST /api/visitantes/foto`) y no en el
+`PUT` del perfil: guardarla ahí la borraría cada vez que alguien cambia otro
+campo del formulario. Subir una foto sustituye al emoji —quien pone su cara ya
+eligió— y **borrar el perfil borra también el archivo del disco**: dejarlo
+huérfano sería incumplir el derecho de supresión con la excusa de que «en la
+base ya no está».
+
+Los emojis salen de un catálogo cerrado en el servidor. Un campo de texto libre
+aquí sería una vía para colar cualquier cosa en un sitio donde luego se pinta
+sin escapar, en el canvas del pasaporte.
+
 **País, departamento y municipio van encadenados.** El país es un desplegable
 (Colombia u «otro país», que abre un campo de texto); si es Colombia aparece el
 departamento con los 32 más Bogotá D.C.; y sólo si el departamento es **Nariño**
@@ -325,6 +343,34 @@ no está autorizada a enviar en nombre del dominio del remitente, así que el
 servidor de destino lo descarta o lo manda a spam. El panel avisa de las dos
 cosas en rojo, deja mandarse una prueba de verdad y enseña el diálogo completo
 con el servidor SMTP cuando falla, con la contraseña tapada.
+
+**La contraseña de aplicación se limpia sola.** Google la enseña en cuatro grupos
+de cuatro —`abcd efgh ijkl mnop`— y quien la copia se lleva los espacios. El
+servidor SMTP espera los 16 caracteres seguidos, así que con espacios responde
+`535` y parece que la clave está mal cuando lo único que sobra son tres blancos.
+Se quitan al guardar: pégala como venga.
+
+**La sonda de salida** (*Panel → Correo → «Comprobar la salida»*) prueba a la vez
+Gmail por 587, 465 y 25, y el servidor de correo de la propia máquina, y dice qué
+hacer con lo que contesten. Existe porque el diagnóstico anterior sólo sabía
+decir «no se puede abrir el puerto», y con eso el administrador se iba a discutir
+con el proveedor sin saber si el problema era suyo. La diferencia clave:
+
+| Lo que responde | Quién lo hace | Qué significa |
+|---|---|---|
+| **Connection refused** (errno 111), al instante | Este mismo servidor | Una regla de cortafuegos local. Se arregla en casa. |
+| **Connection timed out** (errno 110), tras varios segundos | La red del proveedor | Un descarte silencioso en el camino. Hay que pedirlo. |
+
+Si `nc -zv smtp.gmail.com 587` conecta desde la consola pero PHP recibe
+`Connection refused`, el filtro **distingue por usuario**: la consola corre como
+root y PHP no. Es la configuración típica de un hosting que permite la salida
+SMTP sólo a root. La sonda dice con qué usuario corre PHP y el comando para
+comprobarlo.
+
+**Salida de emergencia:** relevar por el servidor de correo de la propia máquina
+(`127.0.0.1:25`, sin cifrar) — hay un botón en el panel. Es una conexión local,
+así que ninguna regla de salida la toca. Requiere que el SPF del dominio autorice
+la IP del servidor, o los mensajes acabarán en spam.
 
 **«Network is unreachable» aunque `nc` sí conecte.** Si desde la consola del
 servidor `nc -zv smtp.gmail.com 587` conecta y aun así el envío falla con

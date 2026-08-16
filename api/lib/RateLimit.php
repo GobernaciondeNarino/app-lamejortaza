@@ -7,13 +7,40 @@ use PDO;
 final class RateLimit
 {
     /**
+     * Límites de reserva, por si el bucket no está en api/config.php.
+     *
+     * Hace falta porque config.php es del administrador y NO gana claves al
+     * actualizar: un límite nuevo que sólo estuviera en config.example.php
+     * quedaría sin efecto en toda instalación ya existente —y sin efecto aquí
+     * significa sin límite ninguno, que es peor que no haberlo añadido—. Lo que
+     * ponga el administrador manda; esto sólo cubre el hueco.
+     */
+    private const RESERVA = [
+        'login'                 => ['window' => 600,  'max' => 5],
+        'vote'                  => ['window' => 60,   'max' => 1],
+        'vote_email'            => ['window' => 600,  'max' => 12],
+        'pasaporte'             => ['window' => 60,   'max' => 20],
+        'pasaporte_correo'      => ['window' => 3600, 'max' => 10],
+        'promotor_registro'     => ['window' => 3600, 'max' => 5],
+        'promotor_login'        => ['window' => 900,  'max' => 15],
+        'promotor_upload'       => ['window' => 3600, 'max' => 60],
+        'promotor_logo_publico' => ['window' => 3600, 'max' => 10],
+        'perfil_visitante'      => ['window' => 600,  'max' => 30],
+        'foto_visitante'        => ['window' => 3600, 'max' => 12],
+        'perfil_enlace'         => ['window' => 3600, 'max' => 10],
+        'perfil_enlace_correo'  => ['window' => 3600, 'max' => 3],
+        'correo_prueba'         => ['window' => 600,  'max' => 10],
+        'global'                => ['window' => 60,   'max' => 120],
+    ];
+
+    /**
      * Rate limit por (clave, ventana). Devuelve true si la solicitud es permitida.
      * Implementación: contador en DB con ventana fija. Suficiente para feria/POS.
      */
     public static function hit(string $bucket, string $subject): bool
     {
         $cfg = Config::get('rate_limits', []);
-        $rule = $cfg[$bucket] ?? null;
+        $rule = $cfg[$bucket] ?? self::RESERVA[$bucket] ?? null;
         if (!$rule) return true;
 
         $window = (int)$rule['window'];
