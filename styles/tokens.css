@@ -93,6 +93,20 @@ input, textarea, select { font-family: inherit; color: inherit; }
   text-transform: none; letter-spacing: 0;
 }
 
+/* Rejilla de «Mi recorrido».
+   El número de columnas lo pone el organizador desde el panel y llega como
+   variable en el style del contenedor; aquí sólo se decide cuál de las dos
+   manda. El minmax(0,1fr) evita que un nombre largo ensanche su columna y
+   descuadre toda la rejilla. */
+.recorrido-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(var(--cols-movil, 2), minmax(0, 1fr));
+}
+@media (min-width: 780px) {
+  .recorrido-grid { grid-template-columns: repeat(var(--cols-pc, 3), minmax(0, 1fr)); }
+}
+
 /* Divider con estrellita */
 .divider-stamp {
   display: flex; align-items: center; gap: 12px;

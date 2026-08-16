@@ -357,9 +357,213 @@ const Aviso = ({ tipo = "error", children }) => {
   );
 };
 
+// ── Navegación del público ────────────────────────────────────────────────
+// Un solo menú para las cuatro páginas que le importan a un visitante. Vive
+// aquí porque lo montan dos sitios muy distintos —el tablero y el pasaporte,
+// que tiene fondo oscuro— y tener dos copias acabaría con dos menús que no
+// dicen lo mismo.
+
+const MENU_PUBLICO = [
+  { href: "/festival",  texto: "Inicio",       icono: "◆" },
+  { href: "/pasaporte", texto: "Mi pasaporte", icono: "❖" },
+  { href: "/recorrido", texto: "Mi recorrido", icono: "◈" },
+  { href: "/perfil",    texto: "Mi perfil",    icono: "◉" },
+];
+
+// currentPath() ya descuenta el subdirectorio del despliegue; location.pathname
+// no, y en /lamejortaza/ ningún enlace se marcaría como activo.
+const rutaActual = () => {
+  try { return (window.LMTRouter && window.LMTRouter.currentPath()) || "/"; }
+  catch (_) { return location.pathname; }
+};
+
+/**
+ * Menú hamburguesa. `oscuro` lo adapta al pasaporte, que va sobre tinta.
+ *
+ * Se cierra al elegir, al tocar fuera y con Escape, y devuelve el foco al
+ * botón: abierto y sin salida es la trampa clásica de un menú en móvil.
+ */
+const MenuPublico = ({ oscuro = false }) => {
+  const [abierto, setAbierto] = React.useState(false);
+  const cajaRef = React.useRef(null);
+  const botonRef = React.useRef(null);
+  const actual = rutaActual();
+
+  React.useEffect(() => {
+    if (!abierto) return;
+    const fuera = (e) => { if (cajaRef.current && !cajaRef.current.contains(e.target)) setAbierto(false); };
+    const escape = (e) => {
+      if (e.key !== "Escape") return;
+      setAbierto(false);
+      if (botonRef.current) botonRef.current.focus();
+    };
+    document.addEventListener("pointerdown", fuera);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", fuera);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [abierto]);
+
+  const tinta = oscuro ? "var(--paper)" : "var(--ink)";
+  const tenue = oscuro ? "var(--paper-3)" : "var(--ink-3)";
+
+  return (
+    <div ref={cajaRef} style={{ position: "relative" }}>
+      <button ref={botonRef} type="button" onClick={() => setAbierto((v) => !v)}
+        aria-expanded={abierto} aria-haspopup="menu" aria-label="Menú"
+        style={{
+          width: 44, height: 44, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 5,
+          background: "none", border: "none", cursor: "pointer", color: tinta,
+        }}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} style={{
+            display: "block", width: 22, height: 2, background: "currentColor", borderRadius: 2,
+            transition: "transform 0.2s, opacity 0.2s",
+            transform: abierto ? (i === 0 ? "translateY(7px) rotate(45deg)" : i === 2 ? "translateY(-7px) rotate(-45deg)" : "none") : "none",
+            opacity: abierto && i === 1 ? 0 : 1,
+          }}/>
+        ))}
+      </button>
+
+      {abierto && (
+        <div role="menu" style={{
+          position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 60,
+          minWidth: 210, padding: 6,
+          background: "var(--paper)", color: "var(--ink)",
+          border: "1px solid var(--line-2)", borderRadius: "var(--r-md)",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+          animation: "fade-up 0.18s",
+        }}>
+          {MENU_PUBLICO.map((m) => {
+            const aqui = actual === m.href || actual.startsWith(m.href + "/");
+            return (
+              <a key={m.href} href={m.href} data-route role="menuitem"
+                aria-current={aqui ? "page" : undefined}
+                onClick={() => setAbierto(false)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 12px", minHeight: 44, borderRadius: "var(--r-sm)",
+                  textDecoration: "none", fontSize: 15,
+                  color: aqui ? "var(--paper)" : "var(--ink)",
+                  background: aqui ? "var(--ink)" : "transparent",
+                }}>
+                <span aria-hidden="true" style={{ opacity: 0.6, fontSize: 12 }}>{m.icono}</span>
+                {m.texto}
+              </a>
+            );
+          })}
+        </div>
+      )}
+      <span className="mono" style={{ display: "none", color: tenue }}>menú</span>
+    </div>
+  );
+};
+
+// ── Estrellas ─────────────────────────────────────────────────────────────
+// Las tres valoraciones del voto (innovación, atención, calidad) y su lectura
+// en las tarjetas del recorrido. Se comparten para que puntuar y ver lo
+// puntuado usen la misma forma y el mismo relleno.
+
+const ESTRELLA_CAMPOS = ["est_innovacion", "est_atencion", "est_calidad"];
+const ESTRELLA_CLAVES = { est_innovacion: "innovacion", est_atencion: "atencion", est_calidad: "calidad" };
+
+/**
+ * Estrella dibujada, no el carácter «★».
+ *
+ * Con el carácter, cada sistema pone la suya —Android, iOS y Windows dibujan
+ * tres estrellas distintas— y el relleno a medias (media estrella) no se puede
+ * hacer. Con un path y un degradado sí, y se ve igual en todas partes.
+ */
+const Estrella = ({ tam = 22, relleno = 0, color = "var(--meh)" }) => {
+  const id = React.useMemo(() => "est-" + Math.random().toString(36).slice(2, 9), []);
+  const pct = Math.max(0, Math.min(1, relleno)) * 100;
+  return (
+    <svg width={tam} height={tam} viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block" }}>
+      <defs>
+        <linearGradient id={id}>
+          <stop offset={pct + "%"} stopColor={color}/>
+          <stop offset={pct + "%"} stopColor="transparent"/>
+        </linearGradient>
+      </defs>
+      <path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z"
+        fill={`url(#${id})`} stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+    </svg>
+  );
+};
+
+/** Cinco estrellas para puntuar. Cada una es un botón de 44px de alto. */
+const EstrellasEntrada = ({ etiqueta, valor, onCambio, id }) => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+    <span id={id} style={{ fontSize: 14 }}>{etiqueta}</span>
+    <div role="radiogroup" aria-labelledby={id} style={{ display: "flex", gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" role="radio" aria-checked={valor === n}
+          aria-label={`${n} de 5`}
+          // Tocar la que ya está puesta la quita: es la única forma de
+          // deshacer una valoración que no era obligatoria.
+          onClick={() => onCambio(valor === n ? null : n)}
+          style={{
+            background: "none", border: "none", padding: "10px 3px", cursor: "pointer",
+            minHeight: 44, display: "flex", alignItems: "center",
+          }}>
+          <Estrella tam={24} relleno={valor >= n ? 1 : 0}
+            color={valor >= n ? "var(--meh)" : "var(--line-2)"}/>
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+/** Cinco estrellas de sólo lectura, con media estrella cuando toca. */
+const EstrellasLectura = ({ valor, tam = 14, etiqueta }) => {
+  const v = Number(valor) || 0;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}
+      title={etiqueta ? `${etiqueta}: ${v ? v.toFixed(1) : "sin valorar"}` : undefined}>
+      {etiqueta && (
+        // Sin nowrap, «Innovación» se parte en dos líneas dentro de una
+        // tarjeta estrecha y descuadra la fila de estrellas de al lado.
+        <span className="mono" style={{
+          fontSize: 9, color: "var(--ink-3)", flex: 1, minWidth: 0,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{etiqueta}</span>
+      )}
+      <div style={{ display: "flex", gap: 1 }} aria-label={`${v} de 5`}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Estrella key={n} tam={tam} relleno={Math.max(0, Math.min(1, v - n + 1))}
+            color={v >= n - 0.5 ? "var(--meh)" : "var(--line-2)"}/>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/** Los títulos que el organizador haya puesto, o los de fábrica. */
+const titulosEstrellas = () => {
+  const a = (window.LMTFestival && window.LMTFestival.ajustes()) || {};
+  const e = a.estrellas || {};
+  return {
+    est_innovacion: e.innovacion || "Innovación",
+    est_atencion:   e.atencion   || "Atención",
+    est_calidad:    e.calidad    || "Calidad",
+  };
+};
+
+/** Formato de pesos colombianos, sin decimales. */
+const pesos = (n) => {
+  const v = Number(n) || 0;
+  try { return v.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }); }
+  catch (_) { return "$" + v.toLocaleString("es-CO"); }
+};
+
 Object.assign(window, {
   LogoTaza, Wordmark, MontanasSilueta, SelloCircular, Placeholder, QRCode,
   BarraVotos, calcScore, totalVotos, standUrl,
   ERRORES, mensajeError, Aviso,
   SubirImagen, ayudaImagen, urlImagen, BloqueForm,
+  Estrella, EstrellasEntrada, EstrellasLectura,
+  ESTRELLA_CAMPOS, ESTRELLA_CLAVES, titulosEstrellas, pesos,
+  MenuPublico, MENU_PUBLICO,
 });

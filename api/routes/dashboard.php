@@ -7,17 +7,10 @@ function register_routes_dashboard(\LMT\Router $r): void
 {
     // Endpoint único que devuelve stands + últimos votos para minimizar round-trips.
     $r->get('/dashboard', function () {
-        // Las mismas columnas que GET /stands. Cuando faltaban aquí, el panel
-        // —que se alimenta de este endpoint— abría el editor con propietario,
-        // NIT y sitio web en blanco, y el primer «Guardar» los borraba de la
-        // base sin que nadie los hubiera tocado.
-        $stands = Db::pdo()->query(
-            'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
-                    propietario, propietario_documento, nit, sitio_web, logo_path,
-                    telefono, lat, lng,
-                    coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
-             FROM stands ORDER BY id'
-        )->fetchAll();
+        // Exactamente las mismas columnas que GET /stands, de la misma función:
+        // cuando cada endpoint tenía su lista, se separaban, y el panel —que se
+        // alimenta de aquí— abría el editor con propietario y NIT en blanco.
+        $stands = Db::pdo()->query(stand_select() . ' ORDER BY id')->fetchAll();
         $standsApi = array_map('stand_row_to_api', $stands);
 
         $stmt = Db::pdo()->prepare(

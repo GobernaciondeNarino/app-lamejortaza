@@ -51,7 +51,14 @@ CREATE TABLE IF NOT EXISTS votos (
   stand_id   TEXT NOT NULL,
   emoji      TEXT NOT NULL CHECK (emoji IN ('bueno','regular','malo')),
   correo     TEXT NOT NULL,
+  -- Tres valoraciones de 1 a 5. Nulas si el visitante no las tocó: el voto de
+  -- un toque sigue siendo válido sin ellas.
+  est_innovacion INTEGER CHECK (est_innovacion BETWEEN 1 AND 5),
+  est_atencion   INTEGER CHECK (est_atencion   BETWEEN 1 AND 5),
+  est_calidad    INTEGER CHECK (est_calidad    BETWEEN 1 AND 5),
   compra     INTEGER,
+  -- Cuánto gastó, si dijo que sí. Se guarda en pesos enteros.
+  compra_valor INTEGER,
   texto      TEXT,
   ip_hash    TEXT,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

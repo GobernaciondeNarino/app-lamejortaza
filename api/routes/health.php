@@ -28,6 +28,10 @@ function register_routes_health(\LMT\Router $r): void
 
         $info = [
             'ok'           => $vivo,
+            // Qué versión está desplegada. Es lo primero que hay que saber
+            // cuando algo falla en producción y hay que decidir si revertir:
+            // sin esto, la respuesta es «creo que subimos lo último».
+            'version'      => LMT_VERSION,
             'php'          => PHP_VERSION,
             'argon2id'     => defined('PASSWORD_ARGON2ID'),
             'db_driver'    => null,

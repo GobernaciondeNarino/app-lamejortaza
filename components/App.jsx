@@ -98,6 +98,10 @@ const App = () => {
   }
 
   // 4. Pasaporte del usuario (real)
+  if (route.path === "/recorrido" || route.path === "/recorrido/") {
+    return <RecorridoPage stands={stands}/>;
+  }
+
   if (route.path === "/pasaporte") {
     return <PassportPage stands={stands}/>;
   }
@@ -146,6 +150,14 @@ const App = () => {
   if (route.path === "/admin/correo") {
     return <AdminPage section="correo" user={user} stands={stands}/>;
   }
+  if (route.path === "/admin/economia") {
+    return <EconomiaPage/>;
+  }
+
+  if (route.path === "/admin/festival") {
+    return <FestivalPage/>;
+  }
+
   if (route.path === "/admin/caracterizacion") {
     return <AdminPage section="caracterizacion" user={user} stands={stands}/>;
   }

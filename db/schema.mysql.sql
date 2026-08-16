@@ -66,7 +66,14 @@ CREATE TABLE IF NOT EXISTS votos (
   stand_id   VARCHAR(32) NOT NULL,
   emoji      ENUM('bueno','regular','malo') NOT NULL,
   correo     VARCHAR(254) NOT NULL,
+  -- Tres valoraciones de 1 a 5. Nulas si el visitante no las tocó: el voto de
+  -- un toque sigue siendo válido sin ellas.
+  est_innovacion TINYINT UNSIGNED DEFAULT NULL,
+  est_atencion   TINYINT UNSIGNED DEFAULT NULL,
+  est_calidad    TINYINT UNSIGNED DEFAULT NULL,
   compra     TINYINT(1) DEFAULT NULL,
+  -- Cuánto gastó, si dijo que sí. Se guarda en pesos enteros.
+  compra_valor BIGINT UNSIGNED DEFAULT NULL,
   texto      VARCHAR(500) DEFAULT NULL,
   ip_hash    CHAR(64) DEFAULT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

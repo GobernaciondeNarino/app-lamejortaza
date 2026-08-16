@@ -6,6 +6,36 @@ use LMT\Validate;
 use LMT\Security;
 use LMT\RateLimit;
 
+/** Las tres valoraciones, en el orden en que se presentan. */
+const VOTO_ESTRELLAS = ['est_innovacion', 'est_atencion', 'est_calidad'];
+
+/** Una valoración de 1 a 5, o null si no la tocó o llegó basura. */
+function voto_estrella($valor): ?int
+{
+    if ($valor === null || $valor === '' || is_array($valor)) return null;
+    if (!is_numeric($valor)) return null;
+    $n = (int) $valor;
+    return ($n >= 1 && $n <= 5) ? $n : null;
+}
+
+/**
+ * Cuánto gastó, en pesos enteros.
+ *
+ * Se acepta escrito como lo escribe la gente —«25.000», «$ 25 000», «25,000»—
+ * porque el campo se rellena de pie en un stand y con una mano. El tope de
+ * 50 millones no es capricho: sin él, un dedo pegado al teclado numérico
+ * convierte el informe de compras del festival en un disparate.
+ */
+function voto_valor_compra($valor): ?int
+{
+    if ($valor === null || $valor === '' || is_array($valor)) return null;
+    $limpio = preg_replace('/[^0-9]/', '', (string) $valor);
+    if ($limpio === '' || $limpio === null) return null;
+    $n = (int) $limpio;
+    if ($n <= 0) return null;
+    return min($n, 50000000);
+}
+
 function register_routes_votos(\LMT\Router $r): void
 {
     // Últimos N votos para el feed live.
@@ -48,6 +78,17 @@ function register_routes_votos(\LMT\Router $r): void
         $compra = Validate::bool($b['compra']  ?? null);
         $texto  = Validate::comment($b['texto'] ?? '', 500);
 
+        // Tres valoraciones de 1 a 5. Opcionales: quien vota de un toque no las
+        // toca, y ese voto tiene que seguir valiendo.
+        $estrellas = [];
+        foreach (VOTO_ESTRELLAS as $campo) {
+            $estrellas[$campo] = voto_estrella($b[$campo] ?? null);
+        }
+        // El valor sólo tiene sentido si dijo que sí compró. Si dijo que no, se
+        // descarta: guardar un importe junto a «no compré» es una contradicción
+        // que luego cuadra mal en el informe de compras.
+        $compraValor = $compra === true ? voto_valor_compra($b['compra_valor'] ?? null) : null;
+
         if (!$stand)  Response::error(422, 'stand_invalido');
         if (!$emoji)  Response::error(422, 'emoji_invalido');
         if (!$correo) Response::error(422, 'correo_invalido');
@@ -75,16 +116,22 @@ function register_routes_votos(\LMT\Router $r): void
 
         // Insertar voto + actualizar agregados + upsert pasaporte en una transacción.
         try {
-            \LMT\Db::tx(function (\PDO $pdo) use ($stand, $emoji, $correo, $compra, $texto) {
+            \LMT\Db::tx(function (\PDO $pdo) use ($stand, $emoji, $correo, $compra, $compraValor, $texto, $estrellas) {
                 $insVoto = $pdo->prepare(
-                    'INSERT INTO votos (stand_id, emoji, correo, compra, texto, ip_hash, created_at)
-                     VALUES (:s, :e, :c, :compra, :t, :ip, CURRENT_TIMESTAMP)'
+                    'INSERT INTO votos (stand_id, emoji, correo,
+                                        est_innovacion, est_atencion, est_calidad,
+                                        compra, compra_valor, texto, ip_hash, created_at)
+                     VALUES (:s, :e, :c, :inn, :ate, :cal, :compra, :cval, :t, :ip, CURRENT_TIMESTAMP)'
                 );
                 $insVoto->execute([
                     ':s'      => $stand,
                     ':e'      => $emoji,
                     ':c'      => $correo,
+                    ':inn'    => $estrellas['est_innovacion'],
+                    ':ate'    => $estrellas['est_atencion'],
+                    ':cal'    => $estrellas['est_calidad'],
                     ':compra' => $compra === null ? null : ($compra ? 1 : 0),
+                    ':cval'   => $compraValor,
                     ':t'      => $texto !== '' ? $texto : null,
                     ':ip'     => RateLimit::ipHash(),
                 ]);

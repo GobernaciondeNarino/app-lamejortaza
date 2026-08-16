@@ -32,10 +32,13 @@ const ARCHIVOS = [
   'components/VoteFlow.jsx',
   'components/Passport.jsx',
   'components/Dashboard.jsx',
+  'components/Recorrido.jsx',
   'components/Promotores.jsx',
   'components/Cuentas.jsx',
   'components/Perfil.jsx',
   'components/Caracterizacion.jsx',
+  'components/Economia.jsx',
+  'components/Festival.jsx',
   'components/Correo.jsx',
   'components/App.jsx',
 ];

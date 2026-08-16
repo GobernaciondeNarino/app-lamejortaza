@@ -78,7 +78,14 @@
   }
 
   // Helper para construir un payload de voto válido.
-  function buildVotePayload({ stand, emoji, correo, compra, texto }) {
+  // Una valoración válida es un entero de 1 a 5; cualquier otra cosa no viaja.
+  // El servidor lo vuelve a comprobar: esto es sólo para no mandar basura.
+  function estrellaValida(v) {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1 && n <= 5;
+  }
+
+  function buildVotePayload({ stand, emoji, correo, compra, compra_valor, texto, estrellas }) {
     if (!isStandId(stand)) throw new Error("stand_invalido");
     if (!isVoteEmoji(emoji)) throw new Error("emoji_invalido");
     const correoNorm = normalizeEmail(correo);
@@ -88,7 +95,16 @@
       emoji,
       correo: correoNorm,
     };
+    const e = estrellas || {};
+    ["est_innovacion", "est_atencion", "est_calidad"].forEach((k) => {
+      if (estrellaValida(e[k])) payload[k] = Number(e[k]);
+    });
     if (typeof compra === "boolean") payload.compra = compra;
+    // El importe sólo acompaña a un «sí compré»: mandarlo con un «no» sería
+    // pedirle al servidor que descarte lo que nosotros ya sabemos que sobra.
+    if (compra === true && compra_valor != null && String(compra_valor).trim() !== "") {
+      payload.compra_valor = String(compra_valor).slice(0, 20);
+    }
     const limpio = sanitizeText(texto || "", 500);
     if (limpio) payload.texto = limpio;
     return payload;

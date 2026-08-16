@@ -44,6 +44,7 @@ $spaRoute = (
     preg_match('#^/admin(/.*)?$#', $path) ||
     preg_match('#^/festival(/[a-z0-9\-]+)?/?$#', $path) ||
     $path === '/pasaporte' || $path === '/pasaporte/' ||
+    $path === '/recorrido' || $path === '/recorrido/' ||
     $path === '/inscripcion' || $path === '/inscripcion/' ||
     $path === '/promotor' || $path === '/promotor/' ||
     $path === '/perfil' || $path === '/perfil/'

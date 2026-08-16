@@ -107,6 +107,7 @@
       coords: s.coords || { x: 0.5, y: 0.5 },
       color: s.color || "oklch(0.45 0.1 40)",
       votos: s.votos || { bueno: 0, regular: 0, malo: 0 },
+      estrellas: s.estrellas || { innovacion: null, atencion: null, calidad: null, n: 0 },
     };
   }
 
@@ -225,6 +226,24 @@
     await ensureCsrf();
     return request("/promotores/logo-inscripcion", { method: "POST", body: archivoFormData(file) });
   }
+  // ── Festival: personalización y actividad económica ─────────────────────
+  async function economia()                 { return request("/admin/economia"); }
+  async function festivalAjustes()          { return request("/festival/ajustes"); }
+  async function guardarFestivalAjustes(b)  { await ensureCsrf(); return request("/admin/festival/ajustes", { method: "PUT", body: b }); }
+  async function subirFondoPasaporte(destino, file) {
+    await ensureCsrf();
+    const fd = archivoFormData(file);
+    // El destino viaja en el propio formulario: con multipart no hay cuerpo
+    // JSON donde meterlo, y en la query se mezclaría con el enrutado por
+    // ?path= que usa este API cuando no hay reescritura de URL.
+    fd.append("destino", destino);
+    return request("/admin/festival/fondo", { method: "POST", body: fd });
+  }
+  async function quitarFondoPasaporte(destino, indice) {
+    await ensureCsrf();
+    return request("/admin/festival/fondo", { method: "DELETE", body: { destino, indice } });
+  }
+
   /** Logo de un stand desde el panel de administración. */
   async function infoUploads()              { return request("/admin/uploads"); }
   async function subirLogoStand(file) {
@@ -382,6 +401,11 @@
     borrarAdmin,
     cambiarClaveAdmin,
     submitVote,
+    economia,
+    festivalAjustes,
+    guardarFestivalAjustes,
+    subirFondoPasaporte,
+    quitarFondoPasaporte,
     getPerfilVisitante,
     guardarPerfilVisitante,
     borrarPerfilVisitante,
@@ -433,8 +457,32 @@
     },
   };
 
+  /**
+   * Ajustes de presentación del festival (títulos de las estrellas, columnas
+   * del recorrido, fondos del pasaporte).
+   *
+   * Se leen UNA vez al arrancar y quedan en memoria: los pinta media interfaz
+   * y pedirlos en cada componente sería una ráfaga de peticiones para algo que
+   * no cambia durante la visita. Hasta que llegan, se usan los de fábrica, así
+   * que nada se queda en blanco esperando.
+   */
+  let festival = null;
+  window.LMTFestival = {
+    ajustes() { return festival; },
+    async cargar() {
+      try {
+        festival = await request("/festival/ajustes");
+      } catch (_) {
+        festival = null;   // se quedan los valores por defecto del componente
+      }
+      window.dispatchEvent(new CustomEvent("lmt:festival", { detail: festival }));
+      return festival;
+    },
+  };
+
   // Arranque automático
   bootstrap().then(() => {
+    window.LMTFestival.cargar();
     pollDashboard();
     pollTimer = setInterval(pollDashboard, 5000);
     document.addEventListener("visibilitychange", () => {

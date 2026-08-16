@@ -24,9 +24,19 @@ const MobileHeader = ({ stand }) => (
 // (una sola vez). Comentario y compra quedan plegados como opcionales.
 const VoteForm = ({ stand, onComplete, savedEmail }) => {
   const sec = window.LMTSecurity;
-  const [data, setData] = React.useState({ correo: savedEmail || "", emoji: null, compra: null, texto: "" });
+  const [data, setData] = React.useState({
+    correo: savedEmail || "", emoji: null, compra: null, compra_valor: "", texto: "",
+    estrellas: { est_innovacion: null, est_atencion: null, est_calidad: null },
+  });
   const [needEmail, setNeedEmail] = React.useState(false);   // reveló el campo de correo
-  const [showOpt, setShowOpt] = React.useState(false);       // desplegó comentario/compra
+  const [showOpt, setShowOpt] = React.useState(false);       // desplegó el comentario
+  // Los títulos vienen de los ajustes, que llegan por su cuenta al arrancar.
+  const [titulos, setTitulos] = React.useState(() => window.titulosEstrellas());
+  React.useEffect(() => {
+    const refrescar = () => setTitulos(window.titulosEstrellas());
+    window.addEventListener("lmt:festival", refrescar);
+    return () => window.removeEventListener("lmt:festival", refrescar);
+  }, []);
   const [submitError, setSubmitError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const emailRef = React.useRef(null);
@@ -45,7 +55,12 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
     setSubmitError("");
     setSubmitting(true);
     try {
-      const payload = { stand: stand.id, emoji: emojiId, correo, compra: data.compra, texto: data.texto };
+      const payload = {
+        stand: stand.id, emoji: emojiId, correo,
+        estrellas: data.estrellas,
+        compra: data.compra, compra_valor: data.compra_valor,
+        texto: data.texto,
+      };
       if (window.LMTApi && window.LMTApi.enabled) {
         // El voto devuelve el testigo del perfil: es el único momento en que
         // alguien demuestra, en el mismo acto, que ese correo es suyo.
@@ -120,7 +135,58 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
       <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, fontWeight: 400, margin: "4px 0 6px", lineHeight: 1.1, letterSpacing: "-0.01em" }}>
         ¿Cómo estuvo<br/>el café?
       </h2>
-      <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 20 }}>Toca para calificar.</p>
+      <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 18 }}>
+        Puntúa lo que quieras y toca un emoji para enviar.
+      </p>
+
+      {/* Las tres valoraciones. Van ANTES de los emoji porque tocar un emoji
+          envía el voto: lo que esté debajo no llegaría a rellenarse nunca.
+          Siguen siendo opcionales — el voto de un toque no se rompe. */}
+      <div style={{
+        padding: "14px 16px", marginBottom: 16,
+        border: "1px solid var(--line-2)", borderRadius: "var(--r-lg)",
+        display: "flex", flexDirection: "column", gap: 2,
+      }}>
+        {ESTRELLA_CAMPOS.map((campo) => (
+          <EstrellasEntrada key={campo} id={"vf-" + campo} etiqueta={titulos[campo]}
+            valor={data.estrellas[campo]}
+            onCambio={(v) => setData((d) => ({ ...d, estrellas: { ...d.estrellas, [campo]: v } }))}/>
+        ))}
+      </div>
+
+      {/* La compra, a la vista. Estaba plegada bajo «agregar comentario» y casi
+          nadie la abría: sin ella no hay informe de actividad económica. */}
+      <div style={{ marginBottom: 18 }}>
+        <div className="mono" style={{ marginBottom: 8 }}>¿Compraste algo?</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          {[{ v: true, l: "Sí, compré" }, { v: false, l: "No esta vez" }].map((o) => (
+            <button key={String(o.v)} type="button"
+              aria-pressed={data.compra === o.v}
+              onClick={() => setData((d) => ({
+                ...d,
+                compra: d.compra === o.v ? null : o.v,
+                // Cambiar a «no» borra el importe: dejarlo escrito debajo de
+                // un «no compré» es una contradicción que acaba en el informe.
+                compra_valor: o.v === true ? d.compra_valor : "",
+              }))}
+              style={{
+                flex: 1, padding: 14, minHeight: 48,
+                border: data.compra === o.v ? "2px solid var(--ink)" : "1px solid var(--line-2)",
+                borderRadius: "var(--r-md)", fontSize: 15, fontWeight: 500,
+                background: data.compra === o.v ? "var(--paper-2)" : "var(--paper)",
+              }}>{o.l}</button>
+          ))}
+        </div>
+        {data.compra === true && (
+          <div className="field" style={{ marginTop: 12, animation: "fade-up 0.25s" }}>
+            <label htmlFor="vf-valor">¿Cuánto gastaste? (opcional)</label>
+            <input id="vf-valor" inputMode="numeric" maxLength={20}
+              value={data.compra_valor} placeholder="25.000"
+              onChange={(e) => update("compra_valor", e.target.value)}/>
+            <span className="ayuda">En pesos. Sirve para el informe de ventas del festival.</span>
+          </div>
+        )}
+      </div>
 
       {/* Emojis grandes en fila — acción principal de un toque */}
       <div style={{ display: "flex", gap: 10 }}>
@@ -180,18 +246,7 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
             </button>
           ) : (
             <div style={{ animation: "fade-up 0.3s" }}>
-              <div className="mono" style={{ marginBottom: 10 }}>¿Compraste algo?</div>
-              <div style={{ display: "flex", gap: 10 }}>
-                {[{v:true,l:"Sí, compré"},{v:false,l:"No esta vez"}].map(o => (
-                  <button key={String(o.v)} onClick={() => update("compra", o.v)} style={{
-                    flex: 1, padding: 12,
-                    border: data.compra === o.v ? "2px solid var(--ink)" : "1px solid var(--line-2)",
-                    borderRadius: "var(--r-md)", fontSize: 14, fontWeight: 500,
-                    background: data.compra === o.v ? "var(--paper-2)" : "var(--paper)",
-                  }}>{o.l}</button>
-                ))}
-              </div>
-              <div className="field" style={{ marginTop: 16 }}>
+              <div className="field">
                 <label>Comentario (opcional, máx. 500)</label>
                 <textarea rows={3} value={data.texto} maxLength={500} onChange={e => update("texto", e.target.value)}
                   placeholder="¿Qué destacarías del stand?"
