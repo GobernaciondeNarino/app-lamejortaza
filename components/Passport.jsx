@@ -156,12 +156,18 @@ const PassportPage = ({ stands }) => {
   // El recorrido va AL FINAL: primero la hoja de datos, luego los sellos que se
   // fueron ganando y, al cerrar, el resumen de lo que se visitó y cómo se
   // calificó. Al principio no tenía nada que contar.
+  // El fondo de cada hoja interna se decide AQUÍ y una sola vez: el índice
+  // corre por las hojas de dentro, no por todas, para que las imágenes se
+  // repartan en orden empezando por la primera hoja interior.
+  const fondos = fondosPasaporte();
+  let nHoja = 0;
+  const interior = () => ({ fondo: fondoDeHoja(nHoja++) });
   const pages = [
-    { type: "cover" },
-    { type: "index" },
-    ...visitados.map((s) => ({ type: "stamp", stand: s })),
-    { type: "travesia" },
-    { type: "end" },
+    { type: "cover", fondo: fondos.portada },
+    { type: "index", ...interior() },
+    ...visitados.map((s) => ({ type: "stamp", stand: s, ...interior() })),
+    { type: "travesia", ...interior() },
+    { type: "end", fondo: fondos.contraportada },
   ];
 
   return (
@@ -187,6 +193,14 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
   const wrapRef = React.useRef(null);
   const libroRef = React.useRef(null);
   const [book3d, setBook3d] = React.useState(false);
+  // Los ajustes del festival llegan por su cuenta; cuando lleguen hay que
+  // rehacer las páginas o los fondos no aparecerían hasta recargar.
+  const [festivalTick, setFestivalTick] = React.useState(0);
+  React.useEffect(() => {
+    const refrescar = () => setFestivalTick((n) => n + 1);
+    window.addEventListener("lmt:festival", refrescar);
+    return () => window.removeEventListener("lmt:festival", refrescar);
+  }, []);
 
   // Clave estable: sin memoizar, el efecto se re-ejecutaría en cada render y
   // acumularía libros (y contextos WebGL) hasta tumbar la pestaña.
@@ -198,22 +212,34 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
   // Las páginas se arman aparte porque el perfil del visitante llega DESPUÉS
   // de montar el libro: la hoja de datos se repinta con setPaginas y así no
   // hay que tirar el contexto WebGL y volver a crearlo sólo por un nombre.
-  const paginasLibro = React.useMemo(() => [
-    { tipo: "portada", nombre: passport.nombre, correo: passport.correo, inicio: passport.inicio },
-    Object.assign(
-      { tipo: "indice", visitados: visitados.length, totalStands: stands.length },
-      datosPagina(passport, stands.length)
-    ),
-    ...visitados.map((s, i) => ({ tipo: "sello", indice: i, stand: s })),
-    {
-      tipo: "travesia",
-      filas: filasTravesia(passport, visitados),
-      visitados: visitados.length,
-      totalStands: stands.length,
-    },
-    { tipo: "final", visitados: visitados.length, totalStands: stands.length },
-  ], [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero,
-      passport.perfil, passport.valoraciones]);
+  const paginasLibro = React.useMemo(() => {
+    const fondos = fondosPasaporte();
+    let nHoja = 0;
+    const interior = () => ({ fondo: fondoDeHoja(nHoja++) });
+    return [
+      { tipo: "portada", nombre: passport.nombre, correo: passport.correo, inicio: passport.inicio, fondo: fondos.portada },
+      Object.assign(
+        { tipo: "indice", visitados: visitados.length, totalStands: stands.length },
+        datosPagina(passport, stands.length), interior()
+      ),
+      ...visitados.map((s, i) => Object.assign({
+        tipo: "sello", indice: i,
+        // El libro dibuja en canvas y necesita la URL absoluta del logo, no la
+        // ruta relativa que guarda la base.
+        stand: Object.assign({}, s, { logo: urlImagen(s.logo) || "" }),
+        desvio_x: desvioSello(s.id).x,
+        desvio_y: desvioSello(s.id).y,
+      }, interior())),
+      Object.assign({
+        tipo: "travesia",
+        filas: filasTravesia(passport, visitados),
+        visitados: visitados.length,
+        totalStands: stands.length,
+      }, interior()),
+      { tipo: "final", visitados: visitados.length, totalStands: stands.length, fondo: fondos.contraportada },
+    ];
+  }, [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero,
+      passport.perfil, passport.valoraciones, festivalTick]);
 
   const paginasRef = React.useRef(paginasLibro);
   paginasRef.current = paginasLibro;
@@ -275,17 +301,17 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
     <div className="pasaporte-vista" style={{ minHeight: "100dvh", background: "var(--ink)", color: "var(--paper)", padding: "12px 10px 24px" }}>
       <div className="mobile-inner" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "0 4px", color: "var(--paper-3)" }}>
-          <a href="/festival" data-route style={{ color: "var(--paper-3)", fontSize: 13, whiteSpace: "nowrap" }}>← Salir</a>
           {/* Con el perfil completo aquí va el nombre entero, que en un móvil
-              estrecho aplasta los dos botones de los lados. Se recorta él. */}
+              estrecho aplasta lo que tiene al lado. Se recorta él. */}
           <div className="mono" style={{
-            color: "var(--paper-3)", minWidth: 0, flex: 1, textAlign: "center",
+            color: "var(--paper-3)", minWidth: 0, flex: 1,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>Pasaporte · {passport.nombre}</div>
           <button onClick={() => {
             try { localStorage.removeItem("lmt.email"); } catch (_) {}
             window.LMTRouter.go("/");
           }} style={{ color: "var(--paper-3)", fontSize: 12, whiteSpace: "nowrap" }}>Cerrar</button>
+          <MenuPublico oscuro/>
         </div>
 
         {/* El montador inserta su canvas como PRIMER hijo con z-index 0; el
@@ -534,6 +560,9 @@ const filasTravesia = (passport, visitados) => {
     return {
       n: String(i + 1).padStart(2, "0"),
       nombre: s.nombre,
+      logo: urlImagen(s.logo) || "",
+      color: s.color || "var(--grano)",
+      inicial: (s.nombre || "?").trim().charAt(0).toUpperCase(),
       municipio: s.municipio || "",
       valoracion: v ? v.texto : "",
       color: "var(" + (v ? v.token : "--ink-3") + ")",
@@ -541,6 +570,39 @@ const filasTravesia = (passport, visitados) => {
     };
   });
 };
+
+/**
+ * Logo del stand en círculo. Sin logo, la inicial sobre el color del sello:
+ * la fila mantiene su ritmo aunque el caficultor no haya subido imagen.
+ */
+/**
+ * Cuánto se descoloca el sello sobre el logo, en píxeles.
+ *
+ * Derivado del id del stand y no de Math.random(): el desvío tiene que ser el
+ * mismo cada vez que se abre esa página. Con aleatoriedad de verdad el sello
+ * bailaría al pasar la hoja adelante y atrás, que es exactamente lo que un
+ * sello de tinta no hace.
+ */
+const desvioSello = (id) => {
+  let h = 0;
+  for (let i = 0; i < String(id).length; i++) h = (h * 31 + String(id).charCodeAt(i)) >>> 0;
+  return { x: (h % 21) - 10, y: ((h >> 5) % 21) - 10 };
+};
+
+const LogoRedondo = ({ fila, tam = 26 }) => (
+  <div style={{
+    width: tam, height: tam, flexShrink: 0, borderRadius: "50%", overflow: "hidden",
+    border: "1px solid var(--line-2)", background: fila.color,
+    display: "flex", alignItems: "center", justifyContent: "center",
+  }}>
+    {fila.logo
+      ? <img src={fila.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}/>
+      : <span style={{
+          fontFamily: "var(--font-display)", fontStyle: "italic",
+          fontSize: Math.round(tam * 0.55), color: "var(--paper)", lineHeight: 1,
+        }}>{fila.inicial}</span>}
+  </div>
+);
 
 const PaginaTravesia = ({ passport, visitados, totalStands }) => {
   const filas = filasTravesia(passport, visitados);
@@ -559,8 +621,9 @@ const PaginaTravesia = ({ passport, visitados, totalStands }) => {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 9, overflow: "hidden" }}>
         {filas.map((f) => (
-          <div key={f.n} style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
-            <span className="mono" style={{ width: 20, flexShrink: 0, color: "var(--ink-3)" }}>{f.n}</span>
+          <div key={f.n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="mono" style={{ width: 18, flexShrink: 0, color: "var(--ink-3)" }}>{f.n}</span>
+            <LogoRedondo fila={f} tam={26}/>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {f.nombre}
@@ -586,14 +649,85 @@ const PaginaTravesia = ({ passport, visitados, totalStands }) => {
   );
 };
 
-const PassportPage_Page = ({ pageData, passport, visitados, totalSlots, totalStands }) => {
-  const lineBg = { backgroundImage: "repeating-linear-gradient(var(--paper) 0, var(--paper) 26px, var(--line) 26px, var(--line) 27px)" };
+/**
+ * Fondos que subió el organizador, o vacío si no subió ninguno.
+ *
+ * `hojas` se reparte por las páginas de dentro en orden y se repite en cuanto
+ * se acaba: con dos imágenes y ocho sellos, cada una sale cuatro veces y
+ * siempre la misma en la misma hoja. El índice se pasa desde fuera porque cada
+ * página tiene que saber cuál le toca, y sin eso el reparto cambiaría al
+ * repintar.
+ */
+const fondosPasaporte = () => {
+  const a = (window.LMTFestival && window.LMTFestival.ajustes()) || {};
+  const p = a.pasaporte || {};
+  return {
+    portada: urlImagen(p.portada) || "",
+    contraportada: urlImagen(p.contraportada) || "",
+    hojas: (p.hojas || []).map((h) => urlImagen(h)).filter(Boolean),
+  };
+};
+
+const fondoDeHoja = (indice) => {
+  const hojas = fondosPasaporte().hojas;
+  if (!hojas.length) return "";
+  return hojas[((indice % hojas.length) + hojas.length) % hojas.length];
+};
+
+/** Capa de imagen bajo el texto, con velo para que el texto siga legible. */
+const CapaFondo = ({ url }) => {
+  if (!url) return null;
+  return (
+    <React.Fragment>
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 0,
+        backgroundImage: `url(${url})`, backgroundSize: "cover", backgroundPosition: "center",
+      }}/>
+      {/* Sin velo, un fondo con contraste se come el texto de la hoja. Es la
+          misma razón por la que el logo del sello lleva el suyo. */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 0, background: "var(--paper)", opacity: 0.78 }}/>
+    </React.Fragment>
+  );
+};
+
+/**
+ * Una hoja del pasaporte: el fondo debajo y su contenido encima.
+ *
+ * El fondo se pone aquí y no dentro de cada tipo de página porque son cinco
+ * tipos distintos y cada uno tendría que acordarse; así lo tiene cualquiera.
+ */
+const PassportPage_Page = (props) => {
+  // La portada se pinta su propio fondo: es oscura, y el velo de papel de las
+  // hojas la dejaría lavada y con el texto claro ilegible.
+  const propio = props.pageData.type === "cover";
+  return (
+    <div style={{ height: "100%", position: "relative", overflow: "hidden" }}>
+      {!propio && <CapaFondo url={props.pageData.fondo || ""}/>}
+      <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
+        <PaginaContenido {...props}/>
+      </div>
+    </div>
+  );
+};
+
+const PaginaContenido = ({ pageData, passport, visitados, totalSlots, totalStands }) => {
+  // Con fondo subido, los renglones sobran: son dos texturas peleándose.
+  const fondo = pageData.fondo || "";
+  const lineBg = fondo
+    ? {}
+    : { backgroundImage: "repeating-linear-gradient(var(--paper) 0, var(--paper) 26px, var(--line) 26px, var(--line) 27px)" };
 
   if (pageData.type === "cover") {
     return (
       <div style={{
         height: "100%", padding: 28, display: "flex", flexDirection: "column", justifyContent: "space-between",
-        background: "linear-gradient(135deg, var(--grano) 0%, oklch(0.32 0.08 45) 100%)", color: "var(--paper)",
+        // Con imagen de portada, el degradado se queda debajo como respaldo y
+        // encima va un velo OSCURO —no de papel como en las hojas—: el texto
+        // de la tapa va en claro y sobre una foto clara desaparecería.
+        background: fondo
+          ? `linear-gradient(rgba(44,32,24,0.55), rgba(44,32,24,0.55)), url(${fondo}) center/cover, linear-gradient(135deg, var(--grano) 0%, oklch(0.32 0.08 45) 100%)`
+          : "linear-gradient(135deg, var(--grano) 0%, oklch(0.32 0.08 45) 100%)",
+        color: "var(--paper)",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ filter: "invert(1) hue-rotate(180deg)" }}><LogoTaza size={36}/></div>
@@ -626,6 +760,8 @@ const PassportPage_Page = ({ pageData, passport, visitados, totalSlots, totalSta
   if (pageData.type === "stamp") {
     const s = pageData.stand;
     const rot = ((s.id.charCodeAt(s.id.length - 1) || 0) % 20) - 10;
+    const desv = desvioSello(s.id);
+    const logo = urlImagen(s.logo);
     return (
       <div style={{ height: "100%", padding: 22, ...lineBg, position: "relative", overflow: "hidden" }}>
         <div className="mono" style={{ marginBottom: 6 }}>Sello · {s.municipio}</div>
@@ -633,8 +769,36 @@ const PassportPage_Page = ({ pageData, passport, visitados, totalSlots, totalSta
           {s.nombre}
         </h2>
         <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.region}</div>
+
+        {/* El logo del stand, centrado y en círculo, DEBAJO del sello. Si el
+            caficultor no subió ninguno no se dibuja nada y el sello queda como
+            estaba: no se inventa un hueco vacío. */}
+        {logo && (
+          <div style={{
+            position: "absolute", top: "48%", left: "52%",
+            transform: "translate(-50%, -50%)",
+            width: 132, height: 132, borderRadius: "50%", overflow: "hidden",
+            border: "1px solid var(--line-2)",
+          }}>
+            <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}/>
+            {/* Velo de papel sobre el logo. Sin él, un logo oscuro se traga la
+                tinta del sello y no se lee ni una cosa ni la otra. Así el logo
+                se reconoce y el sello manda, que es el orden correcto. */}
+            <div style={{
+              position: "absolute", inset: 0, borderRadius: "50%",
+              background: "var(--paper)", opacity: 0.62,
+            }}/>
+          </div>
+        )}
+
+        {/* El sello, encima y descolocado a propósito: un sello puesto a mano
+            nunca cae centrado, y verlo clavado sobre el logo delataba que lo
+            pinta un programa. El desvío es estable por stand, no cambia al
+            pasar la página. */}
         <div style={{
-          position: "absolute", top: "48%", left: "52%", transform: "translate(-50%, -50%)",
+          position: "absolute",
+          top: `calc(48% + ${desv.y}px)`, left: `calc(52% + ${desv.x}px)`,
+          transform: "translate(-50%, -50%)",
           "--stamp-rot": rot + "deg",
           animation: "stamp-land 0.6s cubic-bezier(.2,.8,.2,1.2) forwards",
         }}>

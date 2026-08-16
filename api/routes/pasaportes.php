@@ -66,8 +66,39 @@ function register_routes_pasaportes(\LMT\Router $r): void
             // «malo» no es lo mismo que saber que lo visitó. Sin testigo, la
             // hoja del recorrido enseña los stands sin la calificación.
             'valoraciones' => pasaporte_valoraciones($correo, is_string($_GET['t'] ?? null) ? $_GET['t'] : ''),
+            // Las tres estrellas que puso en cada stand, para «Mi recorrido».
+            // Mismo testigo y mismo motivo que las valoraciones.
+            'estrellas_mias' => pasaporte_estrellas($correo, is_string($_GET['t'] ?? null) ? $_GET['t'] : ''),
         ]);
     });
+}
+
+/**
+ * Lo que puntuó en cada stand, indexado por stand.
+ *
+ * @return array<string, array{innovacion:?int,atencion:?int,calidad:?int}>
+ */
+function pasaporte_estrellas(string $correo, string $token): array
+{
+    if (!\visitante_token_valido($correo, $token)) return [];
+
+    $q = Db::pdo()->prepare(
+        'SELECT stand_id, est_innovacion, est_atencion, est_calidad
+         FROM votos WHERE correo = :c'
+    );
+    $q->execute([':c' => $correo]);
+    $out = [];
+    foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $v) {
+        // Un stand donde no tocó ninguna estrella no entra: si entrara, la
+        // tarjeta enseñaría cero en vez de la media del festival.
+        if ($v['est_innovacion'] === null && $v['est_atencion'] === null && $v['est_calidad'] === null) continue;
+        $out[(string) $v['stand_id']] = [
+            'innovacion' => $v['est_innovacion'] !== null ? (int) $v['est_innovacion'] : null,
+            'atencion'   => $v['est_atencion']   !== null ? (int) $v['est_atencion']   : null,
+            'calidad'    => $v['est_calidad']    !== null ? (int) $v['est_calidad']    : null,
+        ];
+    }
+    return $out;
 }
 
 /**

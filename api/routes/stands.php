@@ -8,13 +8,7 @@ use LMT\Security;
 function register_routes_stands(\LMT\Router $r): void
 {
     $r->get('/stands', function () {
-        $rows = Db::pdo()->query(
-            'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
-                    propietario, propietario_documento, nit, sitio_web, logo_path,
-                    telefono, lat, lng,
-                    coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
-             FROM stands ORDER BY id'
-        )->fetchAll();
+        $rows = Db::pdo()->query(stand_select() . ' ORDER BY id')->fetchAll();
         $list = array_map(fn($s) => stand_row_to_api($s), $rows);
         Response::ok($list);
     });
@@ -22,13 +16,7 @@ function register_routes_stands(\LMT\Router $r): void
     $r->get('/stands/:id', function (array $p) {
         $id = Validate::standId($p['id'] ?? null);
         if (!$id) Response::error(400, 'bad_id');
-        $stmt = Db::pdo()->prepare(
-            'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
-                    propietario, propietario_documento, nit, sitio_web, logo_path,
-                    telefono, lat, lng,
-                    coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo
-             FROM stands WHERE id = :id'
-        );
+        $stmt = Db::pdo()->prepare(stand_select() . ' WHERE id = :id');
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
         if (!$row) Response::error(404, 'not_found');
@@ -227,7 +215,57 @@ function stand_row_to_api(array $r): array
             'regular' => (int)($r['votos_regular'] ?? 0),
             'malo'    => (int)($r['votos_malo']    ?? 0),
         ],
+        // Promedio de las tres valoraciones. Llega ya calculado desde la
+        // consulta cuando quien pregunta las necesita (el listado y el
+        // recorrido); en un stand suelto puede no venir, y entonces es null.
+        'estrellas'   => [
+            'innovacion' => stand_promedio($r['est_innovacion'] ?? null),
+            'atencion'   => stand_promedio($r['est_atencion']   ?? null),
+            'calidad'    => stand_promedio($r['est_calidad']    ?? null),
+            'n'          => (int) ($r['est_n'] ?? 0),
+        ],
     ];
+}
+
+/** Media a un decimal, o null si nadie ha puntuado todavía. */
+function stand_promedio($valor): ?float
+{
+    if ($valor === null || $valor === '') return null;
+    return round((float) $valor, 1);
+}
+
+/**
+ * Las columnas de un stand, en un solo sitio.
+ *
+ * Ya han hecho falta tres arreglos por lo mismo: /stands y /dashboard tenían
+ * cada uno su lista escrita a mano y se separaban. La última vez, el panel
+ * abría el editor con el propietario y el NIT en blanco y el primer «Guardar»
+ * los borraba de la base. Quien añada una columna la añade AQUÍ y aparece en
+ * los dos sitios.
+ */
+function stand_select(string $tabla = 'stands'): string
+{
+    return 'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
+                   propietario, propietario_documento, nit, sitio_web, logo_path,
+                   telefono, lat, lng,
+                   coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo'
+         . stand_select_estrellas($tabla)
+         . ' FROM ' . $tabla;
+}
+
+/**
+ * Trozo de SELECT con las medias de estrellas por stand.
+ *
+ * Se calcula al vuelo y no en columnas acumuladas como los emoji: son tres
+ * medias sobre miles de filas como mucho, y llevar seis contadores más al día
+ * en cada voto es donde aparecen las incoherencias cuando algo falla a medias.
+ */
+function stand_select_estrellas(string $alias = 's'): string
+{
+    return ", (SELECT AVG(est_innovacion) FROM votos WHERE stand_id = {$alias}.id) AS est_innovacion"
+         . ", (SELECT AVG(est_atencion)   FROM votos WHERE stand_id = {$alias}.id) AS est_atencion"
+         . ", (SELECT AVG(est_calidad)    FROM votos WHERE stand_id = {$alias}.id) AS est_calidad"
+         . ", (SELECT COUNT(est_calidad)  FROM votos WHERE stand_id = {$alias}.id) AS est_n";
 }
 
 function stand_payload(array $b, bool $needsId): array

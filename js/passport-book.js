@@ -132,6 +132,73 @@
     return w - espaciado;
   }
 
+  // ---------------------------------------------------------------------
+  // Imágenes (logos de los stands, fondos de las hojas)
+  // ---------------------------------------------------------------------
+  //
+  // Canvas2D no sabe esperar: si `drawImage` recibe una imagen a medio bajar
+  // no dibuja nada y ahí se queda, porque la página ya está pintada y nadie la
+  // vuelve a pintar. Por eso hay un caché con estado: la primera vez que se
+  // pide una imagen se empieza a cargar y se devuelve null —la página se pinta
+  // sin ella—, y al terminar se avisa para repintar. Es lo mismo que se hace
+  // con las fuentes unas líneas más abajo.
+  var imagenes = {};          // url -> {img, listo} | {error:true}
+  var alCargarImagen = null;  // lo pone cada libro para invalidar sus texturas
+
+  function imagenCacheada(url) {
+    if (!url) return null;
+    var e = imagenes[url];
+    if (e) return e.listo ? e.img : null;
+
+    var img = new Image();
+    // Los logos se sirven del mismo origen; crossOrigin evita que un despliegue
+    // con CDN delante ensucie el canvas y rompa toDataURL.
+    img.crossOrigin = "anonymous";
+    imagenes[url] = { img: img, listo: false };
+    img.onload = function () {
+      imagenes[url].listo = true;
+      if (typeof alCargarImagen === "function") alCargarImagen();
+    };
+    img.onerror = function () { imagenes[url] = { img: null, listo: false, error: true }; };
+    img.src = url;
+    return null;
+  }
+
+  /**
+   * Fondo de una hoja: la imagen a sangre y un velo de papel encima.
+   * Devuelve false si todavía no ha cargado, para que quien llama pinte el
+   * grano de siempre y la hoja no salga vacía mientras baja.
+   */
+  function dibujarFondo(ctx, url, W, H, pal) {
+    var img = imagenCacheada(url);
+    if (!img) return false;
+    var escala = Math.max(W / img.width, H / img.height);   // «cover»
+    var w = img.width * escala, h = img.height * escala;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    ctx.save();
+    ctx.globalAlpha = 0.78;
+    ctx.fillStyle = pal["--paper"];
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    return true;
+  }
+
+  /** Dibuja una imagen recortada en círculo, tapando el centro sin deformar. */
+  function imagenEnCirculo(ctx, url, cx, cy, radio) {
+    var img = imagenCacheada(url);
+    if (!img) return false;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radio, 0, Math.PI * 2);
+    ctx.clip();
+    // «cover»: se recorta el lado que sobra en vez de aplastar el logo.
+    var escala = Math.max((radio * 2) / img.width, (radio * 2) / img.height);
+    var w = img.width * escala, h = img.height * escala;
+    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+    ctx.restore();
+    return true;
+  }
+
   // Una línea que no puede desbordar su hueco: los campos de la hoja de datos
   // van uno al lado del otro y un nombre largo se comería el de al lado.
   function recortar(ctx, txt, ancho) {
@@ -330,6 +397,20 @@
       g.addColorStop(0, pal["--grano"]);
       g.addColorStop(1, "#2c2018");
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      // Imagen de portada, si el organizador subió una. Encima queda un velo
+      // OSCURO —no de papel como en las hojas— porque el texto de la tapa va
+      // en claro y sobre una foto clara desaparecería.
+      var portadaImg = pagina.fondo ? imagenCacheada(pagina.fondo) : null;
+      if (portadaImg) {
+        var esc = Math.max(W / portadaImg.width, H / portadaImg.height);
+        var pw = portadaImg.width * esc, ph = portadaImg.height * esc;
+        ctx.drawImage(portadaImg, (W - pw) / 2, (H - ph) / 2, pw, ph);
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = "#2c2018";
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      }
       grano(ctx, W, H);
 
       logoTaza(ctx, W * 0.09, H * 0.07, 46 * k, pal["--paper"], pal["--paper-3"]);
@@ -366,10 +447,15 @@
 
     // Todas las demás páginas comparten el papel.
     ctx.fillStyle = pal["--paper"]; ctx.fillRect(0, 0, W, H);
-    grano(ctx, W, H);
+
+    // Fondo subido por el organizador, si lo hay. Va aquí —sobre el papel y
+    // debajo de todo lo demás— con un velo para que el texto siga legible:
+    // sin él, una foto con contraste se traga la hoja entera.
+    var conFondo = pagina.fondo && dibujarFondo(ctx, pagina.fondo, W, H, pal);
+    if (!conFondo) grano(ctx, W, H);
     // Ni la hoja de datos ni la del recorrido llevan renglones: son fichas, no
     // páginas para escribir. Con ellos parecían un cuaderno.
-    if (tipo !== "contraportada" && tipo !== "indice" && tipo !== "travesia") {
+    if (!conFondo && tipo !== "contraportada" && tipo !== "indice" && tipo !== "travesia") {
       renglones(ctx, W, H, pal["--line"], k);
     }
 
@@ -448,8 +534,27 @@
       ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * k);
       ctx.fillText(String(s.region || ""), W * 0.09, H * 0.172);
 
+      // El logo del stand, en círculo y debajo del sello.
+      if (s.logo) {
+        var rl = W * 0.30;
+        if (imagenEnCirculo(ctx, s.logo, W * 0.52, H * 0.48, rl)) {
+          // Velo de papel: un logo oscuro se traga la tinta del sello y no se
+          // lee ni una cosa ni la otra. El logo se reconoce y el sello manda.
+          ctx.save();
+          ctx.globalAlpha = 0.62;
+          ctx.fillStyle = pal["--paper"];
+          ctx.beginPath(); ctx.arc(W * 0.52, H * 0.48, rl, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
+        ctx.beginPath(); ctx.arc(W * 0.52, H * 0.48, rl, 0, Math.PI * 2); ctx.stroke();
+      }
+
+      // El sello encima, descolocado: viene resuelto desde Passport.jsx para
+      // que las dos vistas lo pongan en el mismo sitio.
       var rot = (((String(s.id || "x").charCodeAt(String(s.id || "x").length - 1) || 0) % 20) - 10) * Math.PI / 180;
-      selloCircular(ctx, W * 0.52, H * 0.48, W * 0.34, s, fecha, rot,
+      var dx = (pagina.desvio_x || 0) * k, dy = (pagina.desvio_y || 0) * k;
+      selloCircular(ctx, W * 0.52 + dx, H * 0.48 + dy, W * 0.34, s, fecha, rot,
                     progresoSello === undefined ? 1 : progresoSello, pal);
 
       ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("display", 19 * k);
@@ -479,11 +584,26 @@
         }
         ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
         ctx.fillText(fila.n, W * 0.09, y);
+
+        // Logo del stand en círculo, delante del nombre. Sin logo, la inicial
+        // sobre el color de su sello: la fila no pierde el ritmo.
+        var rc = 13 * k, ccx = W * 0.175, ccy = y - 5 * k;
+        if (!fila.logo || !imagenEnCirculo(ctx, fila.logo, ccx, ccy, rc)) {
+          ctx.fillStyle = resolverColor(fila.color, pal["--grano"]);
+          ctx.beginPath(); ctx.arc(ccx, ccy, rc, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = pal["--paper"]; ctx.font = familia("display", 15 * k);
+          ctx.textAlign = "center";
+          ctx.fillText(String(fila.inicial || "?"), ccx, ccy + 5 * k);
+          ctx.textAlign = "left";
+        }
+        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
+        ctx.beginPath(); ctx.arc(ccx, ccy, rc, 0, Math.PI * 2); ctx.stroke();
+
         ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 16 * k);
-        ctx.fillText(recortar(ctx, fila.nombre, W * 0.52), W * 0.16, y);
+        ctx.fillText(recortar(ctx, fila.nombre, W * 0.44), W * 0.235, y);
         if (fila.municipio) {
           ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * k);
-          ctx.fillText(recortar(ctx, fila.municipio.toUpperCase(), W * 0.52), W * 0.16, y + 14 * k);
+          ctx.fillText(recortar(ctx, fila.municipio.toUpperCase(), W * 0.44), W * 0.235, y + 14 * k);
         }
         if (fila.valoracion) {
           ctx.fillStyle = pal[fila.colorPal] || pal["--ink-3"];
@@ -656,6 +776,11 @@
         cb.onFallback("error");
       }
     }
+
+    // Los logos y los fondos llegan por la red después de pintar la hoja. Al
+    // llegar, hay que repintar o no se verían nunca: nadie vuelve a dibujar un
+    // canvas por su cuenta. Es el mismo aviso que usan las fuentes.
+    alCargarImagen = function () { if (!destruido) invalidarTexturas(); };
 
     function cargarFuentes() {
       if (!document.fonts || !document.fonts.load) { fuentesListas = true; return; }
@@ -1487,6 +1612,9 @@
       if (destruido) return;
       destruido = true;
       abortado = true;
+      // El caché de imágenes es global y sobrevive al libro; el aviso no puede,
+      // o una imagen tardía intentaría repintar un libro ya desmontado.
+      alCargarImagen = null;
       if (rafId) cancelAnimationFrame(rafId);
       clearTimeout(timeoutThree);
       clearTimeout(debounceResize);

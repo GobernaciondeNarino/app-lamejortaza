@@ -10,7 +10,9 @@ const AdminShell = ({ active, user, children }) => {
     { id: "promotores", label: "Promotores",   sub: "Inscripciones", path: "/admin/promotores" },
     { id: "qr",         label: "Códigos QR",   sub: "Impresión",    path: "/admin/qr" },
     { id: "live",       label: "Actividad",    sub: "En vivo",      path: "/admin/live" },
+    { id: "economia",   label: "Actividad económica", sub: "Compras del evento", path: "/admin/economia" },
     { id: "caracterizacion", label: "Visitantes", sub: "Caracterización", path: "/admin/caracterizacion" },
+    { id: "festival",   label: "Personalización", sub: "Títulos y fondos", path: "/admin/festival" },
     { id: "correo",     label: "Correo",       sub: "Envío y pruebas", path: "/admin/correo" },
     { id: "correos",    label: "Bitácora",     sub: "Mensajes enviados", path: "/admin/correos" },
   ].concat(user && user.rol === "propietario"
@@ -63,6 +65,14 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  // El acceso interno arranca plegado, salvo cuando se llega a /admin/login
+  // directamente: ahí quien entra ya sabe a qué viene y esconderle el
+  // formulario sería un paso de más.
+  const [verInterno, setVerInterno] = React.useState(
+    () => typeof window !== "undefined" && window.LMTRouter
+      ? window.LMTRouter.currentPath().startsWith("/admin")
+      : false
+  );
 
   React.useEffect(() => {
     // Si ya hay sesión activa, salta directo al panel.
@@ -98,25 +108,19 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
       <div className="split-hero">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ filter: "invert(1)" }}><LogoTaza size={36}/></div>
-          <div className="mono" style={{ color: "var(--paper-3)" }}>La Mejor Taza · Admin</div>
+          <div className="mono" style={{ color: "var(--paper-3)" }}>La Mejor Taza · Festival 2026</div>
         </div>
         <div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 64, lineHeight: 0.95, margin: 0, fontWeight: 400, letterSpacing: "-0.02em", maxWidth: "16ch" }}>
             El pasaporte<br/>del café<br/><span style={{ color: "var(--galeras)" }}>nariñense</span>.
           </h1>
           <p style={{ fontSize: 15, color: "var(--paper-3)", maxWidth: 420, marginTop: 24, lineHeight: 1.6 }}>
-            Registra los stands del festival, genera códigos QR para cada uno y sigue en tiempo real la votación de los visitantes.
+            Recorre los stands, prueba los cafés y vota. Tu pasaporte se va
+            sellando con cada visita, y entre todos decidimos cuál es la mejor
+            taza de Nariño.
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-          <button type="button"
-            onClick={onVisitor || (() => window.LMTRouter.go("/festival"))}
-            className="btn"
-            style={{ background: "var(--paper)", color: "var(--ink)", padding: "12px 20px" }}>
-            Entrar como visitante →
-          </button>
-          <span className="mono" style={{ color: "var(--paper-3)" }}>Ver stands, ranking y votación del festival</span>
-          <div style={{ height: 1, background: "var(--paper-3)", opacity: 0.25, width: "100%", margin: "12px 0 4px" }}/>
           <span className="mono" style={{ color: "var(--paper-3)" }}>¿Tienes un stand en el festival?</span>
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <a href="/inscripcion" data-route style={{ color: "var(--paper)", fontSize: 14, textDecoration: "underline" }}>
@@ -128,29 +132,76 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
           </div>
         </div>
       </div>
-      <form onSubmit={handleLogin} className="split-form">
-        <div className="mono">Acceso · Organizadores</div>
-        <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "8px 0 28px" }}>
-          Iniciar sesión
+
+      {/* Esta columna es del público. La portada la abre un ciudadano que
+          acaba de escanear un QR, no el organizador: pedirle un correo
+          institucional y una contraseña nada más entrar era mandarlo de vuelta.
+          El acceso interno sigue estando, pero abajo y plegado. */}
+      <div className="split-form">
+        <div className="mono">Festival 2026 · Nariño</div>
+        <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "8px 0 14px", lineHeight: 1.05 }}>
+          Bienvenido al<br/>festival.
         </h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-          <div className="field">
-            <label>Correo institucional</label>
-            <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} required/>
-          </div>
-          <div className="field">
-            <label>Contraseña</label>
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={128} required/>
-          </div>
-          {error && <div role="alert" style={{ fontSize: 13, color: "var(--bad)" }}>{error}</div>}
-          <button className="btn btn-primary" type="submit" disabled={busy} style={{ marginTop: 6, justifyContent: "center", padding: 14, opacity: busy ? 0.6 : 1 }}>
-            {busy ? "Validando…" : "Entrar al panel →"}
+        <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 22 }}>
+          No necesitas cuenta ni contraseña: entra, mira el ranking en vivo y
+          vota en los stands que visites.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button type="button"
+            onClick={onVisitor || (() => window.LMTRouter.go("/festival"))}
+            className="btn btn-primary"
+            style={{ justifyContent: "center", padding: 15, fontSize: 15 }}>
+            Entrar al festival →
           </button>
-          <div className="mono" style={{ textAlign: "center", color: "var(--ink-3)" }}>
-            {window.LMTApi && window.LMTApi.enabled ? "API conectada" : "API no disponible"}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <a href="/recorrido" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>Mi recorrido</a>
+            <a href="/pasaporte" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>Mi pasaporte</a>
           </div>
         </div>
-      </form>
+
+        <div style={{ height: 1, background: "var(--line)", margin: "26px 0 0" }}/>
+
+        {!verInterno ? (
+          <button type="button" onClick={() => setVerInterno(true)}
+            className="mono"
+            style={{
+              background: "none", border: "none", cursor: "pointer", padding: "14px 0",
+              color: "var(--ink-3)", textDecoration: "underline", textAlign: "left", minHeight: 44,
+            }}>
+            ¿Eres administrador o promotor? Entra aquí
+          </button>
+        ) : (
+          <form onSubmit={handleLogin} style={{ animation: "fade-up 0.25s", paddingTop: 18 }}>
+            <div className="mono" style={{ marginBottom: 10 }}>Acceso · Organizadores</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div className="field">
+                <label htmlFor="lg-email">Correo institucional</label>
+                <input id="lg-email" type="email" autoComplete="username" autoFocus
+                  value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} required/>
+              </div>
+              <div className="field">
+                <label htmlFor="lg-pass">Contraseña</label>
+                <input id="lg-pass" type="password" autoComplete="current-password"
+                  value={password} onChange={(e) => setPassword(e.target.value)} maxLength={128} required/>
+              </div>
+              {error && <div role="alert" style={{ fontSize: 13, color: "var(--bad)" }}>{error}</div>}
+              <button className="btn btn-primary" type="submit" disabled={busy}
+                style={{ justifyContent: "center", padding: 14, opacity: busy ? 0.6 : 1 }}>
+                {busy ? "Validando…" : "Entrar al panel →"}
+              </button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <a href="/promotor" data-route className="mono" style={{ color: "var(--ink-3)" }}>
+                  Soy promotor de un stand →
+                </a>
+                <span className="mono" style={{ color: "var(--ink-3)" }}>
+                  {window.LMTApi && window.LMTApi.enabled ? "API conectada" : "API no disponible"}
+                </span>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 };

@@ -6,13 +6,15 @@ const PublicHeader = () => (
     display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--paper)", flexWrap: "wrap", gap: 12,
   }}>
     <a href="/festival" data-route style={{ textDecoration: "none", color: "inherit" }}><Wordmark size={16}/></a>
-    <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--good)", animation: "pulse 2s infinite" }}/>
         <span className="mono" style={{ color: "var(--good)" }}>En vivo</span>
       </div>
-      <a href="/pasaporte" data-route className="btn btn-ghost" style={{ padding: "6px 14px", fontSize: 13 }}>Mi pasaporte</a>
-      <a href="/admin" data-route className="mono" style={{ color: "var(--ink-3)" }}>Admin</a>
+      {/* Todo lo del visitante cabe en el menú. Antes eran enlaces sueltos que
+          en un teléfono se partían en dos filas, y «Admin» no pinta nada en la
+          cabecera del público: se entra desde la portada. */}
+      <MenuPublico/>
     </div>
   </header>
 );
@@ -379,4 +381,4 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
   );
 };
 
-Object.assign(window, { PublicDashboard, MapaNarino, PublicDetail });
+Object.assign(window, { PublicDashboard, MapaNarino, PublicDetail, PublicHeader });

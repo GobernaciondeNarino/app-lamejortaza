@@ -8,6 +8,10 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
+**Versión 2.0.0.** Qué trae cada versión y —lo que de verdad importa el día del
+evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
+desplegada se consulta en `/api/health` con sesión de administrador.
+
 ---
 
 ## Tabla de contenido
@@ -17,6 +21,9 @@ Gobernación de Nariño.
    - [Cuentas de administración](#1ter-cuentas-de-administración)
    - [Perfil del visitante](#1quater-perfil-del-visitante)
    - [Correo saliente](#1quinquies-correo-saliente)
+   - [Mi recorrido](#1sexies-mi-recorrido)
+   - [Actividad económica](#1septies-actividad-económica)
+   - [Personalización](#1octies-personalización)
 2. [Arquitectura](#2-arquitectura)
 3. [Requisitos](#3-requisitos)
 4. [Instalación local](#4-instalación-local)
@@ -41,6 +48,7 @@ Gobernación de Nariño.
 | `/festival/{standId}`                | Público   | Detalle del stand + botón "Votar este stand →".           |
 | `/s/{standId}`                       | Móvil     | **Página real de votación** que abre el QR del stand.     |
 | `/pasaporte`                         | Móvil     | Libreta del usuario con sus sellos reales, como libro 3D. |
+| `/recorrido`                         | Público   | **Mi recorrido**: todos los stands, los visitados a color. |
 | `/inscripcion`                       | Público   | **Inscripción de promotores de stand** (solicitud).       |
 | `/promotor`                          | Promotor  | Portal: acceso, cambio de clave, empresa y productos.     |
 | `/admin/login`                       | Admin     | Login del organizador.                                    |
@@ -50,6 +58,8 @@ Gobernación de Nariño.
 | `/admin/qr`                          | Admin     | Carteles A5 imprimibles con el QR del stand.              |
 | `/admin/live`                        | Admin     | Actividad y ranking en tiempo real.                       |
 | `/admin/promotores`                  | Admin     | **Verificar inscripciones** y enviar la clave por correo. |
+| `/admin/economia`                    | Admin     | **Actividad económica**: compras del evento y por stand.  |
+| `/admin/festival`                    | Admin     | **Personalización**: títulos, columnas y fondos.          |
 | `/admin/correos`                     | Admin     | Bitácora de correo saliente (¿salió la clave?).           |
 | `/install.php`                       | One-shot  | Asistente de instalación (auto-bloquea al terminar).      |
 | `/api/...`                           | Backend   | Front controller PHP (auth, stands, votos, pasaportes).   |
@@ -68,9 +78,20 @@ Gobernación de Nariño.
 - El QR apunta a `https://tu-sitio/s/{standId}`. Al abrir, la app
   reconoce el stand y muestra el formulario a pantalla completa
   (sin marco de teléfono — esto **no es una demo**).
-- 3 pasos: correo → emoji → comentario + ¿compraste?.
+- Valoraciones en estrellas → ¿compraste? → emoji (que envía) → comentario.
 - El voto se guarda en la tabla `votos`, los agregados en `stands`
   se incrementan, y el correo se sella en la tabla `pasaportes`.
+
+**Tres valoraciones de 1 a 5 estrellas** —Innovación, Atención y Calidad por
+defecto, con los títulos configurables— y la pregunta **«¿Compraste algo?»** van
+**antes** de los emoji. El orden no es estético: tocar un emoji **envía** el
+voto, así que cualquier cosa que quede debajo no llegaría a rellenarse nunca.
+Las estrellas son opcionales; el voto de un toque sigue funcionando igual.
+
+La compra estaba plegada bajo «agregar comentario» y casi nadie la abría, de
+modo que no había datos que informar. Ahora se ve, y al decir «sí» aparece el
+importe. Decir «no» lo borra: un importe colgando de un «no compré» es una
+contradicción que acaba cuadrando mal en el informe.
 - Tras votar, el correo queda en `localStorage.lmt.email` y la app
   navega a `/pasaporte`.
 
@@ -113,11 +134,30 @@ partir de **un único `datosPagina()`**, para que no puedan acabar diciendo cosa
 distintas de la misma persona. El perfil llega después de montar el libro, así
 que la hoja se repinta con `setPaginas` sin tirar el contexto WebGL.
 
+En el pasaporte, cada stand lleva **su logo en círculo**: pequeño delante del
+nombre en la hoja del recorrido, y grande al centro en la hoja de sello, con el
+sello encima **descolocado**. El desvío sale del identificador del stand y no de
+`Math.random()`: tiene que ser el mismo cada vez que se abre esa página, o el
+sello bailaría al pasar la hoja adelante y atrás, que es justo lo que un sello de
+tinta no hace. Bajo el sello va un velo de papel, porque un logo oscuro se traga
+la tinta y no se lee ni una cosa ni la otra.
+
 ### Público
 - Hero animado con un campo 3D de granos de café (Three.js, respeta
   `prefers-reduced-motion`).
 - Polling cada 5 s al `/api/dashboard`. Cualquier voto nuevo aparece
   en el feed en vivo y mueve el ranking.
+- **Menú hamburguesa** con Inicio, Mi pasaporte, Mi recorrido y Mi perfil. Está
+  en el tablero y en el pasaporte, y es el mismo componente: dos copias acaban
+  siendo dos menús que no dicen lo mismo. Se cierra al elegir, al tocar fuera y
+  con Escape.
+
+**La portada (`/`) es de la ciudadanía.** Antes pedía correo institucional y
+contraseña nada más entrar, que es lo primero que veía alguien que acababa de
+escanear un QR en la plaza. Ahora ofrece entrar al festival, al recorrido o al
+pasaporte, y el acceso de administradores y promotores queda **plegado abajo**
+tras un botón. Quien va directo a `/admin/login` lo encuentra ya abierto: ahí ya
+sabe a qué viene.
 
 ---
 
@@ -322,6 +362,74 @@ del SMTP se guarda cifrada (libsodium, o AES-256-GCM) con una clave derivada de
 
 El asistente de instalación tiene un paso dedicado (5·Correo) que configura
 **y envía una prueba** antes de dar la instalación por terminada.
+
+---
+
+## 1.sexies. Mi recorrido
+
+`/recorrido` — todos los stands del festival en una rejilla, público.
+
+Los que el visitante ya selló salen **a color**; el resto quedan apagados, como
+una colección a medio llenar. Responde a «¿cuáles me faltan?», que es una
+pregunta que el ranking no contesta porque ahí lo que manda es quién va ganando.
+
+Cada tarjeta lleva el logo del stand, su nombre, su municipio y las tres
+valoraciones: **la que puso el visitante** si votó ahí, y **la media del
+festival** si no. Enseñar la media en los que faltan es lo que ayuda a decidir a
+cuál ir.
+
+Los sellados se ordenan primero. El **número de columnas** se configura por
+separado para computador y para móvil desde *Panel → Personalización*: en una
+pantalla de sala caben cuatro y en un teléfono a veces conviene una sola.
+
+Sin correo guardado la página sigue teniendo sentido —es el catálogo de stands—
+y explica que votando se van encendiendo.
+
+---
+
+## 1.septies. Actividad económica
+
+`/admin/economia` — cuánto se movió en el festival y en qué stands.
+
+Sale de lo que declara el público al votar. La página **lo dice en su primera
+línea**: no es la facturación del evento, porque indicar la compra y el importe
+es voluntario, así que lo real siempre es igual o más. Sirve para medir la
+magnitud y comparar stands, no para cuadrar caja.
+
+Total y por stand: número de compras, valor declarado, compra media y conversión
+(qué porcentaje de quienes votaron acabó comprando). La **compra media se divide
+entre las compras QUE TRAEN IMPORTE**, no entre todas: quien dice «sí compré»
+pero no escribe cuánto hundiría la media si contara como una compra de cero.
+
+El importe se acepta como lo escribe la gente —`25.000`, `$ 25 000`, `25,000`—
+porque el campo se rellena de pie en un stand y con una mano. Se guarda en pesos
+enteros, con un tope de 50 millones: sin él, un dedo pegado al teclado numérico
+convierte el informe en un disparate.
+
+---
+
+## 1.octies. Personalización
+
+`/admin/festival` — lo que el organizador cambia sin tocar código.
+
+- **Títulos de las tres valoraciones.** Cambiar el nombre no toca lo ya votado:
+  las claves son las columnas de la base y siguen siendo la misma valoración.
+- **Columnas de «Mi recorrido»**, por separado en computador (1-6) y móvil (1-3).
+- **Fondos del pasaporte**: portada, contraportada y hojas internas.
+
+Las hojas internas se reparten **en orden** y se **repiten** cuando se acaban: con
+dos imágenes y ocho sellos, cada una sale cuatro veces y siempre la misma en la
+misma hoja. Con dos o tres ya se nota variedad sin que el pasaporte pese en el
+móvil de un visitante.
+
+Sobre cada fondo va un velo —de papel en las hojas, oscuro en la portada, donde
+el texto es claro— para que lo escrito se siga leyendo. **Si no se sube nada, el
+pasaporte conserva el diseño del sistema**, que es lo que se ve hoy.
+
+Todo se guarda en la tabla `ajustes` bajo la clave `festival`, y el cliente lo
+lee una sola vez al arrancar: lo pinta media interfaz y pedirlo en cada
+componente sería una ráfaga de peticiones para algo que no cambia durante la
+visita.
 
 ---
 
@@ -916,6 +1024,7 @@ la-mejor-taza/
 │   ├── migraciones.php        # columnas que faltan, deducidas del esquema
 │   ├── migrate.php            # actualiza una instalación ya existente
 │   └── create-admin.php       # CLI para crear/actualizar admins
+├── CHANGELOG.md               # versiones y cómo revertir cada una
 ├── tools/
 │   ├── build-components.mjs   # JSX → js/components.build.js
 │   └── build-subregiones.php  # catálogo → Territorio.php + narino-municipios.js
