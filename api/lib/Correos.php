@@ -90,11 +90,20 @@ HTML);
      * en el móvil y tiene que poder verlo sin descargar nada. Quien envía
      * adjunta la imagen con Mailer::send(..., $adjuntos).
      */
-    public static function credenciales(string $nombre, string $email, string $clave, int $horasVigencia, array $stand = []): array
+    /**
+     * Bienvenida con el acceso y el QR del stand.
+     *
+     * `$accesoPropio` llega con una frase («la contraseña que elegiste», «tu
+     * número de teléfono»…) cuando el promotor eligió cómo entrar al
+     * inscribirse. En ese caso NO hay clave temporal que enviar y el correo
+     * sólo se lo recuerda: decirle un secreto que ya tiene, y hacerlo por
+     * correo, sería peor que no decírselo.
+     */
+    public static function credenciales(string $nombre, string $email, ?string $clave, int $horasVigencia, array $stand = [], ?string $accesoPropio = null): array
     {
         $n = self::h($nombre);
         $e = self::h($email);
-        $c = self::h($clave);
+        $c = self::h((string) $clave);
         $url = self::h(self::baseUrl() . '/promotor');
 
         $bloqueStand = '';
@@ -124,6 +133,39 @@ HTML;
                 . "El código QR va adjunto a este correo: imprímelo y pégalo en tu stand.\n";
         }
 
+        // Dos correos distintos según de dónde salga su acceso.
+        if ($accesoPropio !== null) {
+            $a = self::h($accesoPropio);
+            $bloqueClave = <<<HTML
+<div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Cómo entras</div>
+<div style="font-size:15px;margin-top:4px;line-height:1.6;">Con <strong>{$a}</strong>, la que elegiste al inscribirte.</div>
+HTML;
+            $bloqueAviso = <<<HTML
+<p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0 0 8px;">
+  No te mandamos ninguna contraseña porque no hace falta: al inscribirte elegiste cómo entrar
+  y eso sigue funcionando. Si lo perdiste, escribe al equipo organizador y te damos un acceso nuevo.
+</p>
+HTML;
+            $textoClave = "Cómo entras: con {$accesoPropio}, la que elegiste al inscribirte.\n";
+            $textoAviso = "No te mandamos ninguna contraseña porque no hace falta. Si perdiste tu acceso,\n"
+                        . "escribe al equipo organizador y te damos uno nuevo.\n";
+        } else {
+            $bloqueClave = <<<HTML
+<div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Contraseña temporal</div>
+<div style="font-family:Consolas,Menlo,monospace;font-size:21px;letter-spacing:1px;margin-top:4px;color:#8a3b1e;">{$c}</div>
+HTML;
+            $bloqueAviso = <<<HTML
+<p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0 0 8px;">
+  <strong>Importante:</strong> esta contraseña caduca en {$horasVigencia} horas y el sistema te
+  pedirá cambiarla la primera vez que entres. No la compartas con nadie: quien la tenga puede
+  modificar la información de tu stand.
+</p>
+HTML;
+            $textoClave = "Contraseña temporal: {$clave}\n";
+            $textoAviso = "IMPORTANTE: esta contraseña caduca en {$horasVigencia} horas y deberás cambiarla la\n"
+                        . "primera vez que entres. No la compartas con nadie.\n";
+        }
+
         $html = self::envoltura('Bienvenido al festival', <<<HTML
 <p style="font-size:16px;margin:0 0 14px;">Hola {$n},</p>
 <p style="font-size:15px;line-height:1.65;margin:0 0 18px;">
@@ -136,18 +178,13 @@ HTML;
   <tr><td style="padding:16px 18px;">
     <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Usuario</div>
     <div style="font-size:15px;margin:2px 0 14px;">{$e}</div>
-    <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Contraseña temporal</div>
-    <div style="font-family:Consolas,Menlo,monospace;font-size:21px;letter-spacing:1px;margin-top:4px;color:#8a3b1e;">{$c}</div>
+    {$bloqueClave}
   </td></tr>
 </table>
 <p style="margin:0 0 22px;">
   <a href="{$url}" style="display:inline-block;background:#2c2620;color:#f2ece0;text-decoration:none;padding:13px 24px;border-radius:999px;font-size:15px;">Entrar al portal del promotor</a>
 </p>
-<p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0 0 8px;">
-  <strong>Importante:</strong> esta contraseña caduca en {$horasVigencia} horas y el sistema te
-  pedirá cambiarla la primera vez que entres. No la compartas con nadie: quien la tenga puede
-  modificar la información de tu stand.
-</p>
+{$bloqueAviso}
 <p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0;">
   Si no solicitaste esta inscripción, avisa al equipo organizador y no uses este acceso.
 </p>
@@ -157,11 +194,10 @@ HTML);
             . "Tu inscripción como promotor fue verificada y tu stand ya está registrado.\n"
             . $textoStand
             . "\nUsuario: {$email}\n"
-            . "Contraseña temporal: {$clave}\n\n"
-            . "Entra aquí: " . self::baseUrl() . "/promotor\n\n"
-            . "IMPORTANTE: esta contraseña caduca en {$horasVigencia} horas y deberás cambiarla la\n"
-            . "primera vez que entres. No la compartas con nadie.\n\n"
-            . "Si no solicitaste esta inscripción, avisa al equipo organizador y no uses este acceso.\n";
+            . $textoClave
+            . "\nEntra aquí: " . self::baseUrl() . "/promotor\n\n"
+            . $textoAviso
+            . "\nSi no solicitaste esta inscripción, avisa al equipo organizador y no uses este acceso.\n";
         return ['asunto' => 'Bienvenido — tu acceso y el QR de tu stand', 'html' => $html, 'texto' => $texto];
     }
 

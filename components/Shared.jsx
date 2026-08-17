@@ -316,6 +316,8 @@ const ERRORES = {
   estado_invalido: "Ese cambio de estado no es válido.",
   estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
   bad_id: "El identificador no es válido. Recarga la página.",
+  acceso_valor_invalido: "Revisa cómo vas a entrar: la contraseña necesita 8 caracteres, la fecha debe ser válida y el teléfono tener al menos 7 dígitos.",
+  acceso_no_coincide: "Los dos números de teléfono no coinciden.",
   municipio_invalido: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_municipio: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_json: "Los datos enviados no son válidos. Recarga la página.",

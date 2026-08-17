@@ -107,6 +107,12 @@ CREATE TABLE IF NOT EXISTS promotores (
   stand_lng            REAL,
   estado               TEXT NOT NULL DEFAULT 'pendiente'
                        CHECK (estado IN ('pendiente','verificado','activo','rechazado','suspendido')),
+  -- Cómo eligió entrar el promotor al inscribirse. Sólo dice CUÁL es su
+  -- credencial, para poder etiquetar bien el formulario de acceso y redactar
+  -- el correo; el secreto en sí vive hasheado en password_hash como cualquier
+  -- otra contraseña, sea una clave, una fecha, un teléfono o el token del QR.
+  acceso_metodo        TEXT CHECK (acceso_metodo IS NULL OR
+                       acceso_metodo IN ('password','documento','telefono','qr')),
   password_hash        TEXT,
   must_change_password INTEGER NOT NULL DEFAULT 1,
   password_expira_at   DATETIME,

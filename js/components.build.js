@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 70b514bad9fbc4c7
+// Huella de las fuentes: dfcc4c566da12aa3
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -472,6 +472,8 @@ const ERRORES = {
   estado_invalido: "Ese cambio de estado no es válido.",
   estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
   bad_id: "El identificador no es válido. Recarga la página.",
+  acceso_valor_invalido: "Revisa cómo vas a entrar: la contraseña necesita 8 caracteres, la fecha debe ser válida y el teléfono tener al menos 7 dígitos.",
+  acceso_no_coincide: "Los dos números de teléfono no coinciden.",
   municipio_invalido: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_municipio: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_json: "Los datos enviados no son válidos. Recarga la página.",
@@ -5881,6 +5883,113 @@ const EstadoPill = ({
     }
   }, e.texto);
 };
+const ACCESOS = [{
+  id: "password",
+  titulo: "Una contraseña que yo elija",
+  nota: "Lo más seguro si vas a recordarla.",
+  etiqueta: "Tu contraseña",
+  tipo: "password",
+  ayuda: "Mínimo 8 caracteres."
+}, {
+  id: "documento",
+  titulo: "La fecha de expedición de mi cédula",
+  nota: "No hay que recordar nada nuevo: está impresa en tu documento.",
+  etiqueta: "Fecha de expedición del documento",
+  tipo: "date",
+  ayuda: "La que aparece en tu cédula. Con eso entrarás al portal.",
+  debil: true
+}, {
+  id: "telefono",
+  titulo: "Mi número de teléfono",
+  nota: "El mismo que usas siempre. Se pide dos veces para evitar erratas.",
+  etiqueta: "Número de teléfono",
+  tipo: "tel",
+  etiqueta2: "Repite el número",
+  ayuda: "Sin espacios ni guiones, como prefieras: da igual.",
+  debil: true
+}, {
+  id: "qr",
+  titulo: "Un código QR que guardo en el celular",
+  nota: "El sistema genera uno único. Guárdalo: es la forma más segura si no usas correo."
+}];
+const ACCESO_FRASE = {
+  password: "la contraseña que elegiste",
+  documento: "la fecha de expedición de tu documento",
+  telefono: "tu número de teléfono",
+  qr: "el código QR que guardaste"
+};
+const qrUrlAcceso = (correo, token) => {
+  const base = (window.LMT_BASE_URL || location.origin + (window.LMT_BASE_PATH || "")).replace(/\/$/, "");
+  return base + "/promotor?correo=" + encodeURIComponent(correo) + "&acceso=" + encodeURIComponent(token);
+};
+const SelectorAcceso = ({
+  metodo,
+  valor,
+  valor2,
+  onMetodo,
+  onValor,
+  onValor2
+}) => {
+  const sel = ACCESOS.find(a => a.id === metodo) || ACCESOS[0];
+  return React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-acceso"
+  }, "\xBFC\xF3mo quieres entrar al portal? *"), React.createElement("select", {
+    id: "in-acceso",
+    value: metodo,
+    onChange: e => onMetodo(e.target.value)
+  }, ACCESOS.map(a => React.createElement("option", {
+    key: a.id,
+    value: a.id
+  }, a.titulo))), React.createElement("span", {
+    className: "ayuda"
+  }, sel.nota)), sel.tipo && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-acceso-valor"
+  }, sel.etiqueta, " *"), React.createElement("input", {
+    id: "in-acceso-valor",
+    type: sel.tipo,
+    value: valor,
+    required: true,
+    maxLength: sel.tipo === "tel" ? 32 : 128,
+    inputMode: sel.tipo === "tel" ? "tel" : undefined,
+    autoComplete: sel.id === "password" ? "new-password" : "off",
+    onChange: e => onValor(e.target.value)
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, sel.ayuda)), sel.etiqueta2 && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-acceso-valor2"
+  }, sel.etiqueta2, " *"), React.createElement("input", {
+    id: "in-acceso-valor2",
+    type: sel.tipo,
+    value: valor2,
+    required: true,
+    maxLength: 32,
+    inputMode: "tel",
+    autoComplete: "off",
+    onChange: e => onValor2(e.target.value)
+  }), valor && valor2 && valor.replace(/\D/g, "") !== valor2.replace(/\D/g, "") && React.createElement("span", {
+    className: "ayuda",
+    style: {
+      color: "var(--bad)"
+    }
+  }, "Los dos n\xFAmeros no coinciden.")), sel.id === "qr" && React.createElement("p", {
+    className: "ayuda"
+  }, "Al enviar la solicitud te mostraremos tu c\xF3digo. ", React.createElement("strong", {
+    style: {
+      fontWeight: 500
+    }
+  }, "Gu\xE1rdalo en ese momento"), ": por seguridad no lo podemos volver a mostrar."), sel.debil && React.createElement("p", {
+    className: "ayuda",
+    style: {
+      color: "var(--meh)"
+    }
+  }, "Es c\xF3modo de recordar, pero tambi\xE9n m\xE1s f\xE1cil de adivinar que una contrase\xF1a. Cuando entres, el sistema te pedir\xE1 crear una."));
+};
 const PromotorRegistroPage = () => {
   const vacio = {
     nombre: "",
@@ -5895,7 +6004,10 @@ const PromotorRegistroPage = () => {
     stand_direccion: "",
     stand_descripcion: "",
     stand_nit: "",
-    stand_sitio_web: ""
+    stand_sitio_web: "",
+    acceso_metodo: "password",
+    acceso_valor: "",
+    acceso_valor2: ""
   };
   const [form, setForm] = React.useState(vacio);
   const [ubicacion, setUbicacion] = React.useState({
@@ -5906,6 +6018,7 @@ const PromotorRegistroPage = () => {
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
+  const [qrToken, setQrToken] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setForm(f => ({
     ...f,
@@ -5935,9 +6048,29 @@ const PromotorRegistroPage = () => {
       setError(ERRORES.debe_aceptar_tratamiento_datos);
       return;
     }
+    if (form.acceso_metodo === "password" && form.acceso_valor.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    if (form.acceso_metodo === "documento" && !form.acceso_valor) {
+      setError("Indica la fecha de expedición de tu documento.");
+      return;
+    }
+    if (form.acceso_metodo === "telefono") {
+      const a = form.acceso_valor.replace(/\D/g, ""),
+        b2 = form.acceso_valor2.replace(/\D/g, "");
+      if (a.length < 7) {
+        setError("El número de teléfono no parece válido.");
+        return;
+      }
+      if (a !== b2) {
+        setError("Los dos números de teléfono no coinciden.");
+        return;
+      }
+    }
     setBusy(true);
     try {
-      await window.LMTApi.promotorRegistro({
+      const res = await window.LMTApi.promotorRegistro({
         ...form,
         stand_nombre: form.stand_nombre.trim() || form.empresa.trim(),
         email: sec.normalizeEmail(form.email),
@@ -5946,6 +6079,7 @@ const PromotorRegistroPage = () => {
         lng: ubicacion.lng,
         acepta_datos: true
       });
+      if (res && res.qr_token) setQrToken(res.qr_token);
       setEnviado(true);
     } catch (err) {
       setError(mensajeError(err, "No fue posible enviar tu solicitud."));
@@ -5979,7 +6113,46 @@ const PromotorRegistroPage = () => {
         lineHeight: 1.65,
         marginBottom: 24
       }
-    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " tu contrase\xF1a para entrar al portal y el", React.createElement("strong", null, " c\xF3digo QR de tu stand"), ", listo para imprimir y pegar en tu puesto."), React.createElement("a", {
+    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " el aviso y el", React.createElement("strong", null, " c\xF3digo QR de tu stand"), ", listo para imprimir y pegar en tu puesto.", " ", "Entrar\xE1s al portal con ", ACCESO_FRASE[form.acceso_metodo] || "tu contraseña", "."), qrToken && React.createElement("div", {
+      style: {
+        border: "2px solid var(--ink)",
+        borderRadius: "var(--r-md)",
+        padding: 18,
+        marginBottom: 24,
+        textAlign: "center"
+      }
+    }, React.createElement("div", {
+      className: "mono",
+      style: {
+        marginBottom: 10
+      }
+    }, "Tu c\xF3digo de acceso"), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "center",
+        marginBottom: 12
+      }
+    }, React.createElement(QRCode, {
+      value: qrUrlAcceso(form.email, qrToken),
+      size: 190
+    })), React.createElement("div", {
+      className: "mono ruta",
+      style: {
+        fontSize: 13,
+        wordBreak: "break-all",
+        padding: "8px 10px",
+        background: "var(--paper-2)",
+        borderRadius: "var(--r-sm)",
+        marginBottom: 12
+      }
+    }, qrToken), React.createElement("p", {
+      style: {
+        fontSize: 13,
+        color: "var(--ink-2)",
+        lineHeight: 1.6,
+        margin: 0
+      }
+    }, React.createElement("strong", null, "Gu\xE1rdalo ahora"), ": hazle una foto o escr\xEDbelo. Por seguridad no lo podemos volver a mostrar. Escanea el c\xF3digo para entrar, o escribe esas letras y n\xFAmeros como contrase\xF1a.")), React.createElement("a", {
       href: "/",
       "data-route": true,
       className: "btn btn-ghost",
@@ -6200,6 +6373,21 @@ const PromotorRegistroPage = () => {
         stand_region: subregionDe(u.municipio) || f.stand_region
       }));
     }
+  })), React.createElement(BloqueForm, {
+    titulo: "C\xF3mo vas a entrar",
+    nota: "Por si el correo no llega: con esto entras igual."
+  }, React.createElement(SelectorAcceso, {
+    metodo: form.acceso_metodo,
+    valor: form.acceso_valor,
+    valor2: form.acceso_valor2,
+    onMetodo: m => setForm(f => ({
+      ...f,
+      acceso_metodo: m,
+      acceso_valor: "",
+      acceso_valor2: ""
+    })),
+    onValor: v => set("acceso_valor", v),
+    onValor2: v => set("acceso_valor2", v)
   })), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
@@ -6254,35 +6442,67 @@ const PromotorRegistroPage = () => {
     }
   }, "Entra aqu\xED")))));
 };
+const ACCESO_ENTRADA = {
+  password: {
+    etiqueta: "Contraseña",
+    tipo: "password",
+    ayuda: ""
+  },
+  documento: {
+    etiqueta: "Fecha de expedición de tu documento",
+    tipo: "date",
+    ayuda: "La que aparece impresa en tu cédula."
+  },
+  telefono: {
+    etiqueta: "Tu número de teléfono",
+    tipo: "tel",
+    ayuda: "El mismo que diste al inscribirte."
+  },
+  qr: {
+    etiqueta: "Código de tu QR",
+    tipo: "text",
+    ayuda: "Escanea el QR que guardaste, o escribe aquí sus 32 caracteres."
+  }
+};
 const PromotorLoginPage = ({
   onEntrar
 }) => {
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+  const url = new URLSearchParams(window.location.search);
+  const tokenUrl = (url.get("acceso") || "").trim();
+  const [email, setEmail] = React.useState(() => (url.get("correo") || "").trim());
+  const [metodo, setMetodo] = React.useState(() => tokenUrl ? "qr" : "password");
+  const [password, setPassword] = React.useState(tokenUrl);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const entrar = async e => {
-    e.preventDefault();
+  const ent = ACCESO_ENTRADA[metodo] || ACCESO_ENTRADA.password;
+  const entrar = React.useCallback(async (correo, credencial, comoEntra) => {
     setError("");
     const sec = window.LMTSecurity;
-    if (!sec || !sec.isEmail(email.trim())) {
+    if (!sec || !sec.isEmail((correo || "").trim())) {
       setError(ERRORES.email_invalido);
       return;
     }
-    if (!password) {
-      setError("Escribe tu contraseña.");
+    if (!credencial) {
+      setError("Escribe " + (ACCESO_ENTRADA[comoEntra] || ent).etiqueta.toLowerCase() + ".");
       return;
     }
     setBusy(true);
     try {
-      const p = await window.LMTApi.promotorLogin(sec.normalizeEmail(email), password);
+      const p = await window.LMTApi.promotorLogin(sec.normalizeEmail(correo), credencial, comoEntra);
       onEntrar(p);
     } catch (err) {
       setError(mensajeError(err, "No fue posible iniciar sesión."));
     } finally {
       setBusy(false);
     }
-  };
+  }, [onEntrar, ent]);
+  const yaIntentado = React.useRef(false);
+  React.useEffect(() => {
+    if (yaIntentado.current || !tokenUrl || !email) return;
+    yaIntentado.current = true;
+    const t = setTimeout(() => entrar(email, tokenUrl, "qr"), 250);
+    return () => clearTimeout(t);
+  }, [tokenUrl, email, entrar]);
   return React.createElement("div", {
     className: "mobile-page"
   }, React.createElement("div", {
@@ -6308,8 +6528,11 @@ const PromotorLoginPage = ({
       margin: "6px 0 22px",
       lineHeight: 1.05
     }
-  }, "Entra con el acceso", React.createElement("br", null), "que te lleg\xF3 al correo."), React.createElement("form", {
-    onSubmit: entrar,
+  }, "Entra a tu stand."), React.createElement("form", {
+    onSubmit: e => {
+      e.preventDefault();
+      entrar(email, password, metodo);
+    },
     style: {
       display: "flex",
       flexDirection: "column",
@@ -6317,7 +6540,10 @@ const PromotorLoginPage = ({
     }
   }, React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Usuario (tu correo)"), React.createElement("input", {
+  }, React.createElement("label", {
+    htmlFor: "pl-email"
+  }, "Usuario (tu correo)"), React.createElement("input", {
+    id: "pl-email",
     type: "email",
     value: email,
     onChange: e => setEmail(e.target.value),
@@ -6326,14 +6552,41 @@ const PromotorLoginPage = ({
     autoComplete: "username"
   })), React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Contrase\xF1a"), React.createElement("input", {
-    type: "password",
+  }, React.createElement("label", {
+    htmlFor: "pl-metodo"
+  }, "\xBFCon qu\xE9 vas a entrar?"), React.createElement("select", {
+    id: "pl-metodo",
+    value: metodo,
+    onChange: e => {
+      setMetodo(e.target.value);
+      setPassword("");
+    }
+  }, React.createElement("option", {
+    value: "password"
+  }, "Mi contrase\xF1a"), React.createElement("option", {
+    value: "documento"
+  }, "La fecha de expedici\xF3n de mi c\xE9dula"), React.createElement("option", {
+    value: "telefono"
+  }, "Mi n\xFAmero de tel\xE9fono"), React.createElement("option", {
+    value: "qr"
+  }, "El c\xF3digo de mi QR")), React.createElement("span", {
+    className: "ayuda"
+  }, "Lo que elegiste al inscribirte. Si te lleg\xF3 una clave por correo, es \xABMi contrase\xF1a\xBB.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pl-clave"
+  }, ent.etiqueta), React.createElement("input", {
+    id: "pl-clave",
+    type: ent.tipo,
     value: password,
     onChange: e => setPassword(e.target.value),
     maxLength: 128,
     required: true,
-    autoComplete: "current-password"
-  })), React.createElement(Aviso, null, error), React.createElement("button", {
+    inputMode: metodo === "telefono" ? "tel" : undefined,
+    autoComplete: metodo === "password" ? "current-password" : "off"
+  }), ent.ayuda && React.createElement("span", {
+    className: "ayuda"
+  }, ent.ayuda)), React.createElement(Aviso, null, error), React.createElement("button", {
     className: "btn btn-primary",
     type: "submit",
     disabled: busy,
@@ -6356,7 +6609,7 @@ const PromotorLoginPage = ({
     style: {
       color: "var(--grano)"
     }
-  }, "Solicita tu acceso"), React.createElement("br", null), "Si perdiste la contrase\xF1a, pide al organizador que te la reenv\xEDe.")));
+  }, "Solicita tu acceso"), React.createElement("br", null), "Si perdiste tu acceso, pide al organizador que te d\xE9 uno nuevo.")));
 };
 const PromotorCambioClave = ({
   onListo

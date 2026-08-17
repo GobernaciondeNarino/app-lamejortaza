@@ -82,6 +82,32 @@ function register_routes_promotores(\LMT\Router $r): void
         // festival sin que nadie se dé cuenta.
         [$standLat, $standLng] = promotor_coordenadas($b['lat'] ?? null, $b['lng'] ?? null);
 
+        // Cómo va a entrar si el correo no llega. Ver PROMOTOR_ACCESOS.
+        $accesoMetodo = in_array($b['acceso_metodo'] ?? '', PROMOTOR_ACCESOS, true)
+            ? (string) $b['acceso_metodo'] : null;
+        $tokenQr = null;
+        $credencial = null;
+        if ($accesoMetodo !== null) {
+            if ($accesoMetodo === 'qr') {
+                // El token lo genera el servidor: si lo eligiera el cliente,
+                // «12345678…» sería una credencial válida.
+                $tokenQr = promotor_token_qr();
+                $credencial = $tokenQr;
+            } else {
+                $credencial = promotor_credencial_normalizada($accesoMetodo, $b['acceso_valor'] ?? null);
+                if ($credencial === null) Response::error(422, 'acceso_valor_invalido');
+                // El teléfono se pide dos veces en el formulario; que coincidan
+                // se comprueba también aquí, porque el navegador no es quien
+                // decide qué entra en la base.
+                if ($accesoMetodo === 'telefono') {
+                    $rep = promotor_credencial_normalizada('telefono', $b['acceso_valor2'] ?? null);
+                    if ($rep === null || !hash_equals($credencial, $rep)) {
+                        Response::error(422, 'acceso_no_coincide');
+                    }
+                }
+            }
+        }
+
         if (!$email)  Response::error(422, 'email_invalido');
         if (!$nombre) Response::error(422, 'nombre_invalido');
         if (!$municipio) Response::error(422, 'municipio_invalido');
@@ -106,10 +132,11 @@ function register_routes_promotores(\LMT\Router $r): void
                                          empresa_tentativa, mensaje, stand_nombre, stand_region,
                                          stand_direccion, stand_descripcion, stand_nit,
                                          stand_sitio_web, logo_path, stand_lat, stand_lng,
-                                         estado, acepta_datos, ip_hash,
+                                         estado, acceso_metodo, password_hash, must_change_password,
+                                         acepta_datos, ip_hash,
                                          created_at, updated_at)
                  VALUES (:e, :n, :doc, :tel, :mun, :emp, :msg, :sn, :sr, :sd, :sdesc, :snit,
-                         :sweb, :logo, :slat, :slng, \'pendiente\', 1, :ip,
+                         :sweb, :logo, :slat, :slng, \'pendiente\', :am, :ph, :mcp, 1, :ip,
                          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
             );
             $ins->execute([
@@ -129,6 +156,15 @@ function register_routes_promotores(\LMT\Router $r): void
                 ':logo'  => $logo,
                 ':slat'  => $standLat,
                 ':slng'  => $standLng,
+                ':am'    => $accesoMetodo,
+                // La credencial elegida se guarda hasheada YA, aunque la cuenta
+                // siga pendiente: el login la rechaza igual mientras no esté
+                // verificada, y así no hay que volver a pedírsela.
+                ':ph'    => $credencial !== null ? Security::hashPassword($credencial) : null,
+                // Fecha y teléfono sirven para entrar, no para quedarse: en
+                // cuanto entra, el sistema le obliga a poner una clave de
+                // verdad. Una contraseña que eligió él no necesita cambiarse.
+                ':mcp'   => ($accesoMetodo !== null && !in_array($accesoMetodo, PROMOTOR_ACCESOS_DEBILES, true)) ? 0 : 1,
                 ':ip'    => RateLimit::ipHash(),
             ]);
         } catch (\PDOException $e) {
@@ -144,7 +180,14 @@ function register_routes_promotores(\LMT\Router $r): void
         Mailer::send($email, $nombre, $plantilla['asunto'], $plantilla['html'], $plantilla['texto'], 'solicitud_recibida');
         promotores_avisar_admins($nombre, $email, (string) $municipio);
 
-        Response::ok(['recibido' => true]);
+        // El token del QR se devuelve UNA vez y no se vuelve a poder consultar:
+        // en la base sólo queda su hash. El formulario lo enseña para que lo
+        // guarde ahí mismo.
+        Response::ok(array_filter([
+            'recibido'      => true,
+            'acceso_metodo' => $accesoMetodo,
+            'qr_token'      => $tokenQr,
+        ], fn($v) => $v !== null));
     });
 
     /**
@@ -178,8 +221,14 @@ function register_routes_promotores(\LMT\Router $r): void
         $b     = Security::jsonBody();
         $email = Validate::email($b['email'] ?? null);
         $pwd   = $b['password'] ?? '';
+        // Con qué dice la persona que entra. El formulario lo pregunta en vez
+        // de deducirlo del correo: consultar el método antes de autenticar
+        // convertiría el login en un comprobador de «¿está inscrito este
+        // correo?», que es justo lo que el resto del módulo evita.
+        $metodo = in_array($b['acceso_metodo'] ?? '', PROMOTOR_ACCESOS, true)
+            ? (string) $b['acceso_metodo'] : 'password';
 
-        if (!$email || !is_string($pwd) || strlen($pwd) < 8 || strlen($pwd) > 128) {
+        if (!$email || !is_string($pwd) || $pwd === '' || strlen($pwd) > 128) {
             usleep(random_int(150000, 350000));
             Response::error(401, 'invalid_credentials');
         }
@@ -187,7 +236,7 @@ function register_routes_promotores(\LMT\Router $r): void
         $pdo = Db::pdo();
         $stmt = $pdo->prepare(
             'SELECT id, email, nombre, estado, password_hash, must_change_password,
-                    password_expira_at, intentos_fallidos, bloqueado_hasta
+                    password_expira_at, intentos_fallidos, bloqueado_hasta, acceso_metodo
              FROM promotores WHERE email = :e LIMIT 1'
         );
         $stmt->execute([':e' => $email]);
@@ -198,11 +247,26 @@ function register_routes_promotores(\LMT\Router $r): void
             Response::error(429, 'cuenta_bloqueada');
         }
 
+        // La credencial se normaliza según el método que dice usar quien entra:
+        // «315 778 8990» y «3157788990» tienen que ser el mismo teléfono, y
+        // «4/3/2015» la misma fecha que «2015-03-04».
+        //
+        // Se prueba también el valor SIN normalizar. Es lo que salva a las
+        // cuentas anteriores a esto y a las que reciben la clave temporal por
+        // correo: su credencial es una contraseña normal y el método que venga
+        // marcado en el formulario no debería poder estropearla.
+        $candidatos = [$pwd];
+        $norm = promotor_credencial_normalizada($metodo, $pwd);
+        if ($norm !== null && $norm !== $pwd) $candidatos[] = $norm;
+
         // Se verifica siempre contra algo para que el tiempo de respuesta no
         // delate si el correo existe.
         $hash = ($row && $row['password_hash']) ? (string) $row['password_hash']
               : '$2y$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidinv';
-        $okPwd = Security::verifyPassword($pwd, $hash);
+        $okPwd = false;
+        foreach ($candidatos as $cand) {
+            if (Security::verifyPassword($cand, $hash)) { $okPwd = true; break; }
+        }
 
         if (!$row || !$row['password_hash'] || !$okPwd) {
             if ($row) promotores_registrar_fallo($pdo, (int) $row['id'], (int) $row['intentos_fallidos']);
@@ -547,7 +611,8 @@ function register_routes_promotores(\LMT\Router $r): void
         if ($id === null) Response::error(400, 'bad_id');
 
         $pdo = Db::pdo();
-        $sel = $pdo->prepare('SELECT id, email, nombre, estado FROM promotores WHERE id = :id');
+        $sel = $pdo->prepare('SELECT id, email, nombre, estado, acceso_metodo, password_hash
+                              FROM promotores WHERE id = :id');
         $sel->execute([':id' => $id]);
         $row = $sel->fetch();
         if (!$row) Response::error(404, 'not_found');
@@ -568,7 +633,8 @@ function register_routes_promotores(\LMT\Router $r): void
         if ($id === null) Response::error(400, 'bad_id');
 
         $pdo = Db::pdo();
-        $sel = $pdo->prepare('SELECT id, email, nombre, estado FROM promotores WHERE id = :id');
+        $sel = $pdo->prepare('SELECT id, email, nombre, estado, acceso_metodo, password_hash
+                              FROM promotores WHERE id = :id');
         $sel->execute([':id' => $id]);
         $row = $sel->fetch();
         if (!$row) Response::error(404, 'not_found');
@@ -576,7 +642,10 @@ function register_routes_promotores(\LMT\Router $r): void
             Response::error(409, 'estado_no_permite_clave');
         }
 
-        Response::ok(promotor_emitir_credenciales($pdo, $row, 'clave_promotor_reenvio'));
+        // Con `true`: reenviar es justamente para cuando el promotor perdió su
+        // acceso y lo pide. Aquí sí se genera una credencial nueva, aunque
+        // hubiera elegido método propio, y la anterior deja de valer.
+        Response::ok(promotor_emitir_credenciales($pdo, $row, 'clave_promotor_reenvio', true));
     });
 
     $r->post('/admin/promotores/:id/rechazar', function (array $params) {
@@ -736,10 +805,21 @@ function register_routes_promotores(\LMT\Router $r): void
  * —dejar al promotor sin acceso y sin diagnóstico— es peor en una feria.
  * Cuando el envío sí funciona, la clave nunca vuelve al cliente.
  */
-function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo): array
+function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo, bool $forzarClave = false): array
 {
-    $clave = Security::generarClaveTemporal();
-    $expira = date('Y-m-d H:i:s', time() + LMT_CLAVE_TEMPORAL_HORAS * 3600);
+    // Si el promotor eligió cómo entrar al inscribirse, se le RESPETA: generar
+    // una clave temporal aquí borraría la suya y le dejaría dependiendo de un
+    // correo que quizá no le llega, que es justo lo que quiso evitar. El correo
+    // le confirma que ya está aprobado y le recuerda con qué entra.
+    //
+    // `$forzarClave` es para el botón de reenviar clave: ahí el organizador SÍ
+    // quiere una credencial nueva, normalmente porque el promotor perdió la
+    // suya y lo está pidiendo por teléfono.
+    $metodo = (string) ($row['acceso_metodo'] ?? '');
+    $conservaSuAcceso = !$forzarClave && $metodo !== '' && !empty($row['password_hash']);
+
+    $clave = $conservaSuAcceso ? null : Security::generarClaveTemporal();
+    $expira = $conservaSuAcceso ? null : date('Y-m-d H:i:s', time() + LMT_CLAVE_TEMPORAL_HORAS * 3600);
     $admin = Session::user();
 
     // El stand se crea AQUÍ, con lo que el promotor escribió al inscribirse.
@@ -747,19 +827,34 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo)
     // organizador a teclear otra vez unos datos que ya tiene delante.
     $stand = promotor_asegurar_stand($pdo, $row);
 
-    $pdo->prepare(
-        'UPDATE promotores SET password_hash = :h, must_change_password = 1, password_expira_at = :exp,
-                               estado = \'verificado\', intentos_fallidos = 0, bloqueado_hasta = NULL,
-                               verificado_por = :adm, verificado_at = CURRENT_TIMESTAMP,
-                               stand_id = :sid, motivo = NULL, updated_at = CURRENT_TIMESTAMP
-         WHERE id = :id'
-    )->execute([
-        ':h'   => Security::hashPassword($clave),
-        ':exp' => $expira,
-        ':adm' => $admin['id'] ?? null,
-        ':sid' => $stand['id'] ?? null,
-        ':id'  => (int) $row['id'],
-    ]);
+    if ($conservaSuAcceso) {
+        // No se toca ni la credencial ni must_change_password: los eligió él.
+        $pdo->prepare(
+            'UPDATE promotores SET estado = \'verificado\', intentos_fallidos = 0, bloqueado_hasta = NULL,
+                                   verificado_por = :adm, verificado_at = CURRENT_TIMESTAMP,
+                                   stand_id = :sid, motivo = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        )->execute([
+            ':adm' => $admin['id'] ?? null,
+            ':sid' => $stand['id'] ?? null,
+            ':id'  => (int) $row['id'],
+        ]);
+    } else {
+        $pdo->prepare(
+            'UPDATE promotores SET password_hash = :h, must_change_password = 1, password_expira_at = :exp,
+                                   acceso_metodo = NULL,
+                                   estado = \'verificado\', intentos_fallidos = 0, bloqueado_hasta = NULL,
+                                   verificado_por = :adm, verificado_at = CURRENT_TIMESTAMP,
+                                   stand_id = :sid, motivo = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        )->execute([
+            ':h'   => Security::hashPassword($clave),
+            ':exp' => $expira,
+            ':adm' => $admin['id'] ?? null,
+            ':sid' => $stand['id'] ?? null,
+            ':id'  => (int) $row['id'],
+        ]);
+    }
 
     // QR del stand incrustado en el correo. Si falla la generación no se
     // aborta el envío: la clave es lo imprescindible, el QR es una comodidad
@@ -778,7 +873,11 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo)
         }
     }
 
-    $pl = Correos::credenciales((string) $row['nombre'], (string) $row['email'], $clave, LMT_CLAVE_TEMPORAL_HORAS, $stand);
+    $pl = Correos::credenciales(
+        (string) $row['nombre'], (string) $row['email'], $clave,
+        LMT_CLAVE_TEMPORAL_HORAS, $stand,
+        $conservaSuAcceso ? promotor_acceso_etiqueta($metodo) : null
+    );
     $enviado = Mailer::send((string) $row['email'], (string) $row['nombre'], $pl['asunto'], $pl['html'], $pl['texto'], $tipoCorreo, $adjuntos);
 
     $salida = [
@@ -786,10 +885,18 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo)
         'correo_enviado' => $enviado,
         'expira_en'      => $expira,
         'stand_id'       => $stand['id'] ?? null,
+        'acceso_propio'  => $conservaSuAcceso ? $metodo : null,
     ];
     if (!$enviado) {
-        $salida['clave_temporal'] = $clave;
-        $salida['aviso'] = 'El correo no pudo enviarse. Entrega esta clave al promotor por un canal seguro y revisa la configuración de correo.';
+        if ($conservaSuAcceso) {
+            // Aquí no hay clave que entregar, y eso es precisamente lo bueno:
+            // el promotor eligió su forma de entrar y ya puede hacerlo.
+            $salida['aviso'] = 'El correo no pudo enviarse, pero este promotor ya puede entrar con '
+                             . promotor_acceso_etiqueta($metodo) . '. Avísale de que su stand quedó aprobado.';
+        } else {
+            $salida['clave_temporal'] = $clave;
+            $salida['aviso'] = 'El correo no pudo enviarse. Entrega esta clave al promotor por un canal seguro y revisa la configuración de correo.';
+        }
     }
     return $salida;
 }
@@ -972,6 +1079,109 @@ function promotor_guardar_imagen(string $sub): string
  * Uploads::imagen() dentro de uploads/inscripciones/ y que además EXISTA: si no
  * se comprobara, cualquiera podría apuntar a un fichero arbitrario del disco.
  */
+/**
+ * Cómo entra un promotor que NO recibe el correo.
+ * ==============================================
+ *
+ * El acceso normal es la clave temporal que se envía al verificar la
+ * inscripción. Falla más de lo que parece: hay caficultores que dan un correo
+ * que casi no abren, que lo escriben mal, o cuyo proveedor manda el mensaje a
+ * spam. Cuando eso pasa se quedan fuera de su propio stand el día del evento y
+ * hay que resolverlo por teléfono, uno a uno.
+ *
+ * Por eso, al inscribirse, cada promotor elige con qué va a entrar:
+ *
+ *   password    una clave que escribe él
+ *   documento   la fecha de expedición de su cédula
+ *   telefono    su número de teléfono, escrito dos veces
+ *   qr          un código que genera el sistema y guarda en el móvil
+ *
+ * Sobre la fuerza de cada uno, sin adornos
+ * ----------------------------------------
+ * La fecha y el teléfono son credenciales DÉBILES: una fecha son unos pocos
+ * miles de combinaciones y un teléfono es un dato semipúblico que además queda
+ * guardado en claro en la misma ficha, porque es también un campo de contacto.
+ * Se aceptan igual, porque el problema real que resuelven —quedarse fuera— es
+ * más grave que el que introducen, y porque tres cosas los contienen:
+ *
+ *   1. Nada funciona hasta que un administrador verifica la inscripción. Antes
+ *      de eso, acertar la credencial no abre nada.
+ *   2. La cuenta se bloquea sola tras varios fallos (intentos_fallidos).
+ *   3. Quien entra con fecha o teléfono está OBLIGADO a poner una clave de
+ *      verdad antes de tocar nada. Son llaves para entrar, no para vivir con
+ *      ellas.
+ *
+ * El QR no tiene ese problema: son 32 caracteres al azar, tanta entropía como
+ * una contraseña larga. Es la mejor opción para quien no maneja correo.
+ *
+ * Se guarde lo que se guarde, va HASHEADO (Argon2id + pepper) en la misma
+ * columna que cualquier contraseña. `acceso_metodo` sólo recuerda cuál de los
+ * cuatro es, para etiquetar bien el formulario y redactar el correo.
+ */
+const PROMOTOR_ACCESOS = ['password', 'documento', 'telefono', 'qr'];
+
+/** Métodos que obligan a poner una clave de verdad en cuanto entran. */
+const PROMOTOR_ACCESOS_DEBILES = ['documento', 'telefono'];
+
+/**
+ * Normaliza la credencial según el método, para que al comparar dé igual cómo
+ * la escriba la persona: «315 778 8990» y «3157788990» son el mismo teléfono, y
+ * «4/3/2015» y «2015-03-04» la misma fecha.
+ */
+function promotor_credencial_normalizada(string $metodo, $valor): ?string
+{
+    if (!is_string($valor)) return null;
+    $v = trim($valor);
+    if ($v === '') return null;
+
+    if ($metodo === 'telefono') {
+        $d = preg_replace('/\D+/', '', $v) ?? '';
+        // Un teléfono colombiano tiene 10 dígitos; se aceptan de 7 a 15 para no
+        // dejar fuera fijos ni números con indicativo de país.
+        return (strlen($d) >= 7 && strlen($d) <= 15) ? $d : null;
+    }
+
+    if ($metodo === 'documento') {
+        // Se acepta ISO (del <input type=date>) y d/m/a, que es como la escribe
+        // la gente aquí. Se guarda siempre en ISO.
+        $f = \DateTimeImmutable::createFromFormat('!Y-m-d', $v)
+          ?: \DateTimeImmutable::createFromFormat('!d/m/Y', $v)
+          ?: \DateTimeImmutable::createFromFormat('!d-m-Y', $v);
+        if (!$f) return null;
+        $anio = (int) $f->format('Y');
+        if ($anio < 1900 || $f->getTimestamp() > time()) return null;   // no hay cédulas del futuro
+        return $f->format('Y-m-d');
+    }
+
+    if ($metodo === 'password') {
+        return (mb_strlen($v, 'UTF-8') >= 8 && mb_strlen($v, 'UTF-8') <= 128) ? $v : null;
+    }
+
+    if ($metodo === 'qr') {
+        $t = strtolower(preg_replace('/[^A-Za-z0-9]/', '', $v) ?? '');
+        return strlen($t) === 32 ? $t : null;
+    }
+
+    return null;
+}
+
+/** Token del QR: 32 caracteres hexadecimales, como una contraseña larga. */
+function promotor_token_qr(): string
+{
+    return bin2hex(random_bytes(16));
+}
+
+/** Cómo se llama cada método de cara a la persona. */
+function promotor_acceso_etiqueta(?string $metodo): string
+{
+    return [
+        'password'  => 'la contraseña que elegiste',
+        'documento' => 'la fecha de expedición de tu documento',
+        'telefono'  => 'tu número de teléfono',
+        'qr'        => 'el código QR que guardaste',
+    ][$metodo ?? ''] ?? 'la contraseña que te enviamos';
+}
+
 function promotor_logo_reclamado($valor): ?string
 {
     if (!is_string($valor) || $valor === '') return null;
