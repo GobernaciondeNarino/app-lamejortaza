@@ -34,6 +34,117 @@ const EstadoPill = ({ estado }) => {
 // 1. Inscripción pública
 // ---------------------------------------------------------------------------
 
+/**
+ * Cómo entra un promotor que no recibe el correo.
+ *
+ * El acceso normal es la clave que se envía al aprobar la inscripción, y falla
+ * más de lo que parece: correos que casi no se abren, escritos mal, o que el
+ * proveedor manda a spam. El caficultor se queda fuera de su propio stand el
+ * día del evento y hay que resolverlo por teléfono, uno a uno.
+ *
+ * Las cuatro opciones NO son igual de fuertes y la interfaz lo dice. La fecha y
+ * el teléfono son fáciles de recordar y fáciles de adivinar; se aceptan porque
+ * quedarse fuera es peor, y porque nada funciona hasta que un organizador
+ * aprueba la inscripción y quien entra así está obligado a poner una clave de
+ * verdad. El QR es el más seguro para quien no maneja correo.
+ */
+const ACCESOS = [
+  {
+    id: "password", titulo: "Una contraseña que yo elija",
+    nota: "Lo más seguro si vas a recordarla.",
+    etiqueta: "Tu contraseña", tipo: "password", ayuda: "Mínimo 8 caracteres.",
+  },
+  {
+    id: "documento", titulo: "La fecha de expedición de mi cédula",
+    nota: "No hay que recordar nada nuevo: está impresa en tu documento.",
+    etiqueta: "Fecha de expedición del documento", tipo: "date",
+    ayuda: "La que aparece en tu cédula. Con eso entrarás al portal.",
+    debil: true,
+  },
+  {
+    id: "telefono", titulo: "Mi número de teléfono",
+    nota: "El mismo que usas siempre. Se pide dos veces para evitar erratas.",
+    etiqueta: "Número de teléfono", tipo: "tel",
+    etiqueta2: "Repite el número", ayuda: "Sin espacios ni guiones, como prefieras: da igual.",
+    debil: true,
+  },
+  {
+    id: "qr", titulo: "Un código QR que guardo en el celular",
+    nota: "El sistema genera uno único. Guárdalo: es la forma más segura si no usas correo.",
+  },
+];
+
+/** Cómo se le nombra a cada método cuando ya está elegido. */
+const ACCESO_FRASE = {
+  password:  "la contraseña que elegiste",
+  documento: "la fecha de expedición de tu documento",
+  telefono:  "tu número de teléfono",
+  qr:        "el código QR que guardaste",
+};
+
+/**
+ * URL que lleva el QR. Incluye el correo porque el token por sí solo no
+ * identifica a nadie: en la base está hasheado con sal y no se puede buscar
+ * por él. Es el QR de esa persona y lo guarda ella, así que no añade
+ * exposición.
+ */
+const qrUrlAcceso = (correo, token) => {
+  const base = (window.LMT_BASE_URL || location.origin + (window.LMT_BASE_PATH || "")).replace(/\/$/, "");
+  return base + "/promotor?correo=" + encodeURIComponent(correo) + "&acceso=" + encodeURIComponent(token);
+};
+
+const SelectorAcceso = ({ metodo, valor, valor2, onMetodo, onValor, onValor2 }) => {
+  const sel = ACCESOS.find((a) => a.id === metodo) || ACCESOS[0];
+  return (
+    <React.Fragment>
+      <div className="field">
+        <label htmlFor="in-acceso">¿Cómo quieres entrar al portal? *</label>
+        <select id="in-acceso" value={metodo} onChange={(e) => onMetodo(e.target.value)}>
+          {ACCESOS.map((a) => <option key={a.id} value={a.id}>{a.titulo}</option>)}
+        </select>
+        <span className="ayuda">{sel.nota}</span>
+      </div>
+
+      {sel.tipo && (
+        <div className="field">
+          <label htmlFor="in-acceso-valor">{sel.etiqueta} *</label>
+          <input id="in-acceso-valor" type={sel.tipo} value={valor} required
+            maxLength={sel.tipo === "tel" ? 32 : 128}
+            inputMode={sel.tipo === "tel" ? "tel" : undefined}
+            autoComplete={sel.id === "password" ? "new-password" : "off"}
+            onChange={(e) => onValor(e.target.value)}/>
+          <span className="ayuda">{sel.ayuda}</span>
+        </div>
+      )}
+
+      {sel.etiqueta2 && (
+        <div className="field">
+          <label htmlFor="in-acceso-valor2">{sel.etiqueta2} *</label>
+          <input id="in-acceso-valor2" type={sel.tipo} value={valor2} required maxLength={32} inputMode="tel"
+            autoComplete="off" onChange={(e) => onValor2(e.target.value)}/>
+          {valor && valor2 && valor.replace(/\D/g, "") !== valor2.replace(/\D/g, "") && (
+            <span className="ayuda" style={{ color: "var(--bad)" }}>Los dos números no coinciden.</span>
+          )}
+        </div>
+      )}
+
+      {sel.id === "qr" && (
+        <p className="ayuda">
+          Al enviar la solicitud te mostraremos tu código. <strong style={{ fontWeight: 500 }}>Guárdalo
+          en ese momento</strong>: por seguridad no lo podemos volver a mostrar.
+        </p>
+      )}
+
+      {sel.debil && (
+        <p className="ayuda" style={{ color: "var(--meh)" }}>
+          Es cómodo de recordar, pero también más fácil de adivinar que una contraseña.
+          Cuando entres, el sistema te pedirá crear una.
+        </p>
+      )}
+    </React.Fragment>
+  );
+};
+
 const PromotorRegistroPage = () => {
   // Un promotor y su stand son la misma cosa, así que aquí se pide de una vez
   // todo lo que el stand necesita. Al verificar la solicitud el stand se crea
@@ -42,6 +153,8 @@ const PromotorRegistroPage = () => {
     nombre: "", email: "", telefono: "", documento: "", municipio: "", empresa: "", mensaje: "",
     stand_nombre: "", stand_region: "", stand_direccion: "", stand_descripcion: "",
     stand_nit: "", stand_sitio_web: "",
+    // Cómo va a entrar si el correo no llega. Ver el comentario del selector.
+    acceso_metodo: "password", acceso_valor: "", acceso_valor2: "",
   };
   const [form, setForm] = React.useState(vacio);
   const [ubicacion, setUbicacion] = React.useState({ lat: null, lng: null });
@@ -49,6 +162,9 @@ const PromotorRegistroPage = () => {
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
+  // El token del QR llega UNA vez en la respuesta y no se puede volver a
+  // consultar: en la base sólo queda su hash. Se enseña en la pantalla final.
+  const [qrToken, setQrToken] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -65,9 +181,22 @@ const PromotorRegistroPage = () => {
     if (!sec || !sec.isEmail(form.email.trim())) { setError(ERRORES.email_invalido); return; }
     if (!form.municipio.trim()) { setError("Indica el municipio de tu stand."); return; }
     if (!acepta) { setError(ERRORES.debe_aceptar_tratamiento_datos); return; }
+    // El acceso se comprueba aquí para dar el mensaje concreto; el servidor lo
+    // vuelve a comprobar, que es quien decide.
+    if (form.acceso_metodo === "password" && form.acceso_valor.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres."); return;
+    }
+    if (form.acceso_metodo === "documento" && !form.acceso_valor) {
+      setError("Indica la fecha de expedición de tu documento."); return;
+    }
+    if (form.acceso_metodo === "telefono") {
+      const a = form.acceso_valor.replace(/\D/g, ""), b2 = form.acceso_valor2.replace(/\D/g, "");
+      if (a.length < 7) { setError("El número de teléfono no parece válido."); return; }
+      if (a !== b2) { setError("Los dos números de teléfono no coinciden."); return; }
+    }
     setBusy(true);
     try {
-      await window.LMTApi.promotorRegistro({
+      const res = await window.LMTApi.promotorRegistro({
         ...form,
         // El nombre del stand cae al de la empresa si se deja en blanco; el
         // backend hace lo mismo, pero así el resumen que ve el organizador ya
@@ -79,6 +208,8 @@ const PromotorRegistroPage = () => {
         lng: ubicacion.lng,
         acepta_datos: true,
       });
+      // El token del QR sólo viaja en esta respuesta: en la base queda su hash.
+      if (res && res.qr_token) setQrToken(res.qr_token);
       setEnviado(true);
     } catch (err) {
       setError(mensajeError(err, "No fue posible enviar tu solicitud."));
@@ -97,9 +228,34 @@ const PromotorRegistroPage = () => {
           </h2>
           <p style={{ color: "var(--ink-2)", lineHeight: 1.65, marginBottom: 24 }}>
             El equipo organizador revisará tu inscripción. Cuando quede aprobada te llegará
-            a <strong>{form.email}</strong> tu contraseña para entrar al portal y el
+            a <strong>{form.email}</strong> el aviso y el
             <strong> código QR de tu stand</strong>, listo para imprimir y pegar en tu puesto.
+            {" "}Entrarás al portal con {ACCESO_FRASE[form.acceso_metodo] || "tu contraseña"}.
           </p>
+
+          {/* El código sólo se puede enseñar AQUÍ: en la base queda su hash y
+              no hay forma de recuperarlo. Por eso la pantalla insiste. */}
+          {qrToken && (
+            <div style={{
+              border: "2px solid var(--ink)", borderRadius: "var(--r-md)",
+              padding: 18, marginBottom: 24, textAlign: "center",
+            }}>
+              <div className="mono" style={{ marginBottom: 10 }}>Tu código de acceso</div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                <QRCode value={qrUrlAcceso(form.email, qrToken)} size={190}/>
+              </div>
+              <div className="mono ruta" style={{
+                fontSize: 13, wordBreak: "break-all", padding: "8px 10px",
+                background: "var(--paper-2)", borderRadius: "var(--r-sm)", marginBottom: 12,
+              }}>{qrToken}</div>
+              <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
+                <strong>Guárdalo ahora</strong>: hazle una foto o escríbelo. Por seguridad no
+                lo podemos volver a mostrar. Escanea el código para entrar, o escribe esas
+                letras y números como contraseña.
+              </p>
+            </div>
+          )}
+
           <a href="/" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>← Volver al inicio</a>
         </div>
       </div>
@@ -210,6 +366,16 @@ const PromotorRegistroPage = () => {
               }}/>
           </BloqueForm>
 
+          <BloqueForm titulo="Cómo vas a entrar"
+            nota="Por si el correo no llega: con esto entras igual.">
+            <SelectorAcceso
+              metodo={form.acceso_metodo}
+              valor={form.acceso_valor} valor2={form.acceso_valor2}
+              onMetodo={(m) => setForm((f) => ({ ...f, acceso_metodo: m, acceso_valor: "", acceso_valor2: "" }))}
+              onValor={(v) => set("acceso_valor", v)}
+              onValor2={(v) => set("acceso_valor2", v)}/>
+          </BloqueForm>
+
           <div className="field">
             <label htmlFor="in-msg">Mensaje para el organizador (opcional)</label>
             <textarea id="in-msg" rows={2} value={form.mensaje} onChange={(e) => set("mensaje", e.target.value)} maxLength={500}
@@ -243,28 +409,56 @@ const PromotorRegistroPage = () => {
 // 2. Acceso del promotor
 // ---------------------------------------------------------------------------
 
+/** Cómo se llama y cómo se escribe cada credencial en el formulario de acceso. */
+const ACCESO_ENTRADA = {
+  password:  { etiqueta: "Contraseña", tipo: "password", ayuda: "" },
+  documento: { etiqueta: "Fecha de expedición de tu documento", tipo: "date",
+               ayuda: "La que aparece impresa en tu cédula." },
+  telefono:  { etiqueta: "Tu número de teléfono", tipo: "tel",
+               ayuda: "El mismo que diste al inscribirte." },
+  qr:        { etiqueta: "Código de tu QR", tipo: "text",
+               ayuda: "Escanea el QR que guardaste, o escribe aquí sus 32 caracteres." },
+};
+
 const PromotorLoginPage = ({ onEntrar }) => {
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+  // El QR abre /promotor?correo=…&acceso=TOKEN: si viene así, se rellena todo
+  // y sólo queda pulsar. Escribir 32 caracteres a mano en un móvil, de pie en
+  // un stand, no es una opción razonable.
+  const url = new URLSearchParams(window.location.search);
+  const tokenUrl = (url.get("acceso") || "").trim();
+
+  const [email, setEmail] = React.useState(() => (url.get("correo") || "").trim());
+  const [metodo, setMetodo] = React.useState(() => (tokenUrl ? "qr" : "password"));
+  const [password, setPassword] = React.useState(tokenUrl);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const ent = ACCESO_ENTRADA[metodo] || ACCESO_ENTRADA.password;
 
-  const entrar = async (e) => {
-    e.preventDefault();
+  const entrar = React.useCallback(async (correo, credencial, comoEntra) => {
     setError("");
     const sec = window.LMTSecurity;
-    if (!sec || !sec.isEmail(email.trim())) { setError(ERRORES.email_invalido); return; }
-    if (!password) { setError("Escribe tu contraseña."); return; }
+    if (!sec || !sec.isEmail((correo || "").trim())) { setError(ERRORES.email_invalido); return; }
+    if (!credencial) { setError("Escribe " + (ACCESO_ENTRADA[comoEntra] || ent).etiqueta.toLowerCase() + "."); return; }
     setBusy(true);
     try {
-      const p = await window.LMTApi.promotorLogin(sec.normalizeEmail(email), password);
+      const p = await window.LMTApi.promotorLogin(sec.normalizeEmail(correo), credencial, comoEntra);
       onEntrar(p);
     } catch (err) {
       setError(mensajeError(err, "No fue posible iniciar sesión."));
     } finally {
       setBusy(false);
     }
-  };
+  }, [onEntrar, ent]);
+
+  // Con correo y token en la URL, entrar es automático: el QR ya identificó a
+  // la persona y pedirle que además pulse un botón no añade nada.
+  const yaIntentado = React.useRef(false);
+  React.useEffect(() => {
+    if (yaIntentado.current || !tokenUrl || !email) return;
+    yaIntentado.current = true;
+    const t = setTimeout(() => entrar(email, tokenUrl, "qr"), 250);
+    return () => clearTimeout(t);
+  }, [tokenUrl, email, entrar]);
 
   return (
     <div className="mobile-page">
@@ -272,17 +466,40 @@ const PromotorLoginPage = ({ onEntrar }) => {
         <a href="/" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Volver</a>
         <div className="mono" style={{ marginTop: 22 }}>Portal del promotor</div>
         <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 38, fontWeight: 400, margin: "6px 0 22px", lineHeight: 1.05 }}>
-          Entra con el acceso<br/>que te llegó al correo.
+          Entra a tu stand.
         </h1>
-        <form onSubmit={entrar} style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+        <form onSubmit={(e) => { e.preventDefault(); entrar(email, password, metodo); }}
+          style={{ display: "flex", flexDirection: "column", gap: 22 }}>
           <div className="field">
-            <label>Usuario (tu correo)</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} required autoComplete="username"/>
+            <label htmlFor="pl-email">Usuario (tu correo)</label>
+            <input id="pl-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              maxLength={254} required autoComplete="username"/>
           </div>
+
+          {/* El método lo elige quien entra, no se deduce del correo: mirar
+              antes qué credencial tiene una cuenta convertiría este formulario
+              en un comprobador de «¿está inscrito este correo?». */}
           <div className="field">
-            <label>Contraseña</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={128} required autoComplete="current-password"/>
+            <label htmlFor="pl-metodo">¿Con qué vas a entrar?</label>
+            <select id="pl-metodo" value={metodo}
+              onChange={(e) => { setMetodo(e.target.value); setPassword(""); }}>
+              <option value="password">Mi contraseña</option>
+              <option value="documento">La fecha de expedición de mi cédula</option>
+              <option value="telefono">Mi número de teléfono</option>
+              <option value="qr">El código de mi QR</option>
+            </select>
+            <span className="ayuda">Lo que elegiste al inscribirte. Si te llegó una clave por correo, es «Mi contraseña».</span>
           </div>
+
+          <div className="field">
+            <label htmlFor="pl-clave">{ent.etiqueta}</label>
+            <input id="pl-clave" type={ent.tipo} value={password} onChange={(e) => setPassword(e.target.value)}
+              maxLength={128} required
+              inputMode={metodo === "telefono" ? "tel" : undefined}
+              autoComplete={metodo === "password" ? "current-password" : "off"}/>
+            {ent.ayuda && <span className="ayuda">{ent.ayuda}</span>}
+          </div>
+
           <Aviso>{error}</Aviso>
           <button className="btn btn-primary" type="submit" disabled={busy}
             style={{ justifyContent: "center", padding: 14, opacity: busy ? 0.6 : 1 }}>
@@ -291,7 +508,7 @@ const PromotorLoginPage = ({ onEntrar }) => {
         </form>
         <p className="mono" style={{ textAlign: "center", color: "var(--ink-3)", marginTop: 24, lineHeight: 1.7 }}>
           ¿Aún no te inscribes? <a href="/inscripcion" data-route style={{ color: "var(--grano)" }}>Solicita tu acceso</a><br/>
-          Si perdiste la contraseña, pide al organizador que te la reenvíe.
+          Si perdiste tu acceso, pide al organizador que te dé uno nuevo.
         </p>
       </div>
     </div>

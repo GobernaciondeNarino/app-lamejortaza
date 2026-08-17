@@ -7,6 +7,50 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.2.0 — El promotor elige cómo entrar
+
+**Punto de reversión (v2.1.0):** `3296f88`
+
+El acceso de un promotor dependía de que le llegara un correo, y eso falla más
+de lo que parece: correos que casi no se abren, escritos mal, o que el proveedor
+manda a spam. El caficultor se quedaba fuera de su propio stand el día del
+evento y había que resolverlo por teléfono, uno a uno.
+
+Ahora, al inscribirse, elige con qué va a entrar:
+
+| Método | Fuerza | Para quién |
+|---|---|---|
+| Contraseña propia | Alta | Quien la va a recordar |
+| Fecha de expedición de la cédula | **Baja** | Quien no quiere recordar nada nuevo |
+| Teléfono (escrito dos veces) | **Baja** | Igual, y aún más fácil |
+| Código QR | Alta | **Quien no maneja correo** |
+
+**La fecha y el teléfono son credenciales débiles y la interfaz lo dice.** Una
+fecha son unos miles de combinaciones y un teléfono es un dato semipúblico que
+además queda en claro en la misma ficha, porque es también un campo de contacto.
+Se aceptan porque quedarse fuera es peor, y porque tres cosas los contienen:
+nada funciona hasta que un administrador aprueba la inscripción; la cuenta se
+bloquea sola tras varios fallos; y quien entra así está **obligado a poner una
+contraseña de verdad** antes de tocar nada.
+
+El QR no tiene ese problema: 32 caracteres al azar, tanta entropía como una
+contraseña larga. Se enseña **una sola vez** al terminar la inscripción —en la
+base sólo queda su hash— y escanearlo abre el portal directamente.
+
+Se guarde lo que se guarde, va hasheado (Argon2id + pepper) como cualquier
+contraseña. Aprobar la inscripción **ya no genera una clave temporal** si el
+promotor eligió método propio: el correo se lo recuerda en vez de mandarle un
+secreto que ya tiene. «Reenviar clave» sigue generando una nueva, que es para lo
+que sirve.
+
+Una columna nueva en `promotores` (`acceso_metodo`), opcional. La añade
+`php db/migrate.php`. Los promotores ya inscritos siguen entrando con su clave
+de siempre: sin `acceso_metodo`, el flujo es exactamente el anterior.
+
+Para revertir a la v2.1.0: `git checkout 3296f88 -- .`. La base no se toca.
+
+---
+
 ## v2.1.0 — Retrato del visitante y diagnóstico de la salida SMTP
 
 **Punto de reversión (v2.0.0):** `436e69d`

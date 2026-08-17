@@ -176,9 +176,12 @@
     return request("/promotores/registro", { method: "POST", body });
   }
 
-  async function promotorLogin(email, password) {
+  async function promotorLogin(email, password, acceso_metodo) {
     await ensureCsrf();
-    const data = await request("/promotores/login", { method: "POST", body: { email, password } });
+    const data = await request("/promotores/login", {
+      method: "POST",
+      body: { email, password, acceso_metodo: acceso_metodo || "password" },
+    });
     promotor = data.promotor || null;
     user = null;                      // el backend cierra la sesión de admin
     csrf = data.csrf || "";

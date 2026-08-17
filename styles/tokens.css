@@ -53,7 +53,15 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .mono { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
 /* Como .mono pero SIN mayúsculas: para rutas de archivo, direcciones y todo lo
    que alguien vaya a copiar y pegar. En mayúsculas no existiría. */
-.ruta { font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--ink-3); overflow-wrap: anywhere; }
+/* Rutas de archivo, tokens y cualquier cosa que se copia literal. Anula el
+   text-transform de .mono a propósito: enseñar en mayúsculas algo que hay que
+   escribir tal cual —una ruta, el código de un QR— hace que la copia no
+   coincida con lo que se ve. */
+.ruta {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
+  color: var(--ink-3); overflow-wrap: anywhere;
+  text-transform: none; letter-spacing: 0;
+}
 
 /* Botón base */
 .btn {

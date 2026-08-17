@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.1.0.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.2.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -223,6 +223,48 @@ Módulo completo de inscripción para quienes exhiben en el festival.
    reenviarle una clave nueva (que invalida la anterior).
 
 **Estados:** `pendiente → verificado → activo`, y `rechazado` / `suspendido`.
+
+### Cómo entra un promotor que no recibe el correo
+
+El acceso dependía de un correo, y eso falla: buzones que casi no se abren,
+direcciones mal escritas, mensajes que acaban en spam. El caficultor se quedaba
+fuera de su propio stand el día del evento. Por eso, al inscribirse, elige con
+qué va a entrar:
+
+| Método | Fuerza | Para quién |
+|---|---|---|
+| Contraseña propia | Alta | Quien la va a recordar |
+| Fecha de expedición de la cédula | **Baja** | Quien no quiere recordar nada nuevo |
+| Teléfono, escrito dos veces | **Baja** | Igual, y aún más fácil |
+| Código QR | Alta | **Quien no maneja correo** |
+
+**La fecha y el teléfono son credenciales débiles, y la interfaz lo dice.** Una
+fecha son unos miles de combinaciones, y un teléfono es un dato semipúblico que
+además queda en claro en la misma ficha porque es también un campo de contacto.
+Se aceptan igual —quedarse fuera es peor— y tres cosas los contienen:
+
+1. **Nada funciona hasta que un administrador aprueba la inscripción.** Antes de
+   eso, acertar la credencial no abre nada.
+2. La cuenta se **bloquea sola** tras varios intentos fallidos.
+3. Quien entra con fecha o teléfono está **obligado a poner una contraseña de
+   verdad** antes de tocar nada. Son llaves para entrar, no para vivir con ellas.
+
+El QR no tiene ese problema: 32 caracteres al azar. Se muestra **una sola vez**
+al terminar la inscripción —en la base sólo queda su hash, no hay forma de
+recuperarlo— y escanearlo abre el portal sin escribir nada.
+
+Se guarde lo que se guarde, va hasheado (Argon2id + pepper) en la misma columna
+que cualquier contraseña. `acceso_metodo` sólo recuerda cuál de los cuatro es,
+para etiquetar el formulario y redactar el correo.
+
+**Aprobar la inscripción ya no genera una clave temporal** cuando el promotor
+eligió método propio: el correo se lo recuerda en vez de mandarle un secreto que
+ya tiene. «Reenviar clave» sí genera una nueva —es para cuando perdió el acceso
+y lo está pidiendo—, y esa reemplaza a la anterior.
+
+El formulario de acceso **pregunta el método en vez de deducirlo del correo**.
+Consultarlo antes de autenticar convertiría el login en un comprobador de «¿está
+inscrito este correo?», que es justo lo que el resto del módulo evita.
 
 **Si el correo no sale** (hosting sin MTA, SMTP mal configurado), la respuesta
 de «verificar» devuelve la clave al administrador para que la entregue por otro

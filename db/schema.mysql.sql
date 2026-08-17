@@ -127,6 +127,11 @@ CREATE TABLE IF NOT EXISTS promotores (
   stand_lng            DECIMAL(9,6) DEFAULT NULL,
   estado               ENUM('pendiente','verificado','activo','rechazado','suspendido')
                        NOT NULL DEFAULT 'pendiente',
+  -- Cómo eligió entrar el promotor al inscribirse. Sólo dice CUÁL es su
+  -- credencial, para poder etiquetar bien el formulario de acceso y redactar
+  -- el correo; el secreto en sí vive hasheado en password_hash como cualquier
+  -- otra contraseña, sea una clave, una fecha, un teléfono o el token del QR.
+  acceso_metodo        ENUM('password','documento','telefono','qr') DEFAULT NULL,
   password_hash        VARCHAR(255) DEFAULT NULL,
   must_change_password TINYINT(1) NOT NULL DEFAULT 1,
   password_expira_at   DATETIME DEFAULT NULL,
