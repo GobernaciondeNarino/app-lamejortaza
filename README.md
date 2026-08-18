@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.2.0.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.3.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -109,11 +109,11 @@ pasaporte, autoridad expedidora y la banda de lectura mecánica abajo. Antes ah�
 había un índice de casillas vacías que no decía nada del visitante.
 
 Los datos salen de su perfil, y **sólo se piden si este navegador guarda el
-testigo del perfil** (ver más abajo): sin él la hoja se dibuja igual pero con lo
-que ya es público —nombre en iniciales y correo enmascarado— e invita a
-completarlo. **El grupo étnico y la discapacidad no aparecen nunca en esta
-hoja**: se preguntan para caracterizar al público, son datos sensibles y esta
-página se enseña y se fotografía.
+testigo** (ver más abajo, «Perfil del visitante»): sin él la hoja se dibuja
+igual pero con lo que ya es público —nombre en iniciales y correo enmascarado—
+e invita a completarlo. **El grupo étnico y la discapacidad no aparecen nunca en
+esta hoja**: se preguntan para caracterizar al público, son datos sensibles y
+esta página se enseña y se fotografía.
 
 El número de pasaporte (`NAR-XXXX-XXXX`) es un hash del correo: estable para la
 misma persona y no reversible.
@@ -158,6 +158,12 @@ escanear un QR en la plaza. Ahora ofrece entrar al festival, al recorrido o al
 pasaporte, y el acceso de administradores y promotores queda **plegado abajo**
 tras un botón. Quien va directo a `/admin/login` lo encuentra ya abierto: ahí ya
 sabe a qué viene.
+
+**El tablero invita a escribir el correo, arriba del todo.** Una franja con un
+campo y qué se gana escribiéndolo: pasaporte, recorrido y perfil. Desaparece en
+cuanto está puesto —el ranking y el mapa se ven sin identificarse, la portada no
+es un muro— y a partir de ahí votar es un solo toque, porque el formulario del
+stand ya no vuelve a pedir el correo.
 
 ---
 
@@ -253,6 +259,19 @@ El QR no tiene ese problema: 32 caracteres al azar. Se muestra **una sola vez**
 al terminar la inscripción —en la base sólo queda su hash, no hay forma de
 recuperarlo— y escanearlo abre el portal sin escribir nada.
 
+**El PNG lo dibuja el servidor** (`LMT\QrCode`, PHP puro) con el token recién
+creado y viaja incrustado en la respuesta como `data:` URI. No hay ningún
+endpoint que convierta texto libre en un QR: `/api/qr/{id}.png` sólo sabe de
+stands, y abrirlo a texto arbitrario sería una fábrica de códigos para
+cualquiera. En pantalla se ve el código, el token en letras y un botón para
+**guardarlo en el teléfono**; si el correo sale, va también adjunto al mensaje
+de «solicitud recibida», que le deja una segunda copia en el buzón.
+
+Como se enseña una sola vez, el panel tiene **«Reemitir código QR»** para los
+promotores que entran así: genera uno nuevo —el anterior deja de valer— y lo
+muestra para imprimirlo o entregarlo en mano. Sin eso, perder el código dejaba
+a un caficultor fuera de su propio stand.
+
 Se guarde lo que se guarde, va hasheado (Argon2id + pepper) en la misma columna
 que cualquier contraseña. `acceso_metodo` sólo recuerda cuál de los cuatro es,
 para etiquetar el formulario y redactar el correo.
@@ -343,15 +362,42 @@ colgando de «Valle del Cauca». El servidor guarda el nombre oficial cuando
 reconoce el departamento y lo deja tal cual cuando no (un visitante de Ecuador
 escribe su provincia).
 
-**Cómo se prueba que un perfil es tuyo.** El visitante no tiene contraseña, así
-que el correo por sí solo no abre nada: si bastara con escribirlo, cualquiera
-podría leer a qué grupo étnico pertenece un vecino. Al votar, el servidor emite
-un `HMAC-SHA256(app_secret, 'perfil|' + correo)` que viaja al navegador de quien
-acaba de demostrar —en el mismo acto de votar— que controla ese correo, y se
-guarda ahí. Sin ese testigo no se lee ni se escribe nada. Quien cambie de
-teléfono pide el enlace desde `/perfil`: llega a su buzón, que es la prueba de
-propiedad de verdad. Ese envío responde igual exista o no el correo, para que no
-sirva de censo de asistentes.
+**Cómo se abre un perfil: con el correo.** Escribirlo basta. `POST
+/api/visitantes/acceso` devuelve el testigo —un `HMAC-SHA256(app_secret,
+'perfil|' + correo)`— y con él se abren el pasaporte, el recorrido y el perfil.
+El voto sigue emitiendo el mismo testigo, así que quien acaba de votar ya está
+dentro sin escribir nada.
+
+**Qué significa eso, sin adornos:** quien conozca el correo de otra persona
+puede abrir su pasaporte y su caracterización. Es una decisión del festival, no
+un descuido. La alternativa —una contraseña para todo el mundo— dejaba fuera a
+la mayor parte del público de una feria de dos días: gente que vota desde el
+móvil de un familiar, que navega en privado, que cambia de teléfono a media
+tarde. Y quien quiera cerrarlo lo tiene a un toque.
+
+**La clave, opcional.** En «Mi perfil» hay un bloque *Protección de tu perfil*:
+se pone una clave (mínimo 6 caracteres, hasheada con Argon2id + pepper en
+`visitantes.acceso_hash`) y desde ese momento la puerta la pide además del
+correo, en las tres pantallas. Se cambia y se quita desde el mismo sitio,
+escribiendo la actual.
+
+Tres detalles que la sostienen:
+
+- **Votar deja de entregar el testigo** si esa persona puso clave. Votar
+  demuestra que tienes ese correo a mano, no que seas quien decidió cerrarlo;
+  sin esta excepción, escribir el correo de otro en cualquier stand abriría el
+  perfil que precisamente se había protegido.
+- **Cambiar o quitar la clave exige la clave actual**, aunque se traiga un
+  testigo válido: hasta que hubo clave el testigo se conseguía con sólo el
+  correo, y quedan testigos viejos en otros navegadores.
+- **Dos límites en la puerta**: uno por IP, generoso —en la feria una familia
+  entera entra desde el mismo wifi— y otro por correo, estrecho, que es el que
+  frena a quien prueba claves de una persona concreta desde muchas IP.
+
+**Si se pierde la clave**, el enlace al buzón desde `/perfil` la salta a
+propósito: llegar al correo es la prueba de propiedad de verdad. Ese envío
+responde igual exista o no la dirección, para que no sirva de censo de
+asistentes.
 
 **Ley 1581 de 2012.** El grupo étnico y la discapacidad son datos sensibles: van
 en un bloque que explica por qué se preguntan, todas las listas admiten
@@ -470,8 +516,10 @@ Los sellados se ordenan primero. El **número de columnas** se configura por
 separado para computador y para móvil desde *Panel → Personalización*: en una
 pantalla de sala caben cuatro y en un teléfono a veces conviene una sola.
 
-Sin correo guardado la página sigue teniendo sentido —es el catálogo de stands—
-y explica que votando se van encendiendo.
+Sin correo, la página pide primero identificarse: es **mi** recorrido y hay que
+saber de quién. Basta con escribirlo, sin contraseña (ver «Perfil del
+visitante»). Quien todavía no ha votado entra igual y ve el catálogo entero
+apagado, esperando el primer sello.
 
 ---
 
@@ -732,7 +780,7 @@ php -r "echo bin2hex(random_bytes(32)) . PHP_EOL;"   # ejecuta dos veces
 | `promotores`  | Inscripciones, credenciales y borrador de los datos del stand. |
 | `empresas`    | Empresa de cada promotor.                                  |
 | `productos`   | Cafés que expone cada promotor.                            |
-| `visitantes`  | Caracterización voluntaria del público (Ley 1581/2012).    |
+| `visitantes`  | Caracterización voluntaria del público (Ley 1581/2012) y su clave opcional (`acceso_hash`). |
 | `emails_log`  | Bitácora de correos salientes.                             |
 | `ajustes`     | Configuración editable desde el panel (correo). Pisa a `api/config.php`. |
 | `rate_limits` | Ventanas fijas por (bucket, hash) para limitar requests.  |
@@ -893,6 +941,7 @@ Todas las respuestas usan `application/json` y la forma:
 | `GET/PUT` | `/api/promotores/perfil`, `/empresa`, `/productos` | promotor | |
 | `GET`   | `/api/admin/promotores`       | admin        | Listado y detalle de inscripciones. |
 | `POST`  | `/api/admin/promotores/:id/verificar` | admin | Crea el stand y envía clave + QR. |
+| `POST`  | `/api/admin/promotores/:id/qr` | admin       | Reemite el QR de acceso (el anterior deja de valer). |
 | **Cuentas** | | | |
 | `GET/POST` | `/api/admin/administradores` | propietario | Listar y crear cuentas.           |
 | `PUT/DELETE` | `/api/admin/administradores/:id` | propietario | Perfil, alta/baja, borrado.  |
@@ -900,7 +949,9 @@ Todas las respuestas usan `application/json` y la forma:
 | `POST`  | `/api/auth/password`          | admin        | Cambio de la propia contraseña.    |
 | **Visitantes** | | | |
 | `GET`   | `/api/visitantes/opciones`    | público      | Catálogos del formulario.          |
-| `GET/PUT/DELETE` | `/api/visitantes/perfil` | testigo   | `correo` + `t` (HMAC emitido al votar). |
+| `POST`  | `/api/visitantes/acceso`      | público*     | Correo (+ clave si la puso) → testigo. |
+| `PUT`   | `/api/visitantes/clave`       | testigo      | Poner, cambiar o quitar la clave opcional. |
+| `GET/PUT/DELETE` | `/api/visitantes/perfil` | testigo   | `correo` + `t` (HMAC).             |
 | `POST`  | `/api/visitantes/enlace`      | público*     | Manda el enlace del perfil al buzón. |
 | `GET`   | `/api/admin/visitantes/resumen` | admin      | Sólo agregados, sin correos.       |
 | `GET`   | `/api/admin/visitantes/expectativas` | admin | Texto libre, últimas 100.          |
@@ -915,7 +966,9 @@ Todas las respuestas usan `application/json` y la forma:
 > \* No requiere usuario, pero **sí** CSRF + Origin permitido.
 
 `POST /api/votos` devuelve `{ "perfil_token": "..." }`: es el testigo con el que
-ese correo puede abrir y editar su perfil de visitante.
+ese correo puede abrir y editar su perfil de visitante. Llega `null` si esa
+persona protegió su perfil con clave — entonces se pide por
+`POST /api/visitantes/acceso`, que es donde se comprueba.
 
 ### Ejemplo: emitir voto
 
@@ -1140,6 +1193,8 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 
 ### Antes de abrir al público
 
+- [ ] `php db/migrate.php` ejecutado. Añade las columnas nuevas de la versión
+      (la 2.3.0 trae `visitantes.acceso_hash`) sin tocar nada de lo que ya había.
 - [ ] `node tools/build-components.mjs` ejecutado y `js/components.build.js` subido.
 - [ ] `api/lib/Territorio.php` y `js/narino-municipios.js` presentes en el
       servidor. Se generan, pero **se versionan**: sin el primero, `api/index.php`

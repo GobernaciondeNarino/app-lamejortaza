@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: dfcc4c566da12aa3
+// Huella de las fuentes: 2877d23fdaa855ea
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -485,6 +485,8 @@ const ERRORES = {
   no_puedes_eliminarte: "No puedes eliminar tu propia cuenta.",
   origin_not_allowed: "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
   csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
+  clave_incorrecta: "Esa clave no es la de este perfil.",
+  clave_corta: "La clave debe tener al menos 6 caracteres.",
   internal_error: "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado."
 };
 const mensajeError = (e, porDefecto) => {
@@ -512,6 +514,246 @@ const Aviso = ({
       background: `color-mix(in oklch, ${color} 6%, var(--paper))`
     }
   }, children);
+};
+const usarPuerta = alEntrar => {
+  const [correo, setCorreo] = React.useState(() => window.LMTPerfil && window.LMTPerfil.correoConocido() || "");
+  const [clave, setClave] = React.useState("");
+  const [pideClave, setPideClave] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const entrar = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    const sec = window.LMTSecurity;
+    const limpio = (correo || "").trim();
+    if (!sec || !sec.isEmail(limpio)) {
+      setError("Escribe un correo válido.");
+      return;
+    }
+    const normal = sec.normalizeEmail(limpio);
+    setBusy(true);
+    try {
+      const res = await window.LMTApi.accesoVisitante(normal, pideClave ? clave : "");
+      if (res && res.protegido && !res.token) {
+        setPideClave(true);
+        return;
+      }
+      const token = res && res.token || "";
+      if (window.LMTPerfil) window.LMTPerfil.guardar(normal, token);
+      if (alEntrar) alEntrar(normal, token);
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible identificarte."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return {
+    correo,
+    setCorreo,
+    clave,
+    setClave,
+    pideClave,
+    error,
+    busy,
+    entrar
+  };
+};
+const PuertaCorreo = ({
+  titulo,
+  nota,
+  onListo,
+  volverA = "/festival",
+  volverTexto = "← Volver",
+  children
+}) => {
+  const p = usarPuerta(onListo);
+  return React.createElement("div", {
+    className: "mobile-page"
+  }, React.createElement("div", {
+    className: "mobile-inner"
+  }, React.createElement("a", {
+    href: volverA,
+    "data-route": true,
+    style: {
+      color: "var(--ink-3)",
+      fontSize: 13
+    }
+  }, volverTexto), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 22
+    }
+  }, "Tu festival"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 34,
+      fontWeight: 400,
+      margin: "6px 0 12px",
+      lineHeight: 1.05
+    }
+  }, titulo || "Identifícate con tu correo."), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.65,
+      marginBottom: 22
+    }
+  }, nota || "Es el mismo correo con el que votas en los stands. No hace falta contraseña."), React.createElement("form", {
+    onSubmit: p.entrar
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "puerta-correo"
+  }, "Tu correo"), React.createElement("input", {
+    id: "puerta-correo",
+    type: "email",
+    inputMode: "email",
+    autoComplete: "email",
+    required: true,
+    maxLength: 254,
+    placeholder: "nombre@correo.co",
+    value: p.correo,
+    onChange: e => p.setCorreo(e.target.value)
+  })), p.pideClave && React.createElement("div", {
+    className: "field",
+    style: {
+      marginTop: 14
+    }
+  }, React.createElement("label", {
+    htmlFor: "puerta-clave"
+  }, "Tu clave"), React.createElement("input", {
+    id: "puerta-clave",
+    type: "password",
+    autoComplete: "current-password",
+    required: true,
+    maxLength: 128,
+    value: p.clave,
+    onChange: e => p.setClave(e.target.value),
+    autoFocus: true
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Este perfil est\xE1 protegido con la clave que pusiste desde \xABMi perfil\xBB.")), React.createElement(Aviso, null, p.error), React.createElement("button", {
+    className: "btn btn-primary",
+    type: "submit",
+    disabled: p.busy,
+    style: {
+      justifyContent: "center",
+      padding: 14,
+      width: "100%",
+      marginTop: 20
+    }
+  }, p.busy ? "Un momento…" : "Entrar")), React.createElement("p", {
+    style: {
+      color: "var(--ink-3)",
+      fontSize: 12,
+      lineHeight: 1.6,
+      marginTop: 18
+    }
+  }, "\xBFTodav\xEDa no has votado? Escanea el QR de cualquier stand y tu pasaporte se crea solo."), children));
+};
+const InvitacionCorreo = () => {
+  const [correoYa, setCorreoYa] = React.useState(() => window.LMTPerfil && window.LMTPerfil.correoConocido() || "");
+  const p = usarPuerta(c => setCorreoYa(c));
+  if (correoYa) return null;
+  return React.createElement("div", {
+    style: {
+      background: "var(--ink)",
+      color: "var(--paper)",
+      padding: "16px 32px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 18,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("div", {
+    style: {
+      minWidth: 200,
+      flex: "1 1 260px",
+      maxWidth: 460
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      color: "var(--paper-3)"
+    }
+  }, "Tu pasaporte del festival"), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 21,
+      lineHeight: 1.15,
+      marginTop: 2
+    }
+  }, "Escribe tu correo y ver\xE1s tu pasaporte, tu recorrido y tu perfil.")), React.createElement("form", {
+    onSubmit: p.entrar,
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      flex: "1 1 300px",
+      maxWidth: 460
+    }
+  }, React.createElement("input", {
+    type: "email",
+    inputMode: "email",
+    autoComplete: "email",
+    required: true,
+    maxLength: 254,
+    "aria-label": "Tu correo",
+    placeholder: "nombre@correo.co",
+    value: p.correo,
+    onChange: e => p.setCorreo(e.target.value),
+    style: {
+      flex: "2 1 180px",
+      minWidth: 0,
+      padding: "11px 12px",
+      fontSize: 14,
+      border: "1px solid var(--paper-3)",
+      borderRadius: "var(--r-sm)",
+      background: "transparent",
+      color: "var(--paper)"
+    }
+  }), p.pideClave && React.createElement("input", {
+    type: "password",
+    autoComplete: "current-password",
+    required: true,
+    maxLength: 128,
+    "aria-label": "Tu clave",
+    placeholder: "Tu clave",
+    autoFocus: true,
+    value: p.clave,
+    onChange: e => p.setClave(e.target.value),
+    style: {
+      flex: "2 1 150px",
+      minWidth: 0,
+      padding: "11px 12px",
+      fontSize: 14,
+      border: "1px solid var(--paper-3)",
+      borderRadius: "var(--r-sm)",
+      background: "transparent",
+      color: "var(--paper)"
+    }
+  }), React.createElement("button", {
+    type: "submit",
+    className: "btn",
+    disabled: p.busy,
+    style: {
+      flex: "1 1 110px",
+      justifyContent: "center",
+      background: "var(--paper)",
+      color: "var(--ink)",
+      border: "none"
+    }
+  }, p.busy ? "…" : "Entrar"), p.error && React.createElement("div", {
+    role: "alert",
+    style: {
+      flex: "1 1 100%",
+      fontSize: 12,
+      color: "var(--paper-3)"
+    }
+  }, p.error)));
 };
 const MENU_PUBLICO = [{
   href: "/festival",
@@ -818,7 +1060,10 @@ Object.assign(window, {
   titulosEstrellas,
   pesos,
   MenuPublico,
-  MENU_PUBLICO
+  MENU_PUBLICO,
+  usarPuerta,
+  PuertaCorreo,
+  InvitacionCorreo
 });
 })();
 
@@ -3496,8 +3741,7 @@ const PassportPage = ({
     setLoading(true);
     setError("");
     try {
-      const g = window.LMTPerfil && window.LMTPerfil.leer() || {};
-      const t = g.correo === String(correo).toLowerCase() ? g.token : "";
+      const t = window.LMTPerfil && window.LMTPerfil.testigoDe(correo) || "";
       const res = await window.LMTApi.getPasaporte(correo, t);
       setData(res);
       setAskingEmail(false);
@@ -3544,75 +3788,16 @@ const PassportPage = ({
     };
   }, [email, data]);
   if (askingEmail) {
-    return React.createElement("div", {
-      className: "mobile-page"
-    }, React.createElement("div", {
-      className: "mobile-inner"
-    }, React.createElement("a", {
-      href: "/festival",
-      "data-route": true,
-      style: {
-        color: "var(--ink-3)",
-        fontSize: 13
+    return React.createElement(PuertaCorreo, {
+      titulo: "Tu pasaporte del festival.",
+      nota: "Escribe el correo con el que votas en los stands. No hace falta contrase\xF1a.",
+      volverA: "/festival",
+      volverTexto: "\u2190 Volver al ranking",
+      onListo: correo => {
+        setEmail(correo);
+        setAskingEmail(false);
       }
-    }, "\u2190 Volver al ranking"), React.createElement("div", {
-      className: "mono",
-      style: {
-        marginTop: 24
-      }
-    }, "Mi pasaporte"), React.createElement("h2", {
-      style: {
-        fontFamily: "var(--font-display)",
-        fontStyle: "italic",
-        fontSize: 36,
-        fontWeight: 400,
-        margin: "6px 0 12px",
-        lineHeight: 1.05
-      }
-    }, "Identif\xEDcate con el", React.createElement("br", null), "correo que usaste", React.createElement("br", null), "al votar."), React.createElement("form", {
-      onSubmit: e => {
-        e.preventDefault();
-        const sec = window.LMTSecurity;
-        const v = (e.target.correo.value || "").trim();
-        if (!sec || !sec.isEmail(v)) {
-          setError("Correo inválido.");
-          return;
-        }
-        try {
-          localStorage.setItem("lmt.email", sec.normalizeEmail(v));
-        } catch (_) {}
-        setEmail(v);
-      }
-    }, React.createElement("div", {
-      className: "field",
-      style: {
-        marginTop: 24
-      }
-    }, React.createElement("label", null, "Correo"), React.createElement("input", {
-      name: "correo",
-      type: "email",
-      inputMode: "email",
-      autoComplete: "email",
-      required: true,
-      maxLength: 254,
-      placeholder: "nombre@correo.co"
-    })), error && React.createElement("div", {
-      role: "alert",
-      style: {
-        color: "var(--bad)",
-        fontSize: 13,
-        marginTop: 8
-      }
-    }, error), React.createElement("button", {
-      className: "btn btn-primary",
-      type: "submit",
-      style: {
-        width: "100%",
-        justifyContent: "center",
-        padding: 14,
-        marginTop: 20
-      }
-    }, "Ver mi pasaporte \u2192"))));
+    });
   }
   if (loading) {
     return React.createElement("div", {
@@ -3849,6 +4034,7 @@ const PassportBook = ({
     }
   }, "Pasaporte \xB7 ", passport.nombre), React.createElement("button", {
     onClick: () => {
+      if (window.LMTPerfil) window.LMTPerfil.olvidar();
       try {
         localStorage.removeItem("lmt.email");
       } catch (_) {}
@@ -4816,7 +5002,7 @@ const PublicDashboard = ({
       minHeight: "100dvh",
       background: "var(--paper)"
     }
-  }, React.createElement(PublicHeader, null), React.createElement("section", {
+  }, React.createElement(PublicHeader, null), React.createElement(InvitacionCorreo, null), React.createElement("section", {
     className: "lmt-three-wrap",
     ref: el => {
       if (el && window.LMTThree && !el.dataset.threeMounted) window.LMTThree.mount(el);
@@ -5732,13 +5918,7 @@ const RecorridoPage = ({
     window.addEventListener("lmt:festival", refrescar);
     return () => window.removeEventListener("lmt:festival", refrescar);
   }, []);
-  const correo = React.useMemo(() => {
-    try {
-      return localStorage.getItem("lmt.email") || "";
-    } catch (_) {
-      return "";
-    }
-  }, []);
+  const [correo, setCorreo] = React.useState(() => window.LMTPerfil && window.LMTPerfil.correoConocido() || "");
   React.useEffect(() => {
     if (!correo) {
       setCargando(false);
@@ -5748,8 +5928,7 @@ const RecorridoPage = ({
     const intentar = async () => {
       if (cancelado || !window.LMTApi || !window.LMTApi.enabled) return;
       try {
-        const g = window.LMTPerfil && window.LMTPerfil.leer() || {};
-        const t = g.correo === correo.toLowerCase() ? g.token : "";
+        const t = window.LMTPerfil && window.LMTPerfil.testigoDe(correo) || "";
         const res = await window.LMTApi.getPasaporte(correo, t);
         if (!cancelado) setPasaporte(res);
       } catch (_) {} finally {
@@ -5775,6 +5954,15 @@ const RecorridoPage = ({
     });
     return copia;
   }, [stands, setVisitados]);
+  if (!correo) {
+    return React.createElement(PuertaCorreo, {
+      titulo: "Tu recorrido por el festival.",
+      nota: "Escribe el correo con el que votas en los stands y ver\xE1s cu\xE1les llevas sellados. No hace falta contrase\xF1a.",
+      volverA: "/festival",
+      volverTexto: "\u2190 Volver al ranking",
+      onListo: c => setCorreo(c)
+    });
+  }
   return React.createElement("div", {
     style: {
       minHeight: "100dvh",
@@ -5804,11 +5992,11 @@ const RecorridoPage = ({
       lineHeight: 1.6,
       maxWidth: 560
     }
-  }, correo ? React.createElement(React.Fragment, null, "Llevas ", React.createElement("strong", {
+  }, visitados.length ? React.createElement(React.Fragment, null, "Llevas ", React.createElement("strong", {
     style: {
       fontWeight: 500
     }
-  }, visitados.length, " de ", stands.length), " sellados. Los que est\xE1n a color ya los visitaste.") : React.createElement(React.Fragment, null, "Escanea el QR de cualquier stand y vota: a partir de ah\xED, los que visites se van encendiendo aqu\xED.")), cargando && correo && React.createElement("p", {
+  }, visitados.length, " de ", stands.length), " sellados. Los que est\xE1n a color ya los visitaste.") : React.createElement(React.Fragment, null, "Escanea el QR de cualquier stand y vota: a partir de ah\xED, los que visites se van encendiendo aqu\xED.")), cargando && React.createElement("p", {
     className: "mono",
     style: {
       marginTop: 20,
@@ -5918,10 +6106,69 @@ const ACCESO_FRASE = {
   telefono: "tu número de teléfono",
   qr: "el código QR que guardaste"
 };
-const qrUrlAcceso = (correo, token) => {
-  const base = (window.LMT_BASE_URL || location.origin + (window.LMT_BASE_PATH || "")).replace(/\/$/, "");
-  return base + "/promotor?correo=" + encodeURIComponent(correo) + "&acceso=" + encodeURIComponent(token);
-};
+const TarjetaQrAcceso = ({
+  png,
+  token,
+  url,
+  titulo = "Tu código de acceso",
+  children
+}) => React.createElement("div", {
+  style: {
+    border: "2px solid var(--ink)",
+    borderRadius: "var(--r-md)",
+    padding: 18,
+    marginBottom: 24,
+    textAlign: "center"
+  }
+}, React.createElement("div", {
+  className: "mono",
+  style: {
+    marginBottom: 10
+  }
+}, titulo), png ? React.createElement("div", {
+  style: {
+    display: "flex",
+    justifyContent: "center",
+    marginBottom: 12
+  }
+}, React.createElement("img", {
+  src: png,
+  alt: "Código QR de acceso" + (url ? " (" + url + ")" : ""),
+  width: 200,
+  height: 200,
+  style: {
+    width: 200,
+    height: 200,
+    imageRendering: "pixelated",
+    background: "#fff",
+    borderRadius: "var(--r-sm)"
+  }
+})) : React.createElement("p", {
+  style: {
+    fontSize: 13,
+    color: "var(--ink-2)",
+    marginBottom: 12
+  }
+}, "No fue posible dibujar el c\xF3digo, pero el acceso de abajo funciona igual: escr\xEDbelo como contrase\xF1a."), React.createElement("div", {
+  className: "mono ruta",
+  style: {
+    fontSize: 13,
+    wordBreak: "break-all",
+    padding: "8px 10px",
+    background: "var(--paper-2)",
+    borderRadius: "var(--r-sm)",
+    marginBottom: 12
+  }
+}, token), png && React.createElement("a", {
+  href: png,
+  download: "qr-acceso.png",
+  className: "btn btn-ghost",
+  style: {
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: 12
+  }
+}, "\u2193 Guardar el c\xF3digo"), children);
 const SelectorAcceso = ({
   metodo,
   valor,
@@ -6018,7 +6265,7 @@ const PromotorRegistroPage = () => {
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
-  const [qrToken, setQrToken] = React.useState("");
+  const [qr, setQr] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setForm(f => ({
     ...f,
@@ -6079,7 +6326,11 @@ const PromotorRegistroPage = () => {
         lng: ubicacion.lng,
         acepta_datos: true
       });
-      if (res && res.qr_token) setQrToken(res.qr_token);
+      if (res && res.qr_token) setQr({
+        token: res.qr_token,
+        png: res.qr_png || "",
+        url: res.qr_url || ""
+      });
       setEnviado(true);
     } catch (err) {
       setError(mensajeError(err, "No fue posible enviar tu solicitud."));
@@ -6113,46 +6364,18 @@ const PromotorRegistroPage = () => {
         lineHeight: 1.65,
         marginBottom: 24
       }
-    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " el aviso y el", React.createElement("strong", null, " c\xF3digo QR de tu stand"), ", listo para imprimir y pegar en tu puesto.", " ", "Entrar\xE1s al portal con ", ACCESO_FRASE[form.acceso_metodo] || "tu contraseña", "."), qrToken && React.createElement("div", {
-      style: {
-        border: "2px solid var(--ink)",
-        borderRadius: "var(--r-md)",
-        padding: 18,
-        marginBottom: 24,
-        textAlign: "center"
-      }
-    }, React.createElement("div", {
-      className: "mono",
-      style: {
-        marginBottom: 10
-      }
-    }, "Tu c\xF3digo de acceso"), React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "center",
-        marginBottom: 12
-      }
-    }, React.createElement(QRCode, {
-      value: qrUrlAcceso(form.email, qrToken),
-      size: 190
-    })), React.createElement("div", {
-      className: "mono ruta",
-      style: {
-        fontSize: 13,
-        wordBreak: "break-all",
-        padding: "8px 10px",
-        background: "var(--paper-2)",
-        borderRadius: "var(--r-sm)",
-        marginBottom: 12
-      }
-    }, qrToken), React.createElement("p", {
+    }, "El equipo organizador revisar\xE1 tu inscripci\xF3n. Cuando quede aprobada te llegar\xE1 a ", React.createElement("strong", null, form.email), " el aviso y el", React.createElement("strong", null, " c\xF3digo QR de tu stand"), ", listo para imprimir y pegar en tu puesto.", " ", "Entrar\xE1s al portal con ", ACCESO_FRASE[form.acceso_metodo] || "tu contraseña", "."), qr && React.createElement(TarjetaQrAcceso, {
+      png: qr.png,
+      token: qr.token,
+      url: qr.url
+    }, React.createElement("p", {
       style: {
         fontSize: 13,
         color: "var(--ink-2)",
         lineHeight: 1.6,
         margin: 0
       }
-    }, React.createElement("strong", null, "Gu\xE1rdalo ahora"), ": hazle una foto o escr\xEDbelo. Por seguridad no lo podemos volver a mostrar. Escanea el c\xF3digo para entrar, o escribe esas letras y n\xFAmeros como contrase\xF1a.")), React.createElement("a", {
+    }, React.createElement("strong", null, "Gu\xE1rdalo ahora"), ": desc\xE1rgalo, hazle una foto o escr\xEDbelo. Por seguridad no lo podemos volver a mostrar. Escanea el c\xF3digo para entrar, o escribe esas letras y n\xFAmeros como contrase\xF1a.")), React.createElement("a", {
       href: "/",
       "data-route": true,
       className: "btn btn-ghost",
@@ -7387,6 +7610,7 @@ const AdminPromotores = ({
   const [error, setError] = React.useState("");
   const [aviso, setAviso] = React.useState(null);
   const [ocupado, setOcupado] = React.useState(0);
+  const [qr, setQr] = React.useState(null);
   const cargar = React.useCallback(async estado => {
     setCargando(true);
     try {
@@ -7431,6 +7655,20 @@ const AdminPromotores = ({
     tipo: "error",
     texto: `El correo no salió. Clave nueva para ${p.email}: ${res.clave_temporal}`
   });
+  const reemitirQr = p => {
+    if (!window.confirm(`Se generará un código QR nuevo para ${p.email}. El anterior dejará de funcionar. ¿Continuar?`)) return;
+    accion(p.id, () => window.LMTApi.reemitirQrPromotor(p.id), res => {
+      setQr({
+        ...res,
+        email: p.email,
+        nombre: p.nombre
+      });
+      return {
+        tipo: "ok",
+        texto: `Código nuevo para ${p.email}. El anterior ya no sirve: entrégaselo antes de cerrar.`
+      };
+    });
+  };
   const rechazar = p => {
     const motivo = window.prompt("Motivo del rechazo (se enviará al promotor):", "");
     if (motivo === null) return;
@@ -7502,7 +7740,32 @@ const AdminPromotores = ({
     }
   }, f.label))), aviso && React.createElement(Aviso, {
     tipo: aviso.tipo
-  }, aviso.texto), React.createElement(Aviso, null, error), cargando ? React.createElement("div", {
+  }, aviso.texto), React.createElement(Aviso, null, error), qr && React.createElement("div", {
+    style: {
+      maxWidth: 340,
+      margin: "18px 0"
+    }
+  }, React.createElement(TarjetaQrAcceso, {
+    png: qr.qr_png,
+    token: qr.qr_token,
+    url: qr.qr_url,
+    titulo: `Código de ${qr.nombre || qr.email}`
+  }, React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: "var(--ink-2)",
+      lineHeight: 1.6,
+      margin: "0 0 12px"
+    }
+  }, "Desc\xE1rgalo o impr\xEDmelo y entr\xE9gaselo. Al cerrar este recuadro no se puede volver a ver: en la base s\xF3lo queda su huella."), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: () => setQr(null),
+    style: {
+      justifyContent: "center",
+      width: "100%"
+    }
+  }, "Ya lo entregu\xE9, cerrar"))), cargando ? React.createElement("div", {
     className: "splash"
   }, "Cargando\u2026") : lista.length === 0 ? React.createElement("div", {
     style: {
@@ -7625,7 +7888,14 @@ const AdminPromotores = ({
     style: {
       justifyContent: "center"
     }
-  }, "Reenviar contrase\xF1a"), p.estado !== "rechazado" && React.createElement("button", {
+  }, "Reenviar contrase\xF1a"), p.acceso_metodo === "qr" && p.estado !== "rechazado" && p.estado !== "suspendido" && React.createElement("button", {
+    className: "btn btn-ghost",
+    disabled: ocupado === p.id,
+    onClick: () => reemitirQr(p),
+    style: {
+      justifyContent: "center"
+    }
+  }, "Reemitir c\xF3digo QR"), p.estado !== "rechazado" && React.createElement("button", {
     className: "btn btn-ghost",
     disabled: ocupado === p.id,
     onClick: () => rechazar(p),
@@ -7738,7 +8008,8 @@ Object.assign(window, {
   PromotorPage,
   AdminPromotores,
   AdminCorreos,
-  EstadoPill
+  EstadoPill,
+  TarjetaQrAcceso
 });
 })();
 
@@ -8525,8 +8796,9 @@ const AvatarVisitante = ({
     }
   }, url ? "Tu foto se ve en tu pasaporte. Puedes quitarla cuando quieras." : "Nada de esto es obligatorio. Si no eliges, tu pasaporte lleva la inicial de tu nombre."));
 };
-const PerfilSinAcceso = () => {
+const EnlacePorCorreo = () => {
   const [correo, setCorreo] = React.useState("");
+  const [abierto, setAbierto] = React.useState(false);
   const [enviado, setEnviado] = React.useState(false);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -8548,55 +8820,44 @@ const PerfilSinAcceso = () => {
       setBusy(false);
     }
   };
-  return React.createElement("div", {
-    className: "mobile-page"
-  }, React.createElement("div", {
-    className: "mobile-inner"
-  }, React.createElement("a", {
-    href: "/festival",
-    "data-route": true,
+  if (enviado) {
+    return React.createElement("p", {
+      style: {
+        color: "var(--ink-2)",
+        fontSize: 13,
+        lineHeight: 1.65,
+        marginTop: 20
+      }
+    }, "Si ese correo particip\xF3 en el festival, en unos minutos recibir\xE1s un enlace para abrir tu perfil. Revisa tambi\xE9n la carpeta de correo no deseado.");
+  }
+  if (!abierto) {
+    return React.createElement("button", {
+      type: "button",
+      onClick: () => setAbierto(true),
+      className: "mono",
+      style: {
+        display: "block",
+        marginTop: 20,
+        color: "var(--ink-3)",
+        textDecoration: "underline"
+      }
+    }, "\xBFOlvidaste tu clave? Recibe un enlace por correo");
+  }
+  return React.createElement("form", {
+    onSubmit: pedir,
     style: {
-      color: "var(--ink-3)",
-      fontSize: 13
+      marginTop: 20,
+      paddingTop: 18,
+      borderTop: "1px solid var(--line)"
     }
-  }, "\u2190 Volver"), React.createElement("div", {
-    className: "mono",
-    style: {
-      marginTop: 22
-    }
-  }, "Perfil del visitante"), React.createElement("h1", {
-    style: {
-      fontFamily: "var(--font-display)",
-      fontStyle: "italic",
-      fontSize: 34,
-      fontWeight: 400,
-      margin: "6px 0 12px",
-      lineHeight: 1.05
-    }
-  }, "Te enviamos el", React.createElement("br", null), "enlace por correo."), enviado ? React.createElement(React.Fragment, null, React.createElement("p", {
-    style: {
-      color: "var(--ink-2)",
-      fontSize: 14,
-      lineHeight: 1.65
-    }
-  }, "Si ese correo particip\xF3 en el festival, en unos minutos recibir\xE1s un enlace para abrir tu perfil. Revisa tambi\xE9n la carpeta de correo no deseado."), React.createElement("a", {
-    href: "/festival",
-    "data-route": true,
-    className: "btn btn-ghost",
-    style: {
-      justifyContent: "center",
-      marginTop: 22
-    }
-  }, "Volver al festival")) : React.createElement("form", {
-    onSubmit: pedir
   }, React.createElement("p", {
     style: {
       color: "var(--ink-2)",
-      fontSize: 14,
+      fontSize: 13,
       lineHeight: 1.65,
-      marginBottom: 22
+      marginBottom: 14
     }
-  }, "Tu perfil se abre desde el tel\xE9fono con el que votaste. Si est\xE1s en otro dispositivo, escribe tu correo y te mandamos el enlace."), React.createElement("div", {
+  }, "Te mandamos al buz\xF3n un enlace que abre tu perfil sin clave."), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "pf-correo"
@@ -8610,25 +8871,142 @@ const PerfilSinAcceso = () => {
     maxLength: 254,
     required: true
   })), React.createElement(Aviso, null, error), React.createElement("button", {
-    className: "btn btn-primary",
+    className: "btn btn-ghost",
     type: "submit",
     disabled: busy,
     style: {
       justifyContent: "center",
-      padding: 14,
+      padding: 12,
       width: "100%",
-      marginTop: 20
+      marginTop: 14
     }
-  }, busy ? "Enviando…" : "Enviarme el enlace"))));
+  }, busy ? "Enviando…" : "Enviarme el enlace"));
+};
+const PerfilSinAcceso = ({
+  onListo
+}) => React.createElement(PuertaCorreo, {
+  titulo: "Tu perfil del festival.",
+  nota: "Escribe el correo con el que votas en los stands. No hace falta contrase\xF1a: si quieres una, la pones despu\xE9s desde aqu\xED dentro.",
+  onListo: onListo
+}, React.createElement(EnlacePorCorreo, null));
+const BloqueClave = ({
+  correo,
+  token,
+  protegido,
+  onCambio
+}) => {
+  const [actual, setActual] = React.useState("");
+  const [nueva, setNueva] = React.useState("");
+  const [repite, setRepite] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [ok, setOk] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const aplicar = async quitar => {
+    setError("");
+    setOk("");
+    if (!quitar) {
+      if (nueva.length < 6) {
+        setError("La clave debe tener al menos 6 caracteres.");
+        return;
+      }
+      if (nueva !== repite) {
+        setError("Las dos claves no coinciden.");
+        return;
+      }
+    }
+    setBusy(true);
+    try {
+      const res = await window.LMTApi.guardarClaveVisitante(correo, token, actual, quitar ? "" : nueva);
+      setActual("");
+      setNueva("");
+      setRepite("");
+      setOk(res && res.protegido ? "Listo. A partir de ahora se te pedirá esta clave para abrir tu perfil, tu pasaporte y tu recorrido." : "Quitada. Ahora te basta con escribir tu correo.");
+      if (onCambio) onCambio(!!(res && res.protegido));
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible cambiar la clave."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return React.createElement(BloqueForm, {
+    titulo: "Protecci\xF3n de tu perfil",
+    nota: protegido ? "Tu perfil está protegido: para abrirlo hay que escribir esta clave además del correo." : "Con el correo basta para entrar. Si prefieres que además pidan una clave, ponla aquí. Es opcional."
+  }, protegido && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-clave-actual"
+  }, "Tu clave actual"), React.createElement("input", {
+    id: "pf-clave-actual",
+    type: "password",
+    autoComplete: "current-password",
+    maxLength: 128,
+    value: actual,
+    onChange: e => setActual(e.target.value)
+  })), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-clave-nueva"
+  }, protegido ? "Clave nueva" : "Clave"), React.createElement("input", {
+    id: "pf-clave-nueva",
+    type: "password",
+    autoComplete: "new-password",
+    maxLength: 128,
+    value: nueva,
+    onChange: e => setNueva(e.target.value)
+  }), React.createElement("span", {
+    className: "ayuda"
+  }, "Al menos 6 caracteres. Elige algo que recuerdes: si la pierdes, se recupera por el enlace al correo.")), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "pf-clave-repite"
+  }, "Repite la clave"), React.createElement("input", {
+    id: "pf-clave-repite",
+    type: "password",
+    autoComplete: "new-password",
+    maxLength: 128,
+    value: repite,
+    onChange: e => setRepite(e.target.value)
+  })), React.createElement(Aviso, {
+    tipo: "ok"
+  }, ok), React.createElement(Aviso, null, error), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: () => aplicar(false),
+    style: {
+      justifyContent: "center"
+    }
+  }, busy ? "Guardando…" : protegido ? "Cambiar la clave" : "Proteger mi perfil"), protegido && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: () => aplicar(true),
+    style: {
+      justifyContent: "center",
+      color: "var(--bad)"
+    }
+  }, "Quitar la clave"));
 };
 const PerfilVisitantePage = () => {
-  const params = new URLSearchParams(window.location.search);
-  const guardado = window.LMTPerfil && window.LMTPerfil.leer() || {
-    correo: "",
-    token: ""
-  };
-  const correo = (params.get("correo") || guardado.correo || "").toLowerCase();
-  const token = params.get("t") || guardado.token || "";
+  const [ident, setIdent] = React.useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const delEnlace = (p.get("correo") || "").toLowerCase();
+    if (delEnlace) return {
+      correo: delEnlace,
+      token: p.get("t") || ""
+    };
+    const g = window.LMTPerfil && window.LMTPerfil.leer() || {
+      correo: "",
+      token: ""
+    };
+    return {
+      correo: (g.correo || "").toLowerCase(),
+      token: g.token || ""
+    };
+  });
+  const correo = ident.correo;
+  const token = ident.token;
+  const [protegido, setProtegido] = React.useState(false);
   const [form, setForm] = React.useState(PERFIL_VACIO);
   const [opciones, setOpciones] = React.useState(null);
   const [emojis, setEmojis] = React.useState([]);
@@ -8655,6 +9033,7 @@ const PerfilVisitantePage = () => {
         if (!vivo) return;
         setOpciones(datos.opciones || null);
         setEmojis(datos.emojis || []);
+        setProtegido(!!datos.protegido);
         if (datos.perfil) {
           setForm(Object.assign({}, PERFIL_VACIO, datos.perfil));
           setExistia(true);
@@ -8712,7 +9091,17 @@ const PerfilVisitantePage = () => {
       setBusy(false);
     }
   };
-  if (!correo || !token) return React.createElement(PerfilSinAcceso, null);
+  if (!correo || !token) {
+    return React.createElement(PerfilSinAcceso, {
+      onListo: (c, t) => {
+        setIdent({
+          correo: c,
+          token: t
+        });
+        setCargando(true);
+      }
+    });
+  }
   if (cargando) return React.createElement(Splash, null);
   const ops = opciones || {};
   return React.createElement("div", {
@@ -8996,11 +9385,23 @@ const PerfilVisitantePage = () => {
       color: "var(--ink-3)",
       marginBottom: 8
     }
-  }, "Volver a mi pasaporte"))));
+  }, "Volver a mi pasaporte")), React.createElement("div", {
+    style: {
+      marginTop: 24,
+      marginBottom: 30
+    }
+  }, React.createElement(BloqueClave, {
+    correo: correo,
+    token: token,
+    protegido: protegido,
+    onCambio: setProtegido
+  }))));
 };
 Object.assign(window, {
   PerfilVisitantePage,
   PerfilSinAcceso,
+  EnlacePorCorreo,
+  BloqueClave,
   PERFIL_ETIQUETAS,
   AvatarVisitante
 });

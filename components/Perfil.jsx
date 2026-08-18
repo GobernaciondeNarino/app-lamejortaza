@@ -151,9 +151,17 @@ const AvatarVisitante = ({ correo, token, foto, emoji, emojis, onFoto, onEmoji, 
   );
 };
 
-/** Pantalla para quien llega a /perfil sin testigo en este navegador. */
-const PerfilSinAcceso = () => {
+/**
+ * Salida de emergencia: el enlace al propio buzón.
+ *
+ * Va debajo de la puerta normal —el correo, sin más— y es para dos casos: quien
+ * puso clave a su perfil y no la recuerda, y quien prefiere no escribir nada en
+ * un teléfono ajeno. Llegar al buzón es la prueba de propiedad de verdad, así
+ * que este camino salta la clave a propósito.
+ */
+const EnlacePorCorreo = () => {
   const [correo, setCorreo] = React.useState("");
+  const [abierto, setAbierto] = React.useState(false);
   const [enviado, setEnviado] = React.useState(false);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -172,53 +180,147 @@ const PerfilSinAcceso = () => {
     } finally { setBusy(false); }
   };
 
+  if (enviado) {
+    return (
+      <p style={{ color: "var(--ink-2)", fontSize: 13, lineHeight: 1.65, marginTop: 20 }}>
+        Si ese correo participó en el festival, en unos minutos recibirás un enlace para
+        abrir tu perfil. Revisa también la carpeta de correo no deseado.
+      </p>
+    );
+  }
+
+  if (!abierto) {
+    return (
+      <button type="button" onClick={() => setAbierto(true)} className="mono"
+        style={{ display: "block", marginTop: 20, color: "var(--ink-3)", textDecoration: "underline" }}>
+        ¿Olvidaste tu clave? Recibe un enlace por correo
+      </button>
+    );
+  }
+
   return (
-    <div className="mobile-page">
-      <div className="mobile-inner">
-        <a href="/festival" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Volver</a>
-        <div className="mono" style={{ marginTop: 22 }}>Perfil del visitante</div>
-        <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 34, fontWeight: 400, margin: "6px 0 12px", lineHeight: 1.05 }}>
-          Te enviamos el<br/>enlace por correo.
-        </h1>
-        {enviado ? (
-          <>
-            <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.65 }}>
-              Si ese correo participó en el festival, en unos minutos recibirás un enlace para
-              abrir tu perfil. Revisa también la carpeta de correo no deseado.
-            </p>
-            <a href="/festival" data-route className="btn btn-ghost" style={{ justifyContent: "center", marginTop: 22 }}>
-              Volver al festival
-            </a>
-          </>
-        ) : (
-          <form onSubmit={pedir}>
-            <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.65, marginBottom: 22 }}>
-              Tu perfil se abre desde el teléfono con el que votaste. Si estás en otro
-              dispositivo, escribe tu correo y te mandamos el enlace.
-            </p>
-            <div className="field">
-              <label htmlFor="pf-correo">Tu correo</label>
-              <input id="pf-correo" type="email" inputMode="email" autoComplete="email"
-                value={correo} onChange={(e) => setCorreo(e.target.value)} maxLength={254} required/>
-            </div>
-            <Aviso>{error}</Aviso>
-            <button className="btn btn-primary" type="submit" disabled={busy}
-              style={{ justifyContent: "center", padding: 14, width: "100%", marginTop: 20 }}>
-              {busy ? "Enviando…" : "Enviarme el enlace"}
-            </button>
-          </form>
-        )}
+    <form onSubmit={pedir} style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
+      <p style={{ color: "var(--ink-2)", fontSize: 13, lineHeight: 1.65, marginBottom: 14 }}>
+        Te mandamos al buzón un enlace que abre tu perfil sin clave.
+      </p>
+      <div className="field">
+        <label htmlFor="pf-correo">Tu correo</label>
+        <input id="pf-correo" type="email" inputMode="email" autoComplete="email"
+          value={correo} onChange={(e) => setCorreo(e.target.value)} maxLength={254} required/>
       </div>
-    </div>
+      <Aviso>{error}</Aviso>
+      <button className="btn btn-ghost" type="submit" disabled={busy}
+        style={{ justifyContent: "center", padding: 12, width: "100%", marginTop: 14 }}>
+        {busy ? "Enviando…" : "Enviarme el enlace"}
+      </button>
+    </form>
+  );
+};
+
+/**
+ * Pantalla para quien llega a /perfil sin testigo en este navegador. Basta con
+ * el correo; la clave sólo se pide a quien la haya puesto desde dentro.
+ */
+const PerfilSinAcceso = ({ onListo }) => (
+  <PuertaCorreo
+    titulo="Tu perfil del festival."
+    nota="Escribe el correo con el que votas en los stands. No hace falta contraseña: si quieres una, la pones después desde aquí dentro."
+    onListo={onListo}>
+    <EnlacePorCorreo/>
+  </PuertaCorreo>
+);
+
+/**
+ * Clave opcional del perfil.
+ *
+ * Sin ella, escribir el correo abre el pasaporte, el recorrido y el perfil, que
+ * es como tiene que funcionar una feria de dos días. Quien prefiera cerrarlo
+ * —aquí hay grupo étnico y discapacidad, datos sensibles— pone una clave y a
+ * partir de ese momento se le exige en todas las pantallas.
+ */
+const BloqueClave = ({ correo, token, protegido, onCambio }) => {
+  const [actual, setActual] = React.useState("");
+  const [nueva, setNueva] = React.useState("");
+  const [repite, setRepite] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [ok, setOk] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  const aplicar = async (quitar) => {
+    setError(""); setOk("");
+    if (!quitar) {
+      if (nueva.length < 6) { setError("La clave debe tener al menos 6 caracteres."); return; }
+      if (nueva !== repite) { setError("Las dos claves no coinciden."); return; }
+    }
+    setBusy(true);
+    try {
+      const res = await window.LMTApi.guardarClaveVisitante(correo, token, actual, quitar ? "" : nueva);
+      setActual(""); setNueva(""); setRepite("");
+      setOk(res && res.protegido
+        ? "Listo. A partir de ahora se te pedirá esta clave para abrir tu perfil, tu pasaporte y tu recorrido."
+        : "Quitada. Ahora te basta con escribir tu correo.");
+      if (onCambio) onCambio(!!(res && res.protegido));
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible cambiar la clave."));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <BloqueForm
+      titulo="Protección de tu perfil"
+      nota={protegido
+        ? "Tu perfil está protegido: para abrirlo hay que escribir esta clave además del correo."
+        : "Con el correo basta para entrar. Si prefieres que además pidan una clave, ponla aquí. Es opcional."}>
+      {protegido && (
+        <div className="field">
+          <label htmlFor="pf-clave-actual">Tu clave actual</label>
+          <input id="pf-clave-actual" type="password" autoComplete="current-password" maxLength={128}
+            value={actual} onChange={(e) => setActual(e.target.value)}/>
+        </div>
+      )}
+      <div className="field">
+        <label htmlFor="pf-clave-nueva">{protegido ? "Clave nueva" : "Clave"}</label>
+        <input id="pf-clave-nueva" type="password" autoComplete="new-password" maxLength={128}
+          value={nueva} onChange={(e) => setNueva(e.target.value)}/>
+        <span className="ayuda">Al menos 6 caracteres. Elige algo que recuerdes: si la pierdes, se recupera por el enlace al correo.</span>
+      </div>
+      <div className="field">
+        <label htmlFor="pf-clave-repite">Repite la clave</label>
+        <input id="pf-clave-repite" type="password" autoComplete="new-password" maxLength={128}
+          value={repite} onChange={(e) => setRepite(e.target.value)}/>
+      </div>
+      <Aviso tipo="ok">{ok}</Aviso>
+      <Aviso>{error}</Aviso>
+      <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => aplicar(false)}
+        style={{ justifyContent: "center" }}>
+        {busy ? "Guardando…" : (protegido ? "Cambiar la clave" : "Proteger mi perfil")}
+      </button>
+      {protegido && (
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => aplicar(true)}
+          style={{ justifyContent: "center", color: "var(--bad)" }}>
+          Quitar la clave
+        </button>
+      )}
+    </BloqueForm>
   );
 };
 
 const PerfilVisitantePage = () => {
-  // Del enlace del correo, o del testigo que dejó el voto en este navegador.
-  const params = new URLSearchParams(window.location.search);
-  const guardado = (window.LMTPerfil && window.LMTPerfil.leer()) || { correo: "", token: "" };
-  const correo = (params.get("correo") || guardado.correo || "").toLowerCase();
-  const token  = params.get("t") || guardado.token || "";
+  // De dónde sale la identidad, por orden: el enlace del correo, y si no, lo
+  // que este navegador guardó al votar o al pasar por la puerta. El enlace manda
+  // ENTERO —correo y testigo juntos—: mezclar el correo del enlace con el
+  // testigo guardado abría el perfil de la persona equivocada en un teléfono
+  // que ya había usado otra.
+  const [ident, setIdent] = React.useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const delEnlace = (p.get("correo") || "").toLowerCase();
+    if (delEnlace) return { correo: delEnlace, token: p.get("t") || "" };
+    const g = (window.LMTPerfil && window.LMTPerfil.leer()) || { correo: "", token: "" };
+    return { correo: (g.correo || "").toLowerCase(), token: g.token || "" };
+  });
+  const correo = ident.correo;
+  const token  = ident.token;
+  const [protegido, setProtegido] = React.useState(false);
 
   const [form, setForm] = React.useState(PERFIL_VACIO);
   const [opciones, setOpciones] = React.useState(null);
@@ -243,6 +345,7 @@ const PerfilVisitantePage = () => {
         if (!vivo) return;
         setOpciones(datos.opciones || null);
         setEmojis(datos.emojis || []);
+        setProtegido(!!datos.protegido);
         if (datos.perfil) {
           setForm(Object.assign({}, PERFIL_VACIO, datos.perfil));
           setExistia(true);
@@ -284,7 +387,9 @@ const PerfilVisitantePage = () => {
     } finally { setBusy(false); }
   };
 
-  if (!correo || !token) return <PerfilSinAcceso/>;
+  if (!correo || !token) {
+    return <PerfilSinAcceso onListo={(c, t) => { setIdent({ correo: c, token: t }); setCargando(true); }}/>;
+  }
   if (cargando) return <Splash/>;
 
   const ops = opciones || {};
@@ -453,9 +558,18 @@ const PerfilVisitantePage = () => {
             Volver a mi pasaporte
           </a>
         </form>
+
+        {/* Fuera del formulario de datos a propósito: la clave no es un dato de
+            caracterización y no debe guardarse ni borrarse con ellos. */}
+        <div style={{ marginTop: 24, marginBottom: 30 }}>
+          <BloqueClave correo={correo} token={token} protegido={protegido} onCambio={setProtegido}/>
+        </div>
       </div>
     </div>
   );
 };
 
-Object.assign(window, { PerfilVisitantePage, PerfilSinAcceso, PERFIL_ETIQUETAS, AvatarVisitante });
+Object.assign(window, {
+  PerfilVisitantePage, PerfilSinAcceso, EnlacePorCorreo, BloqueClave,
+  PERFIL_ETIQUETAS, AvatarVisitante,
+});

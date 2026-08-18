@@ -38,8 +38,7 @@ const PassportPage = ({ stands }) => {
     try {
       // Si este navegador guarda el testigo de ESTE correo, el servidor añade
       // las calificaciones al recorrido. Si no, llega el pasaporte de siempre.
-      const g = (window.LMTPerfil && window.LMTPerfil.leer()) || {};
-      const t = g.correo === String(correo).toLowerCase() ? g.token : "";
+      const t = (window.LMTPerfil && window.LMTPerfil.testigoDe(correo)) || "";
       const res = await window.LMTApi.getPasaporte(correo, t);
       setData(res);
       setAskingEmail(false);
@@ -88,34 +87,17 @@ const PassportPage = ({ stands }) => {
     return () => { cancelado = true; };
   }, [email, data]);
 
+  // La misma puerta que el recorrido y el perfil: el correo basta, y quien
+  // haya puesto clave a su perfil la escribe aquí. Además del correo trae el
+  // testigo, que es lo que hace que en el pasaporte se vean las estrellas que
+  // esta persona puso: sin él sólo llegan los sellos.
   if (askingEmail) {
     return (
-      <div className="mobile-page">
-        <div className="mobile-inner">
-          <a href="/festival" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Volver al ranking</a>
-          <div className="mono" style={{ marginTop: 24 }}>Mi pasaporte</div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 36, fontWeight: 400, margin: "6px 0 12px", lineHeight: 1.05 }}>
-            Identifícate con el<br/>correo que usaste<br/>al votar.
-          </h2>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const sec = window.LMTSecurity;
-            const v = (e.target.correo.value || "").trim();
-            if (!sec || !sec.isEmail(v)) { setError("Correo inválido."); return; }
-            try { localStorage.setItem("lmt.email", sec.normalizeEmail(v)); } catch (_) {}
-            setEmail(v);
-          }}>
-            <div className="field" style={{ marginTop: 24 }}>
-              <label>Correo</label>
-              <input name="correo" type="email" inputMode="email" autoComplete="email" required maxLength={254} placeholder="nombre@correo.co"/>
-            </div>
-            {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 8 }}>{error}</div>}
-            <button className="btn btn-primary" type="submit" style={{ width: "100%", justifyContent: "center", padding: 14, marginTop: 20 }}>
-              Ver mi pasaporte →
-            </button>
-          </form>
-        </div>
-      </div>
+      <PuertaCorreo
+        titulo="Tu pasaporte del festival."
+        nota="Escribe el correo con el que votas en los stands. No hace falta contraseña."
+        volverA="/festival" volverTexto="← Volver al ranking"
+        onListo={(correo) => { setEmail(correo); setAskingEmail(false); }}/>
     );
   }
 
@@ -308,6 +290,10 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>Pasaporte · {passport.nombre}</div>
           <button onClick={() => {
+            // Cerrar se lleva el testigo también. Dejarlo suelto era la trampa
+            // del teléfono prestado: el siguiente escribía otro correo y seguía
+            // abriendo el perfil del anterior.
+            if (window.LMTPerfil) window.LMTPerfil.olvidar();
             try { localStorage.removeItem("lmt.email"); } catch (_) {}
             window.LMTRouter.go("/");
           }} style={{ color: "var(--paper-3)", fontSize: 12, whiteSpace: "nowrap" }}>Cerrar</button>

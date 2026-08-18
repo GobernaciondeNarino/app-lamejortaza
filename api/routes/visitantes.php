@@ -69,6 +69,94 @@ function register_routes_visitantes(\LMT\Router $r): void
         Response::ok(['opciones' => VISITANTE_OPCIONES, 'emojis' => VISITANTE_EMOJIS]);
     });
 
+    /**
+     * La puerta del ciudadano: correo dentro, testigo fuera.
+     *
+     * Escribir el correo basta. Es una decisión del festival y conviene decir
+     * en qué consiste: quien conozca el correo de otra persona puede abrir su
+     * pasaporte y su caracterización. Se acepta porque la alternativa —una
+     * contraseña para todo el mundo— dejaba fuera a la mayor parte del público
+     * de una feria de dos días, y porque quien quiera cerrarlo tiene la clave
+     * opcional a un toque dentro de su propio perfil (PUT /visitantes/clave).
+     *
+     * Con clave puesta, esto ya no la abre: hay que escribirla.
+     */
+    $r->post('/visitantes/acceso', function () {
+        $b = Security::jsonBody();
+        $correo = Validate::email($b['correo'] ?? null);
+        $clave  = is_string($b['clave'] ?? null) ? $b['clave'] : '';
+        if (!$correo) Response::error(422, 'correo_invalido');
+        // Dos límites: uno por IP, contra quien pruebe correos en serie, y otro
+        // por correo, contra quien pruebe claves de una persona concreta desde
+        // muchas IP.
+        if (!RateLimit::hit('perfil_acceso', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!RateLimit::hit('perfil_acceso_correo', hash('sha256', $correo))) Response::error(429, 'rate_limited');
+
+        $stmt = Db::pdo()->prepare('SELECT acceso_hash FROM visitantes WHERE correo = :c');
+        $stmt->execute([':c' => $correo]);
+        $hash = (string) ($stmt->fetchColumn() ?: '');
+
+        if ($hash !== '') {
+            // Sin clave no es un error todavía: el formulario aún no sabía que
+            // este perfil la tenía. Se le pide y vuelve.
+            if ($clave === '') Response::ok(['protegido' => true, 'token' => null]);
+            if (!Security::verifyPassword($clave, $hash)) {
+                usleep(random_int(150000, 350000));
+                Response::error(403, 'clave_incorrecta');
+            }
+        }
+
+        Response::ok(['protegido' => $hash !== '', 'token' => visitante_token($correo)]);
+    });
+
+    /**
+     * Poner, cambiar o quitar la clave opcional del perfil.
+     *
+     * Quien ya tiene una debe escribirla para tocarla, aunque traiga testigo
+     * válido: hasta que hubo clave, el testigo se conseguía con sólo el correo,
+     * y quedan por ahí testigos viejos en otros navegadores. Aceptarlos aquí
+     * dejaría la protección abierta desde fuera justo el día que se pone.
+     */
+    $r->put('/visitantes/clave', function () {
+        $b = Security::jsonBody();
+        $correo = Validate::email($b['correo'] ?? null);
+        $token  = is_string($b['token'] ?? null) ? $b['token'] : '';
+        if (!$correo) Response::error(422, 'correo_invalido');
+        if (!RateLimit::hit('perfil_visitante', RateLimit::ipHash())) Response::error(429, 'rate_limited');
+        if (!visitante_token_valido($correo, $token)) Response::error(403, 'token_invalido');
+
+        $actual = is_string($b['clave_actual'] ?? null) ? $b['clave_actual'] : '';
+        $nueva  = is_string($b['clave_nueva'] ?? null) ? trim($b['clave_nueva']) : '';
+
+        $pdo  = Db::pdo();
+        $stmt = $pdo->prepare('SELECT acceso_hash FROM visitantes WHERE correo = :c');
+        $stmt->execute([':c' => $correo]);
+        $hash = (string) ($stmt->fetchColumn() ?: '');
+
+        if ($hash !== '' && !Security::verifyPassword($actual, $hash)) {
+            usleep(random_int(150000, 350000));
+            Response::error(403, 'clave_incorrecta');
+        }
+        if ($nueva !== '' && (mb_strlen($nueva, 'UTF-8') < 6 || mb_strlen($nueva, 'UTF-8') > 128)) {
+            Response::error(422, 'clave_corta');
+        }
+
+        $nuevoHash = $nueva === '' ? null : Security::hashPassword($nueva);
+        $upd = $pdo->prepare('UPDATE visitantes SET acceso_hash = :h, updated_at = CURRENT_TIMESTAMP
+                              WHERE correo = :c');
+        $upd->execute([':h' => $nuevoHash, ':c' => $correo]);
+        if ($upd->rowCount() === 0 && $nuevoHash !== null) {
+            // Todavía no hay fila: se crea sólo con la clave y sin autorización
+            // de tratamiento, que es lo correcto —proteger el perfil no autoriza
+            // a tratar datos sensibles— y el formulario la pedirá cuando toque.
+            $pdo->prepare('INSERT INTO visitantes (correo, acceso_hash, acepta_datos, updated_at)
+                           VALUES (:c, :h, 0, CURRENT_TIMESTAMP)')
+                ->execute([':c' => $correo, ':h' => $nuevoHash]);
+        }
+
+        Response::ok(['protegido' => $nuevoHash !== null]);
+    });
+
     $r->get('/visitantes/perfil', function () {
         $correo = Validate::email($_GET['correo'] ?? null);
         $token  = is_string($_GET['t'] ?? null) ? $_GET['t'] : '';
@@ -83,6 +171,9 @@ function register_routes_visitantes(\LMT\Router $r): void
         Response::ok([
             'correo'   => $correo,
             'perfil'   => $row ? visitante_publico($row) : null,
+            // Va también fuera del perfil porque quien todavía no tiene fila no
+            // tiene perfil que mirar, y la pantalla necesita saberlo igual.
+            'protegido' => $row ? !empty($row['acceso_hash']) : false,
             'opciones' => VISITANTE_OPCIONES,
             'emojis'   => VISITANTE_EMOJIS,
         ]);
@@ -493,6 +584,8 @@ function visitante_publico(array $v): array
         'como_se_entero' => (string) ($v['como_se_entero'] ?? ''),
         'primera_visita' => isset($v['primera_visita']) && $v['primera_visita'] !== null
             ? (bool) $v['primera_visita'] : null,
+        // Si tiene clave, no cuál es: el hash no sale nunca de aquí.
+        'protegido'      => !empty($v['acceso_hash']),
         'actualizado'    => (string) ($v['updated_at'] ?? ''),
     ];
 }

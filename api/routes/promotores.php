@@ -176,8 +176,23 @@ function register_routes_promotores(\LMT\Router $r): void
             throw $e;
         }
 
-        $plantilla = Correos::solicitudRecibida($nombre);
-        Mailer::send($email, $nombre, $plantilla['asunto'], $plantilla['html'], $plantilla['texto'], 'solicitud_recibida');
+        // El QR se genera aquí, con el token recién creado. En la base sólo
+        // queda su hash, así que ésta es la única vez que se puede dibujar.
+        $qr = $tokenQr !== null ? promotor_qr_paquete($email, $tokenQr) : [];
+
+        // Si el correo sale, el QR va dentro: quien eligió este método suele ser
+        // justo quien no quiere depender del correo, pero tenerlo también en el
+        // buzón le da una segunda copia que no se pierde al cerrar la pestaña.
+        $adjuntos = [];
+        if ($tokenQr !== null) {
+            $png = promotor_qr_bytes($email, $tokenQr, 8);
+            if ($png !== null) {
+                $adjuntos[] = ['nombre' => 'qr-acceso.png', 'mime' => 'image/png', 'datos' => $png, 'cid' => 'qracceso'];
+            }
+        }
+
+        $plantilla = Correos::solicitudRecibida($nombre, $adjuntos !== []);
+        Mailer::send($email, $nombre, $plantilla['asunto'], $plantilla['html'], $plantilla['texto'], 'solicitud_recibida', $adjuntos);
         promotores_avisar_admins($nombre, $email, (string) $municipio);
 
         // El token del QR se devuelve UNA vez y no se vuelve a poder consultar:
@@ -186,8 +201,7 @@ function register_routes_promotores(\LMT\Router $r): void
         Response::ok(array_filter([
             'recibido'      => true,
             'acceso_metodo' => $accesoMetodo,
-            'qr_token'      => $tokenQr,
-        ], fn($v) => $v !== null));
+        ], fn($v) => $v !== null) + $qr);
     });
 
     /**
@@ -576,6 +590,7 @@ function register_routes_promotores(\LMT\Router $r): void
         $sql = 'SELECT p.id, p.email, p.nombre, p.documento, p.telefono, p.municipio,
                        p.empresa_tentativa, p.mensaje, p.estado, p.stand_id, p.created_at,
                        p.verificado_at, p.ultimo_acceso, p.must_change_password, p.motivo,
+                       p.acceso_metodo,
                        e.nombre AS empresa_nombre,
                        (SELECT COUNT(*) FROM productos pr WHERE pr.promotor_id = p.id) AS productos
                 FROM promotores p
@@ -646,6 +661,45 @@ function register_routes_promotores(\LMT\Router $r): void
         // acceso y lo pide. Aquí sí se genera una credencial nueva, aunque
         // hubiera elegido método propio, y la anterior deja de valer.
         Response::ok(promotor_emitir_credenciales($pdo, $row, 'clave_promotor_reenvio', true));
+    });
+
+    /**
+     * Vuelve a emitir el QR de acceso. El anterior deja de valer.
+     *
+     * Existe porque el QR se enseña UNA sola vez —en la base queda su hash— y
+     * quien lo pierda se quedaría fuera. La otra salida, mandarle una clave por
+     * correo, es exactamente lo que este método existe para evitar: el
+     * organizador reemite el QR, lo enseña en pantalla o lo imprime, y se lo da
+     * en mano en la feria.
+     */
+    $r->post('/admin/promotores/:id/qr', function (array $params) {
+        Security::requireAdmin();
+        $id = Validate::entero($params['id'] ?? null, 1, PHP_INT_MAX);
+        if ($id === null) Response::error(400, 'bad_id');
+
+        $pdo = Db::pdo();
+        $sel = $pdo->prepare('SELECT id, email, nombre, estado FROM promotores WHERE id = :id');
+        $sel->execute([':id' => $id]);
+        $row = $sel->fetch();
+        if (!$row) Response::error(404, 'not_found');
+        if (in_array((string) $row['estado'], ['rechazado', 'suspendido'], true)) {
+            Response::error(409, 'estado_no_permite_clave');
+        }
+
+        $token = promotor_token_qr();
+        // must_change_password a 0: un QR de 32 caracteres al azar ya es una
+        // credencial fuerte, no una llave prestada que haya que cambiar.
+        $pdo->prepare(
+            'UPDATE promotores SET acceso_metodo = \'qr\', password_hash = :h, must_change_password = 0,
+                                   password_expira_at = NULL, intentos_fallidos = 0, bloqueado_hasta = NULL,
+                                   updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        )->execute([':h' => Security::hashPassword($token), ':id' => $id]);
+
+        Response::ok(promotor_qr_paquete((string) $row['email'], $token) + [
+            'email'  => (string) $row['email'],
+            'nombre' => (string) $row['nombre'],
+        ]);
     });
 
     $r->post('/admin/promotores/:id/rechazar', function (array $params) {
@@ -1171,6 +1225,62 @@ function promotor_token_qr(): string
     return bin2hex(random_bytes(16));
 }
 
+/**
+ * URL que codifica el QR de acceso.
+ *
+ * Lleva el correo además del token porque el token por sí solo no identifica a
+ * nadie: en la base sólo queda su hash y no se puede buscar por él. Es el QR de
+ * esa persona y lo guarda ella, así que el correo no añade exposición.
+ *
+ * El host sale de Security::baseUrlPublica() y no de la cabecera Host: este QR
+ * se guarda en el móvil y se escanea meses después; con el host manipulado
+ * llevaría al sitio de otro a pedir la credencial.
+ */
+function promotor_qr_url(string $email, string $token): string
+{
+    return Security::baseUrlPublica() . '/promotor?correo=' . rawurlencode($email)
+         . '&acceso=' . rawurlencode($token);
+}
+
+/**
+ * PNG del QR de acceso, en bytes.
+ *
+ * Se genera en el SERVIDOR y no en el navegador por dos motivos: el generador
+ * de QR vive aquí (no hay uno en JS) y el endpoint público /qr/{id}.png sólo
+ * sabe de stands —darle texto libre lo convertiría en una fábrica de códigos
+ * QR para cualquiera, que es media suplantación regalada—.
+ *
+ * Si la URL no cupiera en un QR (correos muy largos + subdirectorio hondo) se
+ * codifica sólo el token: escanearlo no abre el portal solo, pero el código
+ * sigue leyéndose y sirve para escribirlo como contraseña.
+ */
+function promotor_qr_bytes(string $email, string $token, int $escala = 6): ?string
+{
+    foreach ([promotor_qr_url($email, $token), $token] as $texto) {
+        try {
+            return \LMT\QrCode::png($texto, $escala, 4);
+        } catch (\Throwable $e) {
+            error_log('[lmt][promotores][qr-acceso] ' . $e->getMessage());
+        }
+    }
+    return null;
+}
+
+/**
+ * El QR de acceso listo para la respuesta JSON: token, URL e imagen incrustada
+ * como data URI. Devuelve sólo lo que exista; si el PNG falla, el token en
+ * letras basta para entrar.
+ */
+function promotor_qr_paquete(string $email, string $token): array
+{
+    $png = promotor_qr_bytes($email, $token);
+    return array_filter([
+        'qr_token' => $token,
+        'qr_url'   => promotor_qr_url($email, $token),
+        'qr_png'   => $png !== null ? 'data:image/png;base64,' . base64_encode($png) : null,
+    ], fn($v) => $v !== null);
+}
+
 /** Cómo se llama cada método de cara a la persona. */
 function promotor_acceso_etiqueta(?string $metodo): string
 {
@@ -1316,6 +1426,9 @@ function promotor_fila_admin(array $p): array
         'motivo'            => (string) ($p['motivo'] ?? ''),
         'estado'            => (string) $p['estado'],
         'stand_id'          => $p['stand_id'] ?? null,
+        // Con qué eligió entrar. El panel lo necesita para ofrecer «reemitir
+        // el QR» sólo a quien entra con QR: a los demás no les diría nada.
+        'acceso_metodo'     => (string) ($p['acceso_metodo'] ?? ''),
         'productos'         => (int) ($p['productos'] ?? 0),
         'must_change'       => (bool) $p['must_change_password'],
         'created_at'        => $p['created_at'] ?? null,

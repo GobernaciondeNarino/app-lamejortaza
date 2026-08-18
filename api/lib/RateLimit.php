@@ -29,6 +29,11 @@ final class RateLimit
         'foto_visitante'        => ['window' => 3600, 'max' => 12],
         'perfil_enlace'         => ['window' => 3600, 'max' => 10],
         'perfil_enlace_correo'  => ['window' => 3600, 'max' => 3],
+        // Puerta del ciudadano (correo -> testigo). Generoso por IP, porque en
+        // la feria una familia entera entra desde el mismo wifi; estrecho por
+        // correo, que es lo que frena a quien prueba claves de una persona.
+        'perfil_acceso'         => ['window' => 600,  'max' => 30],
+        'perfil_acceso_correo'  => ['window' => 900,  'max' => 8],
         'correo_prueba'         => ['window' => 600,  'max' => 10],
         'global'                => ['window' => 60,   'max' => 120],
     ];

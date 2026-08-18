@@ -52,6 +52,10 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
   return (
     <div style={{ minHeight: "100dvh", background: "var(--paper)" }}>
       <PublicHeader/>
+      {/* Lo primero que ve quien llega sin identificarse. Con el correo puesto
+          no aparece: el ranking y el mapa se ven sin escribir nada y la portada
+          no es un muro. */}
+      <InvitacionCorreo/>
 
       <section className="lmt-three-wrap" ref={(el) => { if (el && window.LMTThree && !el.dataset.threeMounted) window.LMTThree.mount(el); }} data-three-bg
                className="seccion" style={{ paddingTop: 48, paddingBottom: 32, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 36, alignItems: "flex-end", position: "relative", overflow: "hidden", minHeight: 320 }}>
