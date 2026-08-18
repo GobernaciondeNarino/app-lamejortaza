@@ -83,15 +83,48 @@ const ACCESO_FRASE = {
 };
 
 /**
- * URL que lleva el QR. Incluye el correo porque el token por sí solo no
- * identifica a nadie: en la base está hasheado con sal y no se puede buscar
- * por él. Es el QR de esa persona y lo guarda ella, así que no añade
- * exposición.
+ * El código QR de acceso, tal y como se enseña la única vez que se puede
+ * enseñar: en la base sólo queda su hash.
+ *
+ * La imagen llega del servidor como data URI. No se dibuja aquí porque el
+ * generador de QR vive en PHP —no hay uno en JS— y el endpoint público
+ * /qr/{id}.png sólo sabe de stands: darle texto libre lo convertiría en una
+ * fábrica de códigos QR para cualquiera.
+ *
+ * Debajo va el mismo código en letras, porque un QR no se puede copiar a mano
+ * y hay quien prefiere escribirlo, y un enlace para bajarlo al carrete del
+ * teléfono, que es donde de verdad se guarda algo en una feria.
  */
-const qrUrlAcceso = (correo, token) => {
-  const base = (window.LMT_BASE_URL || location.origin + (window.LMT_BASE_PATH || "")).replace(/\/$/, "");
-  return base + "/promotor?correo=" + encodeURIComponent(correo) + "&acceso=" + encodeURIComponent(token);
-};
+const TarjetaQrAcceso = ({ png, token, url, titulo = "Tu código de acceso", children }) => (
+  <div style={{
+    border: "2px solid var(--ink)", borderRadius: "var(--r-md)",
+    padding: 18, marginBottom: 24, textAlign: "center",
+  }}>
+    <div className="mono" style={{ marginBottom: 10 }}>{titulo}</div>
+    {png ? (
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+        <img src={png} alt={"Código QR de acceso" + (url ? " (" + url + ")" : "")} width={200} height={200}
+          style={{ width: 200, height: 200, imageRendering: "pixelated", background: "#fff", borderRadius: "var(--r-sm)" }}/>
+      </div>
+    ) : (
+      <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 12 }}>
+        No fue posible dibujar el código, pero el acceso de abajo funciona igual:
+        escríbelo como contraseña.
+      </p>
+    )}
+    <div className="mono ruta" style={{
+      fontSize: 13, wordBreak: "break-all", padding: "8px 10px",
+      background: "var(--paper-2)", borderRadius: "var(--r-sm)", marginBottom: 12,
+    }}>{token}</div>
+    {png && (
+      <a href={png} download="qr-acceso.png" className="btn btn-ghost"
+        style={{ justifyContent: "center", width: "100%", marginBottom: 12 }}>
+        ↓ Guardar el código
+      </a>
+    )}
+    {children}
+  </div>
+);
 
 const SelectorAcceso = ({ metodo, valor, valor2, onMetodo, onValor, onValor2 }) => {
   const sel = ACCESOS.find((a) => a.id === metodo) || ACCESOS[0];
@@ -162,9 +195,10 @@ const PromotorRegistroPage = () => {
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
   const [enviado, setEnviado] = React.useState(false);
-  // El token del QR llega UNA vez en la respuesta y no se puede volver a
-  // consultar: en la base sólo queda su hash. Se enseña en la pantalla final.
-  const [qrToken, setQrToken] = React.useState("");
+  // El QR llega UNA vez en la respuesta —token, URL e imagen ya dibujada por
+  // el servidor— y no se puede volver a consultar: en la base sólo queda su
+  // hash. Se enseña en la pantalla final para que lo guarde ahí mismo.
+  const [qr, setQr] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -208,8 +242,8 @@ const PromotorRegistroPage = () => {
         lng: ubicacion.lng,
         acepta_datos: true,
       });
-      // El token del QR sólo viaja en esta respuesta: en la base queda su hash.
-      if (res && res.qr_token) setQrToken(res.qr_token);
+      // El QR sólo viaja en esta respuesta: en la base queda su hash.
+      if (res && res.qr_token) setQr({ token: res.qr_token, png: res.qr_png || "", url: res.qr_url || "" });
       setEnviado(true);
     } catch (err) {
       setError(mensajeError(err, "No fue posible enviar tu solicitud."));
@@ -235,25 +269,14 @@ const PromotorRegistroPage = () => {
 
           {/* El código sólo se puede enseñar AQUÍ: en la base queda su hash y
               no hay forma de recuperarlo. Por eso la pantalla insiste. */}
-          {qrToken && (
-            <div style={{
-              border: "2px solid var(--ink)", borderRadius: "var(--r-md)",
-              padding: 18, marginBottom: 24, textAlign: "center",
-            }}>
-              <div className="mono" style={{ marginBottom: 10 }}>Tu código de acceso</div>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-                <QRCode value={qrUrlAcceso(form.email, qrToken)} size={190}/>
-              </div>
-              <div className="mono ruta" style={{
-                fontSize: 13, wordBreak: "break-all", padding: "8px 10px",
-                background: "var(--paper-2)", borderRadius: "var(--r-sm)", marginBottom: 12,
-              }}>{qrToken}</div>
+          {qr && (
+            <TarjetaQrAcceso png={qr.png} token={qr.token} url={qr.url}>
               <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
-                <strong>Guárdalo ahora</strong>: hazle una foto o escríbelo. Por seguridad no
-                lo podemos volver a mostrar. Escanea el código para entrar, o escribe esas
-                letras y números como contraseña.
+                <strong>Guárdalo ahora</strong>: descárgalo, hazle una foto o escríbelo. Por
+                seguridad no lo podemos volver a mostrar. Escanea el código para entrar, o
+                escribe esas letras y números como contraseña.
               </p>
-            </div>
+            </TarjetaQrAcceso>
           )}
 
           <a href="/" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>← Volver al inicio</a>
@@ -956,6 +979,9 @@ const AdminPromotores = ({ stands }) => {
   const [error, setError] = React.useState("");
   const [aviso, setAviso] = React.useState(null);   // { tipo, texto }
   const [ocupado, setOcupado] = React.useState(0);
+  // QR recién reemitido. Se enseña una sola vez, igual que al promotor: el
+  // organizador lo imprime o se lo pasa en mano, y al cerrar desaparece.
+  const [qr, setQr] = React.useState(null);
 
   const cargar = React.useCallback(async (estado) => {
     setCargando(true);
@@ -991,6 +1017,14 @@ const AdminPromotores = ({ stands }) => {
       ? { tipo: "ok", texto: `Nueva contraseña enviada a ${p.email}. La anterior dejó de funcionar.` }
       : { tipo: "error", texto: `El correo no salió. Clave nueva para ${p.email}: ${res.clave_temporal}` }
   ));
+
+  const reemitirQr = (p) => {
+    if (!window.confirm(`Se generará un código QR nuevo para ${p.email}. El anterior dejará de funcionar. ¿Continuar?`)) return;
+    accion(p.id, () => window.LMTApi.reemitirQrPromotor(p.id), (res) => {
+      setQr({ ...res, email: p.email, nombre: p.nombre });
+      return { tipo: "ok", texto: `Código nuevo para ${p.email}. El anterior ya no sirve: entrégaselo antes de cerrar.` };
+    });
+  };
 
   const rechazar = (p) => {
     const motivo = window.prompt("Motivo del rechazo (se enviará al promotor):", "");
@@ -1039,6 +1073,20 @@ const AdminPromotores = ({ stands }) => {
 
       {aviso && <Aviso tipo={aviso.tipo}>{aviso.texto}</Aviso>}
       <Aviso>{error}</Aviso>
+
+      {qr && (
+        <div style={{ maxWidth: 340, margin: "18px 0" }}>
+          <TarjetaQrAcceso png={qr.qr_png} token={qr.qr_token} url={qr.qr_url}
+            titulo={`Código de ${qr.nombre || qr.email}`}>
+            <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, margin: "0 0 12px" }}>
+              Descárgalo o imprímelo y entrégaselo. Al cerrar este recuadro no se puede
+              volver a ver: en la base sólo queda su huella.
+            </p>
+            <button type="button" className="btn btn-ghost" onClick={() => setQr(null)}
+              style={{ justifyContent: "center", width: "100%" }}>Ya lo entregué, cerrar</button>
+          </TarjetaQrAcceso>
+        </div>
+      )}
 
       {cargando ? (
         <div className="splash">Cargando…</div>
@@ -1095,6 +1143,13 @@ const AdminPromotores = ({ stands }) => {
                   {(p.estado === "verificado" || p.estado === "activo") && (
                     <button className="btn btn-ghost" disabled={ocupado === p.id} onClick={() => reenviar(p)} style={{ justifyContent: "center" }}>
                       Reenviar contraseña
+                    </button>
+                  )}
+                  {/* Sólo a quien entra con QR: el suyo se enseñó una vez y no
+                      se puede recuperar, así que perderlo lo dejaría fuera. */}
+                  {p.acceso_metodo === "qr" && p.estado !== "rechazado" && p.estado !== "suspendido" && (
+                    <button className="btn btn-ghost" disabled={ocupado === p.id} onClick={() => reemitirQr(p)} style={{ justifyContent: "center" }}>
+                      Reemitir código QR
                     </button>
                   )}
                   {p.estado !== "rechazado" && (
@@ -1176,4 +1231,5 @@ Object.assign(window, {
   AdminPromotores,
   AdminCorreos,
   EstadoPill,
+  TarjetaQrAcceso,
 });

@@ -93,11 +93,9 @@ const RecorridoPage = ({ stands }) => {
     return () => window.removeEventListener("lmt:festival", refrescar);
   }, []);
 
-  // El correo lo dejó el voto en este dispositivo. Sin él no hay «mi»
-  // recorrido, pero la página sigue teniendo sentido: es el catálogo.
-  const correo = React.useMemo(() => {
-    try { return localStorage.getItem("lmt.email") || ""; } catch (_) { return ""; }
-  }, []);
+  // Sin correo no hay «mi» recorrido: es de esta persona y hay que saber quién
+  // es. Se pide con la misma puerta que el pasaporte y el perfil.
+  const [correo, setCorreo] = React.useState(() => (window.LMTPerfil && window.LMTPerfil.correoConocido()) || "");
 
   React.useEffect(() => {
     if (!correo) { setCargando(false); return; }
@@ -105,8 +103,7 @@ const RecorridoPage = ({ stands }) => {
     const intentar = async () => {
       if (cancelado || !window.LMTApi || !window.LMTApi.enabled) return;
       try {
-        const g = (window.LMTPerfil && window.LMTPerfil.leer()) || {};
-        const t = g.correo === correo.toLowerCase() ? g.token : "";
+        const t = (window.LMTPerfil && window.LMTPerfil.testigoDe(correo)) || "";
         const res = await window.LMTApi.getPasaporte(correo, t);
         if (!cancelado) setPasaporte(res);
       } catch (_) { /* sin pasaporte: se ve el catálogo entero apagado */ }
@@ -132,6 +129,16 @@ const RecorridoPage = ({ stands }) => {
     return copia;
   }, [stands, setVisitados]);
 
+  if (!correo) {
+    return (
+      <PuertaCorreo
+        titulo="Tu recorrido por el festival."
+        nota="Escribe el correo con el que votas en los stands y verás cuáles llevas sellados. No hace falta contraseña."
+        volverA="/festival" volverTexto="← Volver al ranking"
+        onListo={(c) => setCorreo(c)}/>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100dvh", background: "var(--paper)" }}>
       <PublicHeader/>
@@ -141,12 +148,12 @@ const RecorridoPage = ({ stands }) => {
           Los stands del festival.
         </h1>
         <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 560 }}>
-          {correo
+          {visitados.length
             ? <>Llevas <strong style={{ fontWeight: 500 }}>{visitados.length} de {stands.length}</strong> sellados. Los que están a color ya los visitaste.</>
             : <>Escanea el QR de cualquier stand y vota: a partir de ahí, los que visites se van encendiendo aquí.</>}
         </p>
 
-        {cargando && correo && (
+        {cargando && (
           <p className="mono" style={{ marginTop: 20, color: "var(--ink-3)" }}>Cargando tu recorrido…</p>
         )}
 

@@ -277,6 +277,7 @@
   async function verPromotor(id)            { return request("/admin/promotores/" + id); }
   async function verificarPromotor(id)      { await ensureCsrf(); return request("/admin/promotores/" + id + "/verificar", { method: "POST" }); }
   async function reenviarClave(id)          { await ensureCsrf(); return request("/admin/promotores/" + id + "/reenviar-clave", { method: "POST" }); }
+  async function reemitirQrPromotor(id)     { await ensureCsrf(); return request("/admin/promotores/" + id + "/qr", { method: "POST" }); }
   async function rechazarPromotor(id, motivo, avisar) {
     await ensureCsrf();
     return request("/admin/promotores/" + id + "/rechazar", { method: "POST", body: { motivo, avisar: avisar !== false } });
@@ -339,6 +340,25 @@
   // Perfil del visitante
   // -----------------------------------------------------------------------
 
+  /**
+   * Puerta del ciudadano: entrega el correo, recibe el testigo.
+   *
+   * Devuelve `{ protegido, token }`. Si el perfil tiene clave y no se manda,
+   * vuelve `{ protegido: true, token: null }` — no es un error, es que hay que
+   * pedirla y volver a llamar.
+   */
+  async function accesoVisitante(correo, clave) {
+    await ensureCsrf();
+    return request("/visitantes/acceso", { method: "POST", body: { correo, clave: clave || "" } });
+  }
+  /** Poner, cambiar (clave_actual) o quitar (clave_nueva vacía) la protección. */
+  async function guardarClaveVisitante(correo, token, claveActual, claveNueva) {
+    await ensureCsrf();
+    return request("/visitantes/clave", {
+      method: "PUT",
+      body: { correo, token, clave_actual: claveActual || "", clave_nueva: claveNueva || "" },
+    });
+  }
   async function getPerfilVisitante(correo, token) {
     return request("/visitantes/perfil?correo=" + encodeURIComponent(correo) + "&t=" + encodeURIComponent(token));
   }
@@ -402,6 +422,7 @@
     verPromotor,
     verificarPromotor,
     reenviarClave,
+    reemitirQrPromotor,
     rechazarPromotor,
     cambiarEstadoPromotor,
     vincularStand,
@@ -426,6 +447,8 @@
     guardarFestivalAjustes,
     subirFondoPasaporte,
     quitarFondoPasaporte,
+    accesoVisitante,
+    guardarClaveVisitante,
     getPerfilVisitante,
     guardarPerfilVisitante,
     borrarPerfilVisitante,
@@ -443,19 +466,35 @@
   };
 
   /**
-   * Testigo del perfil del visitante, guardado en este navegador.
+   * Identidad del ciudadano en este navegador: su correo y el testigo del
+   * perfil.
    *
-   * No es una sesión: es la prueba —emitida por el servidor al votar— de que
-   * quien está delante controla ese correo. Vive en localStorage porque el
-   * visitante no tiene cuenta y volverá desde el mismo teléfono; quien cambie
-   * de dispositivo pide el enlace a su buzón.
+   * No es una sesión. El testigo lo emite el servidor al votar o al escribir
+   * el correo en la puerta (/visitantes/acceso), y es lo que abre el pasaporte,
+   * el recorrido y el perfil. Vive en localStorage porque el visitante no tiene
+   * cuenta y vuelve desde el mismo teléfono.
+   *
+   * `lmt.email` se escribe a la vez que `lmt.perfil.correo` porque el pasaporte
+   * y el recorrido lo leen de ahí desde antes de que existiera el perfil. Eran
+   * dos verdades sobre la misma persona y se desincronizaban: quien entraba por
+   * el enlace del correo veía el pasaporte de otra dirección.
    */
   window.LMTPerfil = {
     guardar(correo, token) {
+      const c = String(correo || "").toLowerCase();
       try {
-        localStorage.setItem("lmt.perfil.correo", String(correo || "").toLowerCase());
+        localStorage.setItem("lmt.perfil.correo", c);
         localStorage.setItem("lmt.perfil.token", String(token || ""));
+        if (c) localStorage.setItem("lmt.email", c);
       } catch (_) { /* navegación privada: el perfil se abre por el enlace del correo */ }
+    },
+    /** El correo sin testigo. Lo escribe quien sólo se identificó para mirar. */
+    guardarCorreo(correo) {
+      const c = String(correo || "").toLowerCase();
+      try {
+        localStorage.setItem("lmt.email", c);
+        localStorage.setItem("lmt.perfil.correo", c);
+      } catch (_) {}
     },
     leer() {
       try {
@@ -465,14 +504,26 @@
         };
       } catch (_) { return { correo: "", token: "" }; }
     },
+    /** El correo que esta persona ya escribió, venga de donde venga. */
+    correoConocido() {
+      try {
+        return (localStorage.getItem("lmt.email") || localStorage.getItem("lmt.perfil.correo") || "").toLowerCase();
+      } catch (_) { return ""; }
+    },
     tieneTestigo() {
       const c = window.LMTPerfil.leer();
       return !!(c.correo && c.token);
+    },
+    /** El testigo sirve para ESE correo y no para otro. */
+    testigoDe(correo) {
+      const c = window.LMTPerfil.leer();
+      return c.token && c.correo === String(correo || "").toLowerCase() ? c.token : "";
     },
     olvidar() {
       try {
         localStorage.removeItem("lmt.perfil.correo");
         localStorage.removeItem("lmt.perfil.token");
+        localStorage.removeItem("lmt.email");
       } catch (_) {}
     },
   };

@@ -179,6 +179,12 @@ CREATE TABLE IF NOT EXISTS visitantes (
   -- lo que hacen es dejarlo vacío.
   avatar_path    TEXT,
   avatar_emoji   TEXT,
+  -- Autenticación OPCIONAL. Escribir el correo basta para abrir el pasaporte,
+  -- el recorrido y el perfil: en una feria la gente llega, vota y quiere ver su
+  -- libreta sin inventarse una contraseña, y obligar a una era perder a la
+  -- mitad del público. Quien quiera cerrar su perfil pone una clave desde
+  -- dentro y a partir de ahí se le exige. Va hasheada como cualquier otra.
+  acceso_hash    TEXT,
   genero         TEXT CHECK (genero IS NULL OR genero IN ('hombre','mujer','otro','prefiero_no_decir')),
   rango_edad     TEXT CHECK (rango_edad IS NULL OR rango_edad IN ('menor_18','18_25','26_35','36_45','46_60','mayor_60','prefiero_no_decir')),
   pais           TEXT,

@@ -57,28 +57,63 @@ HTML;
     }
 
     /** Acuse de recibo de la solicitud de inscripción. */
-    public static function solicitudRecibida(string $nombre): array
+    /**
+     * `$conQrAcceso` añade el bloque del código QR con el que va a entrar. Va
+     * INCRUSTADO (cid:qracceso), no como enlace: el promotor lo abre en el
+     * móvil y tiene que poder verlo sin descargar nada, y así el propio buzón
+     * le queda de copia de seguridad del código que se enseña una sola vez en
+     * pantalla. Quien envía adjunta la imagen con Mailer::send(..., $adjuntos).
+     */
+    public static function solicitudRecibida(string $nombre, bool $conQrAcceso = false): array
     {
         $n = self::h($nombre);
+
+        $bloqueQr = '';
+        $textoQr  = '';
+        if ($conQrAcceso) {
+            $bloqueQr = <<<HTML
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e0d6c2;border-radius:8px;margin:0 0 18px;">
+  <tr><td style="padding:18px;" align="center">
+    <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Tu código de acceso</div>
+    <img src="cid:qracceso" alt="Código QR de acceso" width="200" height="200" style="display:block;margin:12px auto 8px;width:200px;height:200px;"/>
+    <div style="font-size:13px;color:#6d6154;line-height:1.6;">
+      Guarda esta imagen. Escanéala para entrar al portal cuando tu stand quede aprobado.
+    </div>
+  </td></tr>
+</table>
+HTML;
+            $textoQr = "Tu codigo de acceso viaja como imagen adjunta en este mismo correo (qr-acceso.png).\n"
+                . "Guardala: al escanearla entraras al portal cuando tu stand quede aprobado.\n\n";
+        }
+
+        $cierre = $conQrAcceso
+            ? 'Cuando quede aprobada te avisaremos por este mismo correo y te enviaremos el '
+              . '<strong>código QR de tu stand</strong>, listo para imprimir.'
+            : 'Cuando quede aprobada te enviaremos a este mismo correo tu <strong>contraseña de acceso</strong> '
+              . 'para que completes el perfil de tu empresa y cargues tus productos.';
+
         $html = self::envoltura('Solicitud recibida', <<<HTML
 <p style="font-size:16px;margin:0 0 14px;">Hola {$n},</p>
 <p style="font-size:15px;line-height:1.65;margin:0 0 14px;">
   Recibimos tu solicitud para inscribirte como <strong>promotor de stand</strong> del festival.
   Un administrador la revisará en los próximos días hábiles.
 </p>
+{$bloqueQr}
 <p style="font-size:15px;line-height:1.65;margin:0 0 14px;">
-  Cuando quede aprobada te enviaremos a este mismo correo tu <strong>contraseña de acceso</strong>
-  para que completes el perfil de tu empresa y cargues tus productos.
+  {$cierre}
 </p>
 <p style="font-size:14px;color:#6d6154;line-height:1.6;margin:18px 0 0;">
   No necesitas hacer nada más por ahora.
 </p>
 HTML);
+        $textoCierre = $conQrAcceso
+            ? "Cuando quede aprobada te avisaremos por este mismo correo y te enviaremos el codigo QR\nde tu stand, listo para imprimir.\n\n"
+            : "Cuando quede aprobada te enviaremos a este mismo correo tu contraseña de acceso para que\ncompletes el perfil de tu empresa y cargues tus productos.\n\n";
         $texto = "Hola {$nombre},\n\n"
             . "Recibimos tu solicitud para inscribirte como promotor de stand del festival La Mejor Taza.\n"
             . "Un administrador la revisará en los próximos días hábiles.\n\n"
-            . "Cuando quede aprobada te enviaremos a este mismo correo tu contraseña de acceso para que\n"
-            . "completes el perfil de tu empresa y cargues tus productos.\n\n"
+            . $textoQr
+            . $textoCierre
             . "No necesitas hacer nada más por ahora.\n";
         return ['asunto' => 'Recibimos tu solicitud — La Mejor Taza', 'html' => $html, 'texto' => $texto];
     }

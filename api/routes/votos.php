@@ -176,11 +176,17 @@ function register_routes_votos(\LMT\Router $r): void
             throw $e;
         }
 
-        // Testigo del perfil del visitante. Se emite aquí porque votar es el
-        // único momento en que alguien demuestra —dentro del propio acto— que
-        // ese correo es el suyo. Con él, y sólo con él, se puede abrir y editar
-        // la caracterización voluntaria en /perfil.
-        Response::ok(['perfil_token' => visitante_token($correo)]);
+        // Testigo del perfil del visitante: con él se abre y se edita la
+        // caracterización voluntaria en /perfil.
+        //
+        // No se emite si esa persona puso clave a su perfil. Votar demuestra
+        // que tienes ese correo a mano, no que seas quien decidió cerrarlo; sin
+        // esta excepción, escribir el correo de otro en cualquier stand abriría
+        // el perfil que precisamente se había protegido.
+        $protegido = Db::pdo()->prepare('SELECT acceso_hash FROM visitantes WHERE correo = :c');
+        $protegido->execute([':c' => $correo]);
+
+        Response::ok(['perfil_token' => $protegido->fetchColumn() ? null : visitante_token($correo)]);
     });
 
     // Borrar voto (sólo admin) — se usa para moderar comentarios ofensivos.

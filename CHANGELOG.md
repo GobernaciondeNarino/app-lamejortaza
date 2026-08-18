@@ -7,6 +7,84 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.3.0 — Con el correo basta
+
+**Punto de reversión (v2.2.0):** `cd4488f`
+
+### El ciudadano entra con su correo
+
+Para ver el pasaporte, el recorrido o el perfil basta con **escribir el
+correo**. No hay contraseña, no hay que esperar un enlace, no hay que haber
+votado antes desde ese mismo teléfono. Antes, el perfil sólo se abría con el
+testigo que dejaba el voto en el navegador; quien cambiaba de teléfono o
+navegaba en privado se quedaba fuera de sus propios datos.
+
+Y **el tablero lo pide arriba del todo**: quien llega sin identificarse ve una
+franja con un campo de correo y qué gana escribiéndolo. Con el correo puesto
+desaparece —el ranking y el mapa se ven sin escribir nada, la portada no es un
+muro— y votar pasa a ser un solo toque.
+
+**Qué significa exactamente, sin adornos:** quien conozca el correo de otra
+persona puede abrir su pasaporte y su caracterización. Es una decisión
+consciente. La alternativa —una contraseña para todo el mundo— dejaba fuera a
+la mayor parte del público de una feria de dos días, y quien quiera cerrar su
+perfil tiene la clave a un toque.
+
+### La clave del perfil, opcional
+
+Dentro de «Mi perfil» hay ahora un bloque **Protección de tu perfil**: se pone
+una clave y a partir de ese momento se pide en las tres pantallas, además del
+correo. Se cambia y se quita desde el mismo sitio, escribiendo la actual.
+
+Tres detalles que no se ven pero sostienen esto:
+
+- **Votar deja de entregar el testigo** si esa persona puso clave. Votar
+  demuestra que tienes ese correo a mano, no que seas quien decidió cerrarlo.
+- **Cambiar o quitar la clave exige la clave actual**, aunque se traiga un
+  testigo válido: hasta que hubo clave el testigo se conseguía con el correo, y
+  quedan testigos viejos en otros navegadores.
+- **El enlace al buzón sigue siendo la recuperación** y salta la clave a
+  propósito: llegar al buzón es la prueba de propiedad de verdad.
+
+La puerta tiene dos límites: uno por IP, generoso —en la feria una familia
+entera entra desde el mismo wifi— y otro **por correo**, estrecho, que es el
+que frena a quien prueba claves de una persona concreta desde muchas IP.
+
+### El QR del promotor se genera de verdad
+
+Elegir «código QR» al inscribirse enseñaba **el QR del stand `st-01`**, el
+mismo para todo el mundo: el componente que lo pintaba sólo sabía construir
+`/qr/{stand}.png` y además se le pasaba el dato con el nombre equivocado. El
+promotor guardaba un código que no era el suyo.
+
+Ahora el PNG lo dibuja el servidor con el token recién creado y viaja
+incrustado en la respuesta. En pantalla se ve el código, el token en letras y
+un botón para **guardarlo en el teléfono**; si el correo sale, va también
+adjunto al mensaje de «solicitud recibida», que le deja una segunda copia en el
+buzón.
+
+No se ha abierto ningún endpoint que convierta texto libre en un QR: eso sería
+una fábrica de códigos para cualquiera, y media suplantación regalada.
+
+El panel gana **«Reemitir código QR»** para los promotores que entran así. El
+QR se enseña una sola vez —en la base sólo queda su hash— y sin esto, perderlo
+dejaba a un caficultor fuera de su propio stand.
+
+### Base de datos
+
+Una columna nueva en `visitantes` (`acceso_hash`), opcional y nula por defecto.
+La añade `php db/migrate.php`, que la deduce del esquema.
+
+Para revertir a la v2.2.0: `git checkout cd4488f -- .`. La base no se toca: sin
+`acceso_hash` el flujo vuelve a ser el anterior, y la columna se queda ahí sin
+que nadie la lea. Si además se quiere que las claves de perfil dejen de existir:
+
+```sql
+UPDATE visitantes SET acceso_hash = NULL;
+```
+
+---
+
 ## v2.2.0 — El promotor elige cómo entrar
 
 **Punto de reversión (v2.1.0):** `3296f88`

@@ -334,6 +334,8 @@ const ERRORES = {
   origin_not_allowed:
     "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
   csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
+  clave_incorrecta: "Esa clave no es la de este perfil.",
+  clave_corta: "La clave debe tener al menos 6 caracteres.",
   internal_error:
     "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado.",
 };
@@ -356,6 +358,146 @@ const Aviso = ({ tipo = "error", children }) => {
       border: `1px solid ${color}`, color, borderRadius: "var(--r-sm)",
       background: `color-mix(in oklch, ${color} 6%, var(--paper))`,
     }}>{children}</div>
+  );
+};
+
+// ── La puerta del ciudadano ───────────────────────────────────────────────
+// Para ver el pasaporte, el recorrido o el perfil basta con escribir el correo:
+// el servidor devuelve el testigo con el que se abren los tres. Quien haya
+// puesto clave a su perfil —opcional, se pone desde dentro— la escribe aquí; el
+// resto no escribe nada más.
+//
+// Vive en Shared porque la usan cuatro pantallas (tablero, pasaporte, recorrido
+// y perfil) y con una copia en cada una acabarían diciendo cosas distintas
+// sobre la misma puerta.
+
+const usarPuerta = (alEntrar) => {
+  const [correo, setCorreo] = React.useState(() => (window.LMTPerfil && window.LMTPerfil.correoConocido()) || "");
+  const [clave, setClave] = React.useState("");
+  const [pideClave, setPideClave] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  const entrar = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError("");
+    const sec = window.LMTSecurity;
+    const limpio = (correo || "").trim();
+    if (!sec || !sec.isEmail(limpio)) { setError("Escribe un correo válido."); return; }
+    const normal = sec.normalizeEmail(limpio);
+    setBusy(true);
+    try {
+      const res = await window.LMTApi.accesoVisitante(normal, pideClave ? clave : "");
+      // Perfil con clave: no es un error, es que todavía no la habíamos pedido.
+      if (res && res.protegido && !res.token) { setPideClave(true); return; }
+      const token = (res && res.token) || "";
+      if (window.LMTPerfil) window.LMTPerfil.guardar(normal, token);
+      if (alEntrar) alEntrar(normal, token);
+    } catch (err) {
+      setError(mensajeError(err, "No fue posible identificarte."));
+    } finally { setBusy(false); }
+  };
+
+  return { correo, setCorreo, clave, setClave, pideClave, error, busy, entrar };
+};
+
+/** Formulario a página completa. Lo usan el pasaporte, el recorrido y el perfil. */
+const PuertaCorreo = ({ titulo, nota, onListo, volverA = "/festival", volverTexto = "← Volver", children }) => {
+  const p = usarPuerta(onListo);
+  return (
+    <div className="mobile-page">
+      <div className="mobile-inner">
+        <a href={volverA} data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>{volverTexto}</a>
+        <div className="mono" style={{ marginTop: 22 }}>Tu festival</div>
+        <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 34, fontWeight: 400, margin: "6px 0 12px", lineHeight: 1.05 }}>
+          {titulo || "Identifícate con tu correo."}
+        </h1>
+        <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.65, marginBottom: 22 }}>
+          {nota || "Es el mismo correo con el que votas en los stands. No hace falta contraseña."}
+        </p>
+
+        <form onSubmit={p.entrar}>
+          <div className="field">
+            <label htmlFor="puerta-correo">Tu correo</label>
+            <input id="puerta-correo" type="email" inputMode="email" autoComplete="email" required maxLength={254}
+              placeholder="nombre@correo.co" value={p.correo}
+              onChange={(e) => p.setCorreo(e.target.value)}/>
+          </div>
+
+          {p.pideClave && (
+            <div className="field" style={{ marginTop: 14 }}>
+              <label htmlFor="puerta-clave">Tu clave</label>
+              <input id="puerta-clave" type="password" autoComplete="current-password" required maxLength={128}
+                value={p.clave} onChange={(e) => p.setClave(e.target.value)} autoFocus/>
+              <span className="ayuda">Este perfil está protegido con la clave que pusiste desde «Mi perfil».</span>
+            </div>
+          )}
+
+          <Aviso>{p.error}</Aviso>
+          <button className="btn btn-primary" type="submit" disabled={p.busy}
+            style={{ justifyContent: "center", padding: 14, width: "100%", marginTop: 20 }}>
+            {p.busy ? "Un momento…" : "Entrar"}
+          </button>
+        </form>
+
+        <p style={{ color: "var(--ink-3)", fontSize: 12, lineHeight: 1.6, marginTop: 18 }}>
+          ¿Todavía no has votado? Escanea el QR de cualquier stand y tu pasaporte se crea solo.
+        </p>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Invitación en la parte de arriba del tablero. Desaparece en cuanto la persona
+ * escribe su correo, y no vuelve: lo que hay debajo —el ranking, el mapa— se ve
+ * sin identificarse y no queremos convertir la portada en un muro.
+ */
+const InvitacionCorreo = () => {
+  const [correoYa, setCorreoYa] = React.useState(() => (window.LMTPerfil && window.LMTPerfil.correoConocido()) || "");
+  const p = usarPuerta((c) => setCorreoYa(c));
+  if (correoYa) return null;
+
+  return (
+    <div style={{
+      background: "var(--ink)", color: "var(--paper)", padding: "16px 32px",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 18, flexWrap: "wrap",
+    }}>
+      <div style={{ minWidth: 200, flex: "1 1 260px", maxWidth: 460 }}>
+        <div className="mono" style={{ color: "var(--paper-3)" }}>Tu pasaporte del festival</div>
+        <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 21, lineHeight: 1.15, marginTop: 2 }}>
+          Escribe tu correo y verás tu pasaporte, tu recorrido y tu perfil.
+        </div>
+      </div>
+      <form onSubmit={p.entrar} style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: "1 1 300px", maxWidth: 460 }}>
+        <input type="email" inputMode="email" autoComplete="email" required maxLength={254}
+          aria-label="Tu correo" placeholder="nombre@correo.co"
+          value={p.correo} onChange={(e) => p.setCorreo(e.target.value)}
+          style={{
+            flex: "2 1 180px", minWidth: 0, padding: "11px 12px", fontSize: 14,
+            border: "1px solid var(--paper-3)", borderRadius: "var(--r-sm)",
+            background: "transparent", color: "var(--paper)",
+          }}/>
+        {p.pideClave && (
+          <input type="password" autoComplete="current-password" required maxLength={128}
+            aria-label="Tu clave" placeholder="Tu clave" autoFocus
+            value={p.clave} onChange={(e) => p.setClave(e.target.value)}
+            style={{
+              flex: "2 1 150px", minWidth: 0, padding: "11px 12px", fontSize: 14,
+              border: "1px solid var(--paper-3)", borderRadius: "var(--r-sm)",
+              background: "transparent", color: "var(--paper)",
+            }}/>
+        )}
+        <button type="submit" className="btn" disabled={p.busy}
+          style={{ flex: "1 1 110px", justifyContent: "center", background: "var(--paper)", color: "var(--ink)", border: "none" }}>
+          {p.busy ? "…" : "Entrar"}
+        </button>
+        {p.error && (
+          <div role="alert" style={{ flex: "1 1 100%", fontSize: 12, color: "var(--paper-3)" }}>{p.error}</div>
+        )}
+      </form>
+    </div>
   );
 };
 
@@ -568,4 +710,5 @@ Object.assign(window, {
   Estrella, EstrellasEntrada, EstrellasLectura,
   ESTRELLA_CAMPOS, ESTRELLA_CLAVES, titulosEstrellas, pesos,
   MenuPublico, MENU_PUBLICO,
+  usarPuerta, PuertaCorreo, InvitacionCorreo,
 });
