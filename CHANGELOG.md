@@ -7,6 +7,88 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.4.0 — El pasaporte, hoja por hoja
+
+**Punto de reversión (v2.3.0):** `6860ffb`
+
+### La hoja del sello
+
+Debajo del sello va ahora **la votación de esa persona en ese stand**: las tres
+valoraciones en estrellas, tal como las puso. Si votó de un toque, sin
+estrellas, sale el veredicto del emoji. Abajo, una línea con **la fecha y la
+hora reales del sello**.
+
+Esa fecha antes estaba **escrita a mano en el código** —`14·ABR·2026`, la misma
+para todos los stands y para todo el mundo—. Bonita en la maqueta y falsa en
+cuanto alguien miraba dos hojas seguidas. Ahora sale de la hora del voto.
+
+### La hoja de datos
+
+Rehecha con la forma de la página del titular de un pasaporte: número del
+documento arriba en el color del sello, **apellidos y nombres separados**,
+ciudad de origen, nacionalidad, expedición y validez, última visita, sellos,
+correo registrado, la firma del portador y el número dibujado como código QR.
+Debajo, la banda de lectura mecánica en el formato de verdad
+(`P<COL` + apellidos + `<<` + nombres).
+
+**La foto que el visitante subió en su perfil se ve aquí**, en el recuadro del
+retrato. Sin foto, el rayado de «aquí falta una imagen» con su emoji o sus
+iniciales, y el rótulo `FOTOGRAFÍA` debajo.
+
+El perfil guarda **un solo campo de nombre**, así que partirlo en nombres y
+apellidos es una convención: la mitad de atrás, redondeando hacia abajo, son
+apellidos. Acierta con los repartos habituales (2+2, 2+1, 1+1) y nunca deja el
+campo vacío. En la base sigue habiendo un nombre y nada más.
+
+**Ya no aparecen sexo, edad ni tipo de visitante**: no caben en esta
+disposición y siguen estando en «Mi perfil», que es de quien los escribió.
+
+### El texto de las hojas internas
+
+Subido. Y donde de verdad estaba el problema: **el libro 3D dibujaba con
+cuerpos de 6 px**. Las hojas del canvas se medían en porcentajes de su alto y
+el render CSS en píxeles, dos sistemas distintos para el mismo diseño, y el
+canvas se había quedado a la mitad. Ahora las dos vistas se describen en **las
+mismas medidas** —un diseño de 380×528 que se escala entero—, así que un cuerpo
+de letra decidido una vez significa lo mismo en las dos y en cualquier teléfono.
+
+De paso, eso arregla un fallo que se veía en pantallas pequeñas: la hoja de
+datos cabía en un teléfono de 390 px y se salía por abajo en uno de 360,
+perdiendo la firma y la banda mecánica.
+
+`/pasaporte?libro=0` deja a la vista el render CSS, que es el camino que toma un
+navegador sin WebGL. Sin una forma de pedirlo a propósito, esa vista sólo se
+comprobaba el día que fallaba en el teléfono de alguien.
+
+### Logos de ejemplo
+
+Los ocho stands de `db/seed.sql` traen su emblema: grano, volcán, hoja,
+montañas, ola, gota, taza y sol, cada uno en el color con el que ya se sellaba.
+Los genera `php tools/logos-ejemplo.php` —PNG a mano, sin GD ni Composer, igual
+que el generador de QR— y **se versionan** en `assets/logos/`, porque el
+despliegue no ejecuta scripts.
+
+`php db/migrate.php` se los pone a una instalación que ya venía funcionando,
+sólo a esos ocho ids y **sólo si no tienen logo**: un stand real con imagen
+propia no se toca.
+
+### Base de datos
+
+Ninguna columna nueva. `/api/pasaportes/{correo}` devuelve tres campos más
+—`sellado_en`, `ultima_visita` y `numero_qr`—; los dos primeros van con el
+testigo del perfil, como las calificaciones: la lista de stands visitados ya es
+pública en ese endpoint, pero **la hora de cada visita** dice dónde estuvo
+alguien y cuándo.
+
+Para revertir a la v2.3.0: `git checkout 6860ffb -- .`. La base no se toca. Los
+logos de ejemplo quedan asignados en `stands.logo_path`; para quitarlos:
+
+```sql
+UPDATE stands SET logo_path = NULL WHERE logo_path LIKE 'assets/logos/%';
+```
+
+---
+
 ## v2.3.0 — Con el correo basta
 
 **Punto de reversión (v2.2.0):** `cd4488f`

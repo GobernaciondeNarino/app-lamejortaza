@@ -321,7 +321,13 @@ function stand_payload(array $b, bool $needsId): array
 function stand_ruta_publica(?string $ruta): ?string
 {
     if (!is_string($ruta) || $ruta === '') return null;
-    return preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(jpg|png|webp)$#', $ruta) ? $ruta : null;
+    // Lo que subió su promotor.
+    if (preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(jpg|png|webp)$#', $ruta)) return $ruta;
+    // Los emblemas de ejemplo de los stands del prototipo (db/seed.sql). Van
+    // en el repositorio, no en uploads/: nadie los sube ni los puede escribir,
+    // así que basta con reconocer la forma exacta del nombre.
+    if (preg_match('#^assets/logos/[a-z0-9-]{2,32}\.png$#', $ruta)) return $ruta;
+    return null;
 }
 
 /**

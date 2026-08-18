@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.3.0.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.4.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -102,11 +102,20 @@ contradicción que acaba cuadrando mal en el informe.
   recorrido** y cierre.
 - Botón "Cerrar" limpia el correo del dispositivo.
 
-**La hoja de datos** es la primera página interior, y está hecha a imagen de la
-página del titular de un pasaporte de verdad: recuadro con la inicial y el
-número de sellos, ficha con portador, sexo, edad, procedencia y número de
-pasaporte, autoridad expedidora y la banda de lectura mecánica abajo. Antes ahí
-había un índice de casillas vacías que no decía nada del visitante.
+**La hoja de datos** es la primera página interior, con la forma de la página
+del titular de un pasaporte de verdad: retrato a la izquierda, número del
+documento arriba en el color del sello, apellidos y nombres, ciudad de origen,
+nacionalidad, expedición y validez, última visita, sellos, correo registrado, la
+firma del portador con el número dibujado como QR, y la banda de lectura
+mecánica abajo. Antes ahí había un índice de casillas vacías.
+
+**El retrato es la foto que el visitante subió en su perfil.** Sin foto, el
+rayado de «aquí falta una imagen» con el emoji que eligió o sus iniciales.
+
+El perfil guarda **un solo campo de nombre**, así que partirlo en nombres y
+apellidos es una convención: la mitad de atrás, redondeando hacia abajo, son
+apellidos. Acierta con los repartos habituales (2+2, 2+1, 1+1) y nunca deja el
+campo vacío. En la base sigue habiendo un nombre y nada más.
 
 Los datos salen de su perfil, y **sólo se piden si este navegador guarda el
 testigo** (ver más abajo, «Perfil del visitante»): sin él la hoja se dibuja
@@ -116,7 +125,16 @@ esta hoja**: se preguntan para caracterizar al público, son datos sensibles y
 esta página se enseña y se fotografía.
 
 El número de pasaporte (`NAR-XXXX-XXXX`) es un hash del correo: estable para la
-misma persona y no reversible.
+misma persona y no reversible. El QR de la firma codifica **ese número**, no el
+correo ni una URL con el correo dentro: la hoja se enseña y se fotografía, y un
+código QR es justo lo que alguien escanea sin pensar.
+
+**La hoja de cada sello** lleva el nombre del stand, su municipio y su
+subregión; al centro, el logo en círculo con el sello encima; debajo, **la
+votación de esa persona en ese stand** —las tres valoraciones en estrellas, o el
+veredicto del emoji si votó de un toque— y un pie con **la fecha y la hora
+reales del sello**. Esa fecha estuvo escrita a mano en el código —la misma para
+todos los stands y para todo el mundo— hasta la v2.4.0.
 
 **La hoja del recorrido** («Tu travesía») va **al final**, después de los sellos:
 ahí ya hay algo que resumir. Lista cada stand visitado con su número, su nombre,
@@ -127,12 +145,24 @@ era más que una columna de casillas vacías.
 Las calificaciones **también van detrás del testigo**: `/api/pasaportes/{correo}`
 es público, y que alguien visitara un stand no es lo mismo que saber que lo
 calificó de «mejorable». Sin testigo la hoja se ve igual, con los stands pero
-sin las notas.
+sin las notas. Lo mismo con **la hora de cada sello**: la lista de stands
+visitados ya es pública ahí, pero la hora dice dónde estuvo alguien y cuándo.
 
 Lo pintan dos vistas —el render en CSS y el libro 3D, que dibuja en canvas— a
-partir de **un único `datosPagina()`**, para que no puedan acabar diciendo cosas
-distintas de la misma persona. El perfil llega después de montar el libro, así
-que la hoja se repinta con `setPaginas` sin tirar el contexto WebGL.
+partir de **un único `datosPagina()`** (y `datosSello()` para las hojas de
+sello), para que no puedan acabar diciendo cosas distintas de la misma persona.
+El perfil llega después de montar el libro, así que la hoja se repinta con
+`setPaginas` sin tirar el contexto WebGL.
+
+**Las dos vistas se describen en las mismas medidas**: un diseño de 380×528 —la
+proporción del libro— que se escala entero al hueco que haya. Antes el canvas se
+medía en porcentajes de su alto y el CSS en píxeles, dos sistemas para el mismo
+diseño, y el canvas se había quedado con cuerpos de letra de 6 px. Como efecto
+secundario, la hoja de datos ya no se sale por abajo en un teléfono estrecho.
+
+`/pasaporte?libro=0` deja a la vista el render CSS, que es el camino que toma un
+navegador sin WebGL. Sin una forma de pedirlo a propósito, esa vista sólo se
+comprobaba el día que fallaba en el teléfono de alguien.
 
 En el pasaporte, cada stand lleva **su logo en círculo**: pequeño delante del
 nombre en la hoja del recorrido, y grande al centro en la hoja de sello, con el
@@ -926,7 +956,7 @@ Todas las respuestas usan `application/json` y la forma:
 | `GET`   | `/api/votos?limit=20`         | público      | Últimos N votos (correos enmascarados). |
 | `POST`  | `/api/votos`                  | público*     | Validado server-side; índice único.|
 | `DELETE`| `/api/votos/{id}`             | admin        | Modera comentarios; ajusta agregados. |
-| `GET`   | `/api/pasaportes/{correo}`    | público      | Correo viene URL-encoded.          |
+| `GET`   | `/api/pasaportes/{correo}`    | público      | Correo URL-encoded. Con `?t=` añade calificaciones, estrellas y la hora de cada sello. |
 | `GET`   | `/api/dashboard`              | público      | Stands + votos + métricas.         |
 | `GET`   | `/api/health`                 | público      | Versión PHP, BD alcanzable, contadores. |
 | `GET`   | `/api/export/votos.csv`       | admin        | CSV con BOM UTF-8 (Excel).         |
@@ -1166,9 +1196,12 @@ la-mejor-taza/
 │   ├── migrate.php            # actualiza una instalación ya existente
 │   └── create-admin.php       # CLI para crear/actualizar admins
 ├── CHANGELOG.md               # versiones y cómo revertir cada una
+├── assets/
+│   └── logos/                 # emblemas de los stands de ejemplo (versionados)
 ├── tools/
 │   ├── build-components.mjs   # JSX → js/components.build.js
-│   └── build-subregiones.php  # catálogo → Territorio.php + narino-municipios.js
+│   ├── build-subregiones.php  # catálogo → Territorio.php + narino-municipios.js
+│   └── logos-ejemplo.php      # PNG a mano (sin GD) de assets/logos/
 └── README.md
 ```
 
@@ -1194,7 +1227,10 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 ### Antes de abrir al público
 
 - [ ] `php db/migrate.php` ejecutado. Añade las columnas nuevas de la versión
-      (la 2.3.0 trae `visitantes.acceso_hash`) sin tocar nada de lo que ya había.
+      (la 2.3.0 trae `visitantes.acceso_hash`) sin tocar nada de lo que ya había,
+      y da su emblema a los stands de ejemplo que aún no tengan logo.
+- [ ] `assets/logos/` subido: son los emblemas de los stands del prototipo y se
+      versionan. Se regeneran con `php tools/logos-ejemplo.php`.
 - [ ] `node tools/build-components.mjs` ejecutado y `js/components.build.js` subido.
 - [ ] `api/lib/Territorio.php` y `js/narino-municipios.js` presentes en el
       servidor. Se generan, pero **se versionan**: sin el primero, `api/index.php`

@@ -34,7 +34,7 @@ const MontanasSilueta = ({ height = 80, opacity = 0.12 }) => (
 );
 
 // Sello circular estilo pasaporte
-const SelloCircular = ({ stand, size = 110, rotation = -8, state = "stamped" }) => {
+const SelloCircular = ({ stand, size = 110, rotation = -8, state = "stamped", fecha = "" }) => {
   const letras = stand.nombre.toUpperCase();
   return (
     <div style={{
@@ -56,7 +56,13 @@ const SelloCircular = ({ stand, size = 110, rotation = -8, state = "stamped" }) 
         {/* Interior */}
         <text x="55" y="48" textAnchor="middle" fill={stand.color} fontSize="8" fontFamily="var(--font-mono)" letterSpacing="2">VISITADO</text>
         <text x="55" y="62" textAnchor="middle" fill={stand.color} fontSize="16" fontFamily="var(--font-display)" fontStyle="italic">{stand.nombre.split(" ")[0]}</text>
-        <text x="55" y="74" textAnchor="middle" fill={stand.color} fontSize="7" fontFamily="var(--font-mono)" letterSpacing="1">14·ABR·2026</text>
+        {/* La fecha del sello es la del voto. Cuando no se conoce —el sello se
+            dibuja también fuera del pasaporte, donde no hay voto que mirar— no
+            se inventa ninguna: antes iba una escrita a mano en el código, la
+            misma para todo el mundo y para todos los stands. */}
+        {fecha && (
+          <text x="55" y="74" textAnchor="middle" fill={stand.color} fontSize="7" fontFamily="var(--font-mono)" letterSpacing="1">{fecha}</text>
+        )}
       </svg>
     </div>
   );

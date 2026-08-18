@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 2877d23fdaa855ea
+// Huella de las fuentes: 1bac3ef148c789d1
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -99,7 +99,8 @@ const SelloCircular = ({
   stand,
   size = 110,
   rotation = -8,
-  state = "stamped"
+  state = "stamped",
+  fecha = ""
 }) => {
   const letras = stand.nombre.toUpperCase();
   return React.createElement("div", {
@@ -156,7 +157,7 @@ const SelloCircular = ({
     fontSize: "16",
     fontFamily: "var(--font-display)",
     fontStyle: "italic"
-  }, stand.nombre.split(" ")[0]), React.createElement("text", {
+  }, stand.nombre.split(" ")[0]), fecha && React.createElement("text", {
     x: "55",
     y: "74",
     textAnchor: "middle",
@@ -164,7 +165,7 @@ const SelloCircular = ({
     fontSize: "7",
     fontFamily: "var(--font-mono)",
     letterSpacing: "1"
-  }, "14\xB7ABR\xB72026")));
+  }, fecha)));
 };
 const Placeholder = ({
   width = "100%",
@@ -3855,11 +3856,15 @@ const PassportPage = ({
   if (!visitados.length) return React.createElement(PassportEmpty, null);
   const passport = {
     nombre: perfil && perfil.nombre || data.nombre || "Visitante",
-    correo: data.correo || email,
+    correo: email || data.correo || "",
     numero: data.numero || "",
+    numeroQr: data.numero_qr || "",
     inicio: data.inicio || "",
+    ultimaVisita: data.ultima_visita || "",
     visitados: visitadosIds,
     valoraciones: data.valoraciones || {},
+    estrellas: data.estrellas_mias || {},
+    sellos: data.sellado_en || {},
     perfil: perfil
   };
   const fondos = fondosPasaporte();
@@ -3942,7 +3947,7 @@ const PassportBook = ({
       }),
       desvio_x: desvioSello(s.id).x,
       desvio_y: desvioSello(s.id).y
-    }, interior())), Object.assign({
+    }, datosSello(passport, s), interior())), Object.assign({
       tipo: "travesia",
       filas: filasTravesia(passport, visitados),
       visitados: visitados.length,
@@ -3953,12 +3958,15 @@ const PassportBook = ({
       totalStands: stands.length,
       fondo: fondos.contraportada
     }];
-  }, [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero, passport.perfil, passport.valoraciones, festivalTick]);
+  }, [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero, passport.perfil, passport.valoraciones, passport.estrellas, passport.sellos, passport.numeroQr, passport.ultimaVisita, festivalTick]);
   const paginasRef = React.useRef(paginasLibro);
   paginasRef.current = paginasLibro;
   React.useEffect(() => {
     const cont = wrapRef.current;
     if (!cont || !window.LMTPassportBook || !window.LMTPassportBook.soportado()) return;
+    try {
+      if (new URLSearchParams(location.search).get("libro") === "0") return;
+    } catch (_) {}
     const libro = window.LMTPassportBook.mount(cont, {
       paginas: paginasRef.current,
       paginaInicial: 0,
@@ -4167,20 +4175,89 @@ const etiquetaPerfil = (campo, valor) => {
   const tabla = (window.PERFIL_ETIQUETAS || {})[campo] || {};
   return tabla[valor] || valor;
 };
-const fechaCorta = iso => {
-  if (!iso) return DATO_VACIO;
+const fechaISO = iso => {
+  if (!iso) return null;
   const d = new Date(String(iso).replace(" ", "T"));
-  if (isNaN(d)) return DATO_VACIO;
-  const meses = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
-  return String(d.getDate()).padStart(2, "0") + " " + meses[d.getMonth()] + " " + d.getFullYear();
+  return isNaN(d) ? null : d;
 };
-const MRZ_ANCHO = 31;
+const MESES_CORTOS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const fechaCorta = iso => {
+  const d = fechaISO(iso);
+  if (!d) return DATO_VACIO;
+  return String(d.getDate()).padStart(2, "0") + " " + MESES_CORTOS[d.getMonth()] + " " + d.getFullYear();
+};
+const fechaLarga = iso => {
+  const d = fechaISO(iso);
+  if (!d) return DATO_VACIO;
+  return d.getDate() + " " + MESES_LARGOS[d.getMonth()] + " " + d.getFullYear();
+};
+const fechaSello = iso => {
+  const d = fechaISO(iso);
+  if (!d) return "";
+  return String(d.getDate()).padStart(2, "0") + "·" + MESES_CORTOS[d.getMonth()] + "·" + d.getFullYear();
+};
+const horaSello = iso => {
+  const d = fechaISO(iso);
+  if (!d) return "";
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+};
+const unAnioDespues = iso => {
+  const d = fechaISO(iso);
+  if (!d) return DATO_VACIO;
+  const f = new Date(d.getTime());
+  f.setFullYear(f.getFullYear() + 1);
+  return fechaLarga(f.toISOString());
+};
+const partirNombre = completo => {
+  const partes = String(completo || "").trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return {
+    nombres: DATO_VACIO,
+    apellidos: DATO_VACIO
+  };
+  if (partes.length === 1) return {
+    nombres: partes[0],
+    apellidos: DATO_VACIO
+  };
+  const nAp = Math.floor(partes.length / 2);
+  return {
+    nombres: partes.slice(0, partes.length - nAp).join(" "),
+    apellidos: partes.slice(partes.length - nAp).join(" ")
+  };
+};
+const nacionalidadDe = pais => {
+  const p = String(pais || "").trim();
+  if (p === "" || /^colombia$/i.test(p)) return "Colombiana";
+  return p;
+};
+const MRZ_ANCHO = 34;
 const bandaMecanica = passport => {
   const limpia = (s, n) => String(s || "").toUpperCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^A-Z0-9]/g, "<").slice(0, n).padEnd(n, "<");
   const p = passport.perfil || {};
-  const l1 = ("PC<COL" + limpia(passport.nombre, 25)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
+  const {
+    nombres,
+    apellidos
+  } = partirNombre(passport.nombre);
+  const l1 = ("P<COL" + limpia(apellidos, 12) + "<<" + limpia(nombres, 15)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
   const l2 = (limpia(passport.numero, 12) + "COL" + limpia(p.municipio || "NARINO", 16)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
   return [l1, l2];
+};
+const datosSello = (passport, stand) => {
+  const est = (passport.estrellas || {})[stand.id] || null;
+  const titulos = window.titulosEstrellas ? window.titulosEstrellas() : {};
+  const estrellas = est ? ESTRELLA_CAMPOS.map(campo => ({
+    titulo: titulos[campo] || campo,
+    valor: Number(est[ESTRELLA_CLAVES[campo]]) || 0
+  })).filter(e => e.valor > 0) : [];
+  const cuando = (passport.sellos || {})[stand.id] || "";
+  const v = VALORACION[(passport.valoraciones || {})[stand.id]] || null;
+  return {
+    estrellas,
+    veredicto: estrellas.length ? "" : v ? v.texto : "",
+    veredictoPal: v ? v.token : "--ink-3",
+    fecha: fechaSello(cuando),
+    hora: horaSello(cuando)
+  };
 };
 const retratoDe = passport => {
   const p = passport.perfil || {};
@@ -4192,28 +4269,47 @@ const retratoDe = passport => {
 const datosPagina = (passport, totalStands) => {
   const p = passport.perfil || {};
   const [mrz1, mrz2] = bandaMecanica(passport);
+  const {
+    nombres,
+    apellidos
+  } = partirNombre(passport.nombre);
   return {
     nombre: passport.nombre,
+    nombres: nombres,
+    apellidos: apellidos,
     correo: passport.correo,
     numero: passport.numero || DATO_VACIO,
+    numero_qr: passport.numeroQr || "",
     sexo: etiquetaPerfil("genero", p.genero),
     edad: etiquetaPerfil("rango_edad", p.rango_edad),
     procedencia: [p.municipio, p.departamento].filter(Boolean).join(", ") || p.pais || DATO_VACIO,
+    nacionalidad: nacionalidadDe(p.pais),
     visitante: p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante),
-    expedido: fechaCorta(passport.inicio),
+    expedido: fechaLarga(passport.inicio),
+    valido: unAnioDespues(passport.inicio),
+    ultima: passport.ultimaVisita ? fechaLarga(passport.ultimaVisita) : fechaLarga(passport.inicio),
+    sellos: passport.visitados.length,
     conPerfil: !!passport.perfil,
     totalStands: totalStands,
     retrato_foto: retratoDe(passport).foto,
     retrato_emoji: retratoDe(passport).emoji,
+    iniciales: iniciales(passport.nombre),
     mrz1,
     mrz2
   };
+};
+const iniciales = completo => {
+  const partes = String(completo || "").trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return "V";
+  if (partes.length === 1) return partes[0].charAt(0).toUpperCase();
+  return (partes[0].charAt(0) + partes[partes.length - 1].charAt(0)).toUpperCase();
 };
 const CampoDato = ({
   etiqueta,
   valor,
   ancho,
-  tam = 16
+  tam = 18,
+  mono = false
 }) => React.createElement("div", {
   style: {
     flex: ancho || 1,
@@ -4222,34 +4318,111 @@ const CampoDato = ({
 }, React.createElement("div", {
   className: "mono",
   style: {
-    fontSize: 9,
+    fontSize: 11,
     color: "var(--ink-3)",
-    lineHeight: 1.4
+    lineHeight: 1.3
   }
 }, etiqueta), React.createElement("div", {
+  className: mono ? "mono" : undefined,
   style: {
     fontSize: tam,
     lineHeight: 1.2,
     marginTop: 2,
+    textTransform: mono ? "none" : undefined,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis"
   }
 }, valor));
+const RayaFina = ({
+  margen = "6px 0"
+}) => React.createElement("div", {
+  style: {
+    height: 1,
+    background: "var(--line)",
+    margin: margen
+  }
+});
+const RetratoPortador = ({
+  retrato,
+  iniciales: ini
+}) => React.createElement("div", {
+  style: {
+    width: 98,
+    height: 118,
+    flexShrink: 0,
+    border: "1px solid var(--line-2)",
+    borderRadius: 4,
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    background: retrato.foto ? "var(--paper-2)" : "repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 7px, var(--paper-3) 7px, var(--paper-3) 14px)"
+  }
+}, retrato.foto ? React.createElement("img", {
+  src: retrato.foto,
+  alt: "",
+  style: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover"
+  }
+}) : React.createElement(React.Fragment, null, React.createElement("div", {
+  style: {
+    width: 54,
+    height: 54,
+    borderRadius: "50%",
+    background: "var(--grano)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "var(--paper)"
+  }
+}, retrato.emoji ? React.createElement("span", {
+  style: {
+    fontSize: 28,
+    lineHeight: 1
+  },
+  "aria-hidden": "true"
+}, retrato.emoji) : React.createElement("span", {
+  style: {
+    fontFamily: "var(--font-display)",
+    fontStyle: "italic",
+    fontSize: 23,
+    lineHeight: 1
+  }
+}, ini)), React.createElement("div", {
+  className: "mono",
+  style: {
+    fontSize: 10,
+    color: "var(--ink-3)",
+    marginTop: 10
+  }
+}, "FOTOGRAF\xCDA")));
 const PaginaDatos = ({
   passport,
   totalStands
 }) => {
-  const p = passport.perfil || {};
-  const procedencia = [p.municipio, p.departamento].filter(Boolean).join(", ") || p.pais || DATO_VACIO;
-  const entidad = p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante);
-  const [mrz1, mrz2] = bandaMecanica(passport);
-  const sellos = passport.visitados.length;
+  const d = datosPagina(passport, totalStands);
   const retrato = retratoDe(passport);
   return React.createElement("div", {
     style: {
       height: "100%",
-      padding: "18px 18px 0",
+      padding: 11,
+      display: "flex",
+      flexDirection: "column"
+    }
+  }, React.createElement("div", {
+    style: {
+      flex: 1,
+      minHeight: 0,
+      border: "1px solid var(--line-2)",
+      borderRadius: 4,
+      padding: "11px 13px 10px",
       display: "flex",
       flexDirection: "column"
     }
@@ -4257,193 +4430,185 @@ const PaginaDatos = ({
     style: {
       display: "flex",
       justifyContent: "space-between",
-      alignItems: "baseline"
+      alignItems: "flex-start"
     }
   }, React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 10
+      fontSize: 11,
+      color: "var(--ink-2)",
+      lineHeight: 1.4
     }
-  }, "REP\xDABLICA DE COLOMBIA \xB7 NARI\xD1O"), React.createElement("div", {
-    className: "mono",
-    style: {
-      fontSize: 10,
-      color: "var(--ink-3)"
-    }
-  }, "P\xB7CAF\xC9")), React.createElement("div", {
-    style: {
-      height: 1,
-      background: "var(--line-2)",
-      margin: "9px 0 14px"
-    }
+  }, "REP\xDABLICA DE COLOMBIA", React.createElement("br", null), "DEPARTAMENTO DE NARI\xD1O"), React.createElement(LogoTaza, {
+    size: 24
+  })), React.createElement(RayaFina, {
+    margen: "8px 0 9px"
   }), React.createElement("div", {
     style: {
       display: "flex",
-      gap: 15
+      gap: 13
     }
-  }, React.createElement("div", {
-    style: {
-      width: 86,
-      height: 108,
-      flexShrink: 0,
-      border: "1px solid var(--line-2)",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "var(--paper-2, transparent)",
-      position: "relative",
-      overflow: "hidden"
-    }
-  }, retrato.foto ? React.createElement("img", {
-    src: retrato.foto,
-    alt: "",
-    style: {
-      position: "absolute",
-      inset: 0,
-      width: "100%",
-      height: "100%",
-      objectFit: "cover"
-    }
-  }) : React.createElement("div", {
-    style: {
-      fontFamily: "var(--font-display)",
-      fontStyle: "italic",
-      fontSize: 40,
-      lineHeight: 1
-    }
-  }, retrato.emoji ? React.createElement("span", {
-    style: {
-      fontStyle: "normal",
-      fontSize: 38
-    },
-    "aria-hidden": "true"
-  }, retrato.emoji) : (passport.nombre || "V").trim().charAt(0).toUpperCase()), !retrato.foto && React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "mono",
-    style: {
-      fontSize: 9,
-      color: "var(--ink-3)",
-      marginTop: 10
-    }
-  }, "SELLOS"), React.createElement("div", {
-    className: "mono",
-    style: {
-      fontSize: 18
-    }
-  }, String(sellos).padStart(2, "0")))), React.createElement("div", {
+  }, React.createElement(RetratoPortador, {
+    retrato: retrato,
+    iniciales: d.iniciales
+  }), React.createElement("div", {
     style: {
       flex: 1,
-      minWidth: 0,
-      display: "flex",
-      flexDirection: "column",
-      gap: 10
-    }
-  }, React.createElement("div", {
-    style: {
       minWidth: 0
     }
   }, React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 9,
+      fontSize: 11,
       color: "var(--ink-3)",
-      lineHeight: 1.4
+      lineHeight: 1.3
     }
-  }, "PORTADOR / BEARER"), React.createElement("div", {
+  }, "N\xDAMERO DE PASAPORTE"), React.createElement("div", {
+    className: "mono",
     style: {
-      fontFamily: "var(--font-display)",
-      fontStyle: "italic",
-      fontSize: 22,
-      lineHeight: 1.15,
+      fontSize: 19,
+      lineHeight: 1.2,
       marginTop: 2,
+      color: "var(--grano)",
+      textTransform: "none",
+      letterSpacing: "0.01em",
+      whiteSpace: "nowrap",
       overflow: "hidden",
-      display: "-webkit-box",
-      WebkitLineClamp: 2,
-      WebkitBoxOrient: "vertical"
+      textOverflow: "ellipsis"
     }
-  }, passport.nombre)), React.createElement("div", {
+  }, d.numero), React.createElement(RayaFina, {
+    margen: "5px 0"
+  }), React.createElement(CampoDato, {
+    etiqueta: "APELLIDOS",
+    valor: d.apellidos,
+    tam: 16
+  }), React.createElement(RayaFina, {
+    margen: "5px 0"
+  }), React.createElement(CampoDato, {
+    etiqueta: "NOMBRES",
+    valor: d.nombres,
+    tam: 16
+  }))), React.createElement(RayaFina, {
+    margen: "9px 0"
+  }), React.createElement("div", {
     style: {
       display: "flex",
       gap: 12
     }
   }, React.createElement(CampoDato, {
-    etiqueta: "SEXO",
-    valor: etiquetaPerfil("genero", p.genero)
+    etiqueta: "CIUDAD DE ORIGEN",
+    valor: d.procedencia,
+    tam: 16
   }), React.createElement(CampoDato, {
-    etiqueta: "EDAD",
-    valor: etiquetaPerfil("rango_edad", p.rango_edad),
-    ancho: 1.3
-  })))), React.createElement("div", {
-    style: {
-      marginTop: 14
-    }
-  }, React.createElement(CampoDato, {
-    etiqueta: "PROCEDENCIA",
-    valor: procedencia,
-    tam: 17
-  })), React.createElement("div", {
-    style: {
-      marginTop: 12
-    }
-  }, React.createElement(CampoDato, {
-    etiqueta: "N\xBA DE PASAPORTE",
-    valor: passport.numero || DATO_VACIO,
-    tam: 18
-  })), React.createElement("div", {
+    etiqueta: "NACIONALIDAD",
+    valor: d.nacionalidad,
+    tam: 16
+  })), React.createElement(RayaFina, null), React.createElement("div", {
     style: {
       display: "flex",
-      gap: 12,
-      marginTop: 12
+      gap: 12
     }
   }, React.createElement(CampoDato, {
-    etiqueta: "EXPEDIDO",
-    valor: fechaCorta(passport.inicio)
+    etiqueta: "EXPEDICI\xD3N",
+    valor: d.expedido,
+    tam: 15,
+    mono: true
+  }), React.createElement(CampoDato, {
+    etiqueta: "V\xC1LIDO HASTA",
+    valor: d.valido,
+    tam: 15,
+    mono: true
+  })), React.createElement(RayaFina, null), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12
+    }
+  }, React.createElement(CampoDato, {
+    etiqueta: "\xDALTIMA VISITA",
+    valor: d.ultima,
+    tam: 15,
+    mono: true
   }), React.createElement(CampoDato, {
     etiqueta: "SELLOS",
-    valor: sellos + " de " + totalStands
-  })), React.createElement("div", {
-    style: {
-      marginTop: 12
-    }
-  }, React.createElement(CampoDato, {
-    etiqueta: "VISITANTE",
-    valor: entidad,
+    valor: d.sellos + " de " + totalStands,
+    tam: 15,
+    mono: true
+  })), React.createElement(RayaFina, null), React.createElement(CampoDato, {
+    etiqueta: "CORREO REGISTRADO",
+    valor: d.correo,
     tam: 15
-  })), !passport.perfil && React.createElement("p", {
+  }), !passport.perfil && React.createElement("p", {
     style: {
       fontSize: 12,
       color: "var(--ink-3)",
-      lineHeight: 1.5,
-      marginTop: 14
+      lineHeight: 1.4,
+      margin: "8px 0 0",
+      whiteSpace: "nowrap"
     }
-  }, "Completa tu perfil de visitante y esta hoja se llena con tus datos."), React.createElement("div", {
+  }, "Completa tu perfil y esta hoja se llena sola."), React.createElement("div", {
     style: {
-      marginTop: "auto"
+      marginTop: "auto",
+      paddingTop: 6,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "flex-end",
+      gap: 12
     }
   }, React.createElement("div", {
-    className: "mono",
     style: {
-      fontSize: 9,
-      color: "var(--ink-3)",
-      marginBottom: 8
+      flex: 1,
+      minWidth: 0
     }
-  }, "EXPIDE \xB7 GOBERNACI\xD3N DE NARI\xD1O"), React.createElement("div", {
+  }, React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 21,
+      lineHeight: 1.1,
+      color: "var(--grano)",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, passport.nombre), React.createElement("div", {
     style: {
       height: 1,
-      background: "var(--line-2)"
+      background: "var(--ink-3)",
+      opacity: 0.5,
+      margin: "4px 0 4px",
+      maxWidth: 165
     }
   }), React.createElement("div", {
     className: "mono",
     style: {
       fontSize: 10,
-      letterSpacing: "0.06em",
-      lineHeight: 1.7,
-      padding: "8px 0 14px",
+      color: "var(--ink-3)"
+    }
+  }, "FIRMA DEL PORTADOR")), d.numero_qr && React.createElement("img", {
+    src: d.numero_qr,
+    alt: "Código del pasaporte " + d.numero,
+    width: 46,
+    height: 46,
+    style: {
+      width: 46,
+      height: 46,
+      imageRendering: "pixelated",
+      flexShrink: 0
+    }
+  })), React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 11,
+      letterSpacing: "0.02em",
+      lineHeight: 1.5,
+      marginTop: 8,
       color: "var(--ink-2)",
+      textTransform: "none",
+      flexShrink: 0,
       whiteSpace: "nowrap",
       overflow: "hidden"
     }
-  }, mrz1, React.createElement("br", null), mrz2)));
+  }, d.mrz1, React.createElement("br", null), d.mrz2)));
 };
 const VALORACION = {
   bueno: {
@@ -4534,20 +4699,21 @@ const PaginaTravesia = ({
   }, React.createElement("div", {
     className: "mono",
     style: {
+      fontSize: 12,
       marginBottom: 6
     }
   }, "Recorrido"), React.createElement("h2", {
     style: {
       fontFamily: "var(--font-display)",
       fontStyle: "italic",
-      fontSize: 28,
+      fontSize: 30,
       fontWeight: 400,
       margin: "0 0 4px",
       lineHeight: 1
     }
   }, "Tu traves\xEDa."), React.createElement("p", {
     style: {
-      fontSize: 11,
+      fontSize: 13,
       color: "var(--ink-3)",
       lineHeight: 1.5,
       margin: "0 0 14px"
@@ -4569,13 +4735,14 @@ const PaginaTravesia = ({
   }, React.createElement("span", {
     className: "mono",
     style: {
-      width: 18,
+      fontSize: 12,
+      width: 20,
       flexShrink: 0,
       color: "var(--ink-3)"
     }
   }, f.n), React.createElement(LogoRedondo, {
     fila: f,
-    tam: 26
+    tam: 28
   }), React.createElement("div", {
     style: {
       flex: 1,
@@ -4583,7 +4750,7 @@ const PaginaTravesia = ({
     }
   }, React.createElement("div", {
     style: {
-      fontSize: 13,
+      fontSize: 15,
       lineHeight: 1.25,
       whiteSpace: "nowrap",
       overflow: "hidden",
@@ -4592,19 +4759,20 @@ const PaginaTravesia = ({
   }, f.nombre), f.municipio && React.createElement("div", {
     className: "mono",
     style: {
-      fontSize: 9,
+      fontSize: 11,
       color: "var(--ink-3)"
     }
   }, f.municipio)), f.valoracion && React.createElement("span", {
     className: "mono",
     style: {
-      fontSize: 9,
+      fontSize: 11,
       color: f.color,
       flexShrink: 0
     }
   }, f.valoracion)))), React.createElement("div", {
     className: "mono",
     style: {
+      fontSize: 12,
       marginTop: "auto",
       padding: "14px 0 18px",
       borderTop: "1px solid var(--line-2)"
@@ -4653,6 +4821,42 @@ const CapaFondo = ({
     }
   }));
 };
+const HOJA_ANCHO = 380;
+const HOJA_ALTO = Math.round(HOJA_ANCHO / 0.72);
+const HojaEscalada = ({
+  children
+}) => {
+  const ref = React.useRef(null);
+  const [k, setK] = React.useState(1);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const medir = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0) setK(r.width / HOJA_ANCHO);
+    };
+    medir();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(medir) : null;
+    if (ro) ro.observe(el);else window.addEventListener("resize", medir);
+    return () => {
+      if (ro) ro.disconnect();else window.removeEventListener("resize", medir);
+    };
+  }, []);
+  return React.createElement("div", {
+    ref: ref,
+    style: {
+      height: "100%",
+      overflow: "hidden"
+    }
+  }, React.createElement("div", {
+    style: {
+      width: HOJA_ANCHO,
+      height: HOJA_ALTO,
+      transformOrigin: "top left",
+      transform: `scale(${k})`
+    }
+  }, children));
+};
 const PassportPage_Page = props => {
   const propio = props.pageData.type === "cover";
   return React.createElement("div", {
@@ -4669,7 +4873,7 @@ const PassportPage_Page = props => {
       zIndex: 1,
       height: "100%"
     }
-  }, React.createElement(PaginaContenido, props)));
+  }, React.createElement(HojaEscalada, null, React.createElement(PaginaContenido, props))));
 };
 const PaginaContenido = ({
   pageData,
@@ -4755,10 +4959,15 @@ const PaginaContenido = ({
     }, passport.correo)));
   }
   if (pageData.type === "index") {
-    return React.createElement(PaginaDatos, {
+    return React.createElement("div", {
+      style: {
+        height: "100%",
+        ...lineBg
+      }
+    }, React.createElement(PaginaDatos, {
       passport: passport,
       totalStands: totalStands
-    });
+    }));
   }
   if (pageData.type === "travesia") {
     return React.createElement(PaginaTravesia, {
@@ -4772,38 +4981,47 @@ const PaginaContenido = ({
     const rot = (s.id.charCodeAt(s.id.length - 1) || 0) % 20 - 10;
     const desv = desvioSello(s.id);
     const logo = urlImagen(s.logo);
+    const sello = datosSello(passport, s);
     return React.createElement("div", {
       style: {
         height: "100%",
-        padding: 22,
+        padding: 20,
         ...lineBg,
-        position: "relative",
+        display: "flex",
+        flexDirection: "column",
         overflow: "hidden"
       }
     }, React.createElement("div", {
       className: "mono",
       style: {
+        fontSize: 12,
         marginBottom: 6
       }
     }, "Sello \xB7 ", s.municipio), React.createElement("h2", {
       style: {
         fontFamily: "var(--font-display)",
         fontStyle: "italic",
-        fontSize: 26,
+        fontSize: 28,
         fontWeight: 400,
         margin: "0 0 4px",
         lineHeight: 1
       }
     }, s.nombre), React.createElement("div", {
       style: {
-        fontSize: 11,
+        fontSize: 13,
         color: "var(--ink-3)"
       }
-    }, s.region), logo && React.createElement("div", {
+    }, s.region), React.createElement("div", {
+      style: {
+        flex: 1,
+        minHeight: 120,
+        position: "relative"
+      }
+    }, logo && React.createElement("div", {
       style: {
         position: "absolute",
-        top: "48%",
-        left: "52%",
+        top: "50%",
+        left: "54%",
         transform: "translate(-50%, -50%)",
         width: 132,
         height: 132,
@@ -4830,8 +5048,8 @@ const PaginaContenido = ({
     })), React.createElement("div", {
       style: {
         position: "absolute",
-        top: `calc(48% + ${desv.y}px)`,
-        left: `calc(52% + ${desv.x}px)`,
+        top: `calc(50% + ${desv.y}px)`,
+        left: `calc(46% + ${desv.x}px)`,
         transform: "translate(-50%, -50%)",
         "--stamp-rot": rot + "deg",
         animation: "stamp-land 0.6s cubic-bezier(.2,.8,.2,1.2) forwards"
@@ -4839,23 +5057,57 @@ const PaginaContenido = ({
     }, React.createElement(SelloCircular, {
       stand: s,
       size: 150,
-      rotation: rot
-    })), React.createElement("div", {
+      rotation: rot,
+      fecha: sello.fecha
+    }))), sello.estrellas.length > 0 && React.createElement("div", {
       style: {
-        position: "absolute",
-        bottom: 22,
-        left: 22,
-        right: 22
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        marginBottom: 8,
+        maxWidth: 250
       }
-    }, React.createElement("div", {
+    }, sello.estrellas.map(e => React.createElement(EstrellasLectura, {
+      key: e.titulo,
+      valor: e.valor,
+      tam: 15,
+      etiqueta: e.titulo
+    }))), sello.veredicto && React.createElement("div", {
+      className: "mono",
       style: {
-        fontSize: 11,
+        fontSize: 12,
+        color: `var(${sello.veredictoPal})`,
+        marginBottom: 8
+      }
+    }, sello.veredicto), React.createElement("div", {
+      style: {
+        fontSize: 13,
         color: "var(--ink-2)",
         lineHeight: 1.5,
         fontStyle: "italic",
         fontFamily: "var(--font-display)"
       }
-    }, "\"", s.descripcion, "\"")));
+    }, "\"", s.descripcion, "\""), (sello.fecha || sello.hora) && React.createElement("div", {
+      style: {
+        marginTop: 10,
+        paddingTop: 8,
+        borderTop: "1px solid var(--line-2)",
+        display: "flex",
+        justifyContent: "space-between"
+      }
+    }, React.createElement("span", {
+      className: "mono",
+      style: {
+        fontSize: 12,
+        color: "var(--ink-3)"
+      }
+    }, sello.fecha), React.createElement("span", {
+      className: "mono",
+      style: {
+        fontSize: 12,
+        color: "var(--ink-3)"
+      }
+    }, sello.hora)));
   }
   if (pageData.type === "end") {
     return React.createElement("div", {
@@ -4870,12 +5122,15 @@ const PaginaContenido = ({
         ...lineBg
       }
     }, React.createElement("div", {
-      className: "mono"
+      className: "mono",
+      style: {
+        fontSize: 12
+      }
     }, "Fin del pasaporte"), React.createElement("h2", {
       style: {
         fontFamily: "var(--font-display)",
         fontStyle: "italic",
-        fontSize: 30,
+        fontSize: 32,
         fontWeight: 400,
         margin: "12px 0 8px",
         lineHeight: 1
@@ -4886,7 +5141,7 @@ const PaginaContenido = ({
         padding: "12px 18px",
         border: "1px solid var(--line-2)",
         borderRadius: 999,
-        fontSize: 12
+        fontSize: 14
       }
     }, "Vuelve el pr\xF3ximo festival"));
   }
@@ -4894,7 +5149,9 @@ const PaginaContenido = ({
 };
 Object.assign(window, {
   PassportPage,
-  datosPagina
+  datosPagina,
+  datosSello,
+  partirNombre
 });
 })();
 
