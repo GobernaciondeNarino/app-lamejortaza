@@ -161,6 +161,11 @@ const App = () => {
   if (route.path === "/admin/caracterizacion") {
     return <AdminPage section="caracterizacion" user={user} stands={stands}/>;
   }
+  if (route.path === "/admin/sistema") {
+    // Vaciar la base es cosa del propietario, igual que las cuentas.
+    if (user.rol !== "propietario") return <NotFound back="/admin"/>;
+    return <AdminPage section="sistema" user={user} stands={stands}/>;
+  }
   if (route.path === "/admin/cuentas") {
     if (user.rol !== "propietario") return <NotFound back="/admin"/>;
     return <AdminPage section="cuentas" user={user} stands={stands}/>;

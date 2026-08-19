@@ -10,7 +10,7 @@ if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
 // primero que hay que mirar cuando algo falla en producción: sin ella, decidir
 // si revertir se convierte en «creo que subimos lo último». El historial y el
 // procedimiento de reversión de cada versión están en CHANGELOG.md.
-if (!defined('LMT_VERSION')) define('LMT_VERSION', '2.3.0');
+if (!defined('LMT_VERSION')) define('LMT_VERSION', '2.5.0');
 
 // Front controller — no exponer detalles de errores al cliente.
 ini_set('display_errors', '0');
@@ -101,6 +101,7 @@ require __DIR__ . '/routes/administradores.php';
 require __DIR__ . '/routes/visitantes.php';
 require __DIR__ . '/routes/correo.php';
 require __DIR__ . '/routes/festival.php';
+require __DIR__ . '/routes/sistema.php';
 
 \register_routes_health($router);
 \register_routes_auth($router);
@@ -115,5 +116,6 @@ require __DIR__ . '/routes/festival.php';
 \register_routes_visitantes($router);
 \register_routes_correo($router);
 \register_routes_festival($router);
+\register_routes_sistema($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);

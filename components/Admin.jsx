@@ -16,7 +16,10 @@ const AdminShell = ({ active, user, children }) => {
     { id: "correo",     label: "Correo",       sub: "Envío y pruebas", path: "/admin/correo" },
     { id: "correos",    label: "Bitácora",     sub: "Mensajes enviados", path: "/admin/correos" },
   ].concat(user && user.rol === "propietario"
-    ? [{ id: "cuentas", label: "Administradores", sub: "Cuentas de acceso", path: "/admin/cuentas" }]
+    ? [
+        { id: "cuentas", label: "Administradores", sub: "Cuentas de acceso", path: "/admin/cuentas" },
+        { id: "sistema", label: "Empezar de cero", sub: "Borrar datos de prueba", path: "/admin/sistema" },
+      ]
     : []);
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
@@ -217,6 +220,7 @@ const AdminPage = ({ section, user, stands, comentarios, editingId }) => {
   if (section === "correo")     return <AdminShell active="correo" user={user}><AdminCorreoConfig/></AdminShell>;
   if (section === "caracterizacion") return <AdminShell active="caracterizacion" user={user}><AdminCaracterizacion/></AdminShell>;
   if (section === "cuentas")    return <AdminShell active="cuentas" user={user}><AdminCuentas user={user}/></AdminShell>;
+  if (section === "sistema")    return <AdminShell active="sistema" user={user}><SistemaPage/></AdminShell>;
   return <AdminShell active="stands" user={user}><div style={{ padding: 32 }}>—</div></AdminShell>;
 };
 
@@ -406,10 +410,8 @@ const StandEditor = ({ stand }) => {
               <label>Correo de contacto</label>
               <input type="email" value={form.correo} onChange={e => update("correo", e.target.value)} maxLength={254}/>
             </div>
-            <div className="field">
-              <label>Teléfono</label>
-              <input value={form.telefono} onChange={e => update("telefono", e.target.value)} maxLength={32} inputMode="tel"/>
-            </div>
+            <CampoNumerico id="st-tel" etiqueta="Teléfono" telefono maxLength={15}
+              valor={form.telefono} onCambio={(v) => update("telefono", v)}/>
           </div>
           <div className="field">
             <label>Descripción corta</label>
@@ -424,16 +426,12 @@ const StandEditor = ({ stand }) => {
               <label>Propietario</label>
               <input value={form.propietario} onChange={e => update("propietario", e.target.value)} maxLength={120} placeholder="Nombre completo"/>
             </div>
-            <div className="field">
-              <label>Documento del propietario</label>
-              <input value={form.propietario_documento} onChange={e => update("propietario_documento", e.target.value)} maxLength={32} inputMode="numeric"/>
-            </div>
+            <CampoNumerico id="st-doc" etiqueta="Documento del propietario"
+              valor={form.propietario_documento} onCambio={(v) => update("propietario_documento", v)}/>
           </div>
           <div className="grid-2" style={{ gap: 20 }}>
-            <div className="field">
-              <label>NIT o RUT</label>
-              <input value={form.nit} onChange={e => update("nit", e.target.value)} maxLength={32}/>
-            </div>
+            <CampoNumerico id="st-nit" etiqueta="NIT o RUT"
+              valor={form.nit} onCambio={(v) => update("nit", v)}/>
             <div className="field">
               <label>Sitio web o red social</label>
               <input type="url" value={form.sitio_web} onChange={e => update("sitio_web", e.target.value)} maxLength={255} placeholder="https://…"/>
@@ -447,18 +445,7 @@ const StandEditor = ({ stand }) => {
             ruta={form.logo}
             almacen={almacen && almacen.dir}
             onSubir={subirLogo}/>
-          {almacen && (
-            <div className="ruta" style={{ marginTop: -8 }}>
-              Las imágenes se guardan en <strong>{almacen.dir}</strong>
-              {" · "}se sirven desde <strong>{almacen.url_base}</strong>
-              {!almacen.escribible && (
-                <span style={{ color: "var(--bad)" }}><br/>Esa carpeta NO tiene permiso de escritura: las subidas fallarán.</span>
-              )}
-              {!almacen.protegida && (
-                <span style={{ color: "var(--meh)" }}><br/>Falta el .htaccess que impide ejecutar código ahí; se creará con la próxima subida.</span>
-              )}
-            </div>
-          )}
+          <EstadoAlmacen compacto/>
 
           <div>
             <div className="mono" style={{ marginBottom: 8 }}>Ubicación en Nariño</div>

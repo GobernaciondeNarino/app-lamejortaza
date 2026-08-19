@@ -7,18 +7,51 @@
 // Todo tiene un valor por defecto que funciona. Quien no entre aquí nunca ve
 // exactamente lo que ve hoy: el diseño del sistema.
 
+/**
+ * Miniatura que dice si la imagen se ve DE VERDAD.
+ *
+ * Un <img> roto no distingue «no se subió» de «se subió y el servidor no la
+ * sirve», y las dos cosas se ven igual: un icono gris. La segunda es el caso
+ * real —permisos de fichero en hosting compartido— y hasta ahora obligaba a
+ * abrir la consola del navegador para enterarse.
+ */
+const Miniatura = ({ url, alto = 130, vacio = "Diseño del sistema" }) => {
+  const [estado, setEstado] = React.useState("cargando");
+  React.useEffect(() => { setEstado(url ? "cargando" : "vacio"); }, [url]);
+
+  return (
+    <div>
+      <div style={{
+        height: alto, borderRadius: "var(--r-sm)", overflow: "hidden",
+        border: "1px dashed var(--line-2)",
+        background: estado === "error" ? "color-mix(in oklch, var(--bad) 8%, var(--paper))" : "var(--paper-2)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        {url
+          ? <img src={url} alt="" onLoad={() => setEstado("ok")} onError={() => setEstado("error")}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: estado === "ok" ? "block" : "none" }}/>
+          : <span className="mono" style={{ color: "var(--ink-3)", textAlign: "center", padding: 10 }}>{vacio}</span>}
+        {url && estado === "cargando" && <span className="mono" style={{ color: "var(--ink-3)" }}>Cargando…</span>}
+        {url && estado === "error" && (
+          <span className="mono" style={{ color: "var(--bad)", textAlign: "center", padding: 10, lineHeight: 1.5 }}>
+            Subida, pero el servidor no la entrega
+          </span>
+        )}
+      </div>
+      {estado === "error" && (
+        <p style={{ fontSize: 12, color: "var(--bad)", lineHeight: 1.5, marginTop: 6 }}>
+          El archivo está guardado pero el navegador recibe un error al pedirlo. Suele ser
+          permisos: usa «Corregir permisos de las imágenes» aquí abajo.
+        </p>
+      )}
+    </div>
+  );
+};
+
 const FondoRanura = ({ titulo, ayuda, url, onSubir, onQuitar, subiendo }) => (
   <div style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 14 }}>
     <div className="mono" style={{ marginBottom: 8 }}>{titulo}</div>
-    <div style={{
-      height: 130, borderRadius: "var(--r-sm)", overflow: "hidden", marginBottom: 10,
-      border: "1px dashed var(--line-2)", background: "var(--paper-2)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-    }}>
-      {url
-        ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}/>
-        : <span className="mono" style={{ color: "var(--ink-3)", textAlign: "center", padding: 10 }}>Diseño del sistema</span>}
-    </div>
+    <div style={{ marginBottom: 10 }}><Miniatura url={url}/></div>
     {ayuda && <p className="mono" style={{ color: "var(--ink-3)", lineHeight: 1.5, marginBottom: 8 }}>{ayuda}</p>}
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
       <label className="btn btn-ghost" style={{ cursor: subiendo ? "wait" : "pointer", opacity: subiendo ? 0.6 : 1 }}>
@@ -39,6 +72,7 @@ const FestivalPage = () => {
   const [error, setError] = React.useState("");
   const [ok, setOk] = React.useState("");
   const [subiendo, setSubiendo] = React.useState("");
+  const [aplicando, setAplicando] = React.useState(false);
 
   React.useEffect(() => {
     let cancelado = false;
@@ -88,6 +122,19 @@ const FestivalPage = () => {
       setAj(d);
       if (window.LMTFestival) await window.LMTFestival.cargar();
     } catch (e) { setError(mensajeError(e)); }
+  };
+
+  /** Vuelve a pedir los ajustes y refresca la caché que lee el pasaporte. */
+  const aplicar = async () => {
+    setError(""); setOk(""); setAplicando(true);
+    try {
+      const d = await window.LMTApi.festivalAjustes();
+      setAj(d);
+      if (window.LMTFestival) await window.LMTFestival.cargar();
+      const n = ((d.pasaporte && d.pasaporte.hojas) || []).length;
+      setOk(`Aplicado. El pasaporte usa ${n === 0 ? "el papel del sistema" : n + (n === 1 ? " imagen" : " imágenes") + " en las hojas internas"}${d.pasaporte && d.pasaporte.portada ? ", con portada propia" : ""}.`);
+    } catch (e) { setError(mensajeError(e)); }
+    finally { setAplicando(false); }
   };
 
   const hojas = (aj.pasaporte && aj.pasaporte.hojas) || [];
@@ -173,7 +220,7 @@ const FestivalPage = () => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
         {hojas.map((h, i) => (
           <div key={h + i} style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-sm)", overflow: "hidden" }}>
-            <img src={urlImagen(h)} alt="" style={{ width: "100%", height: 96, objectFit: "cover", display: "block" }}/>
+            <Miniatura url={urlImagen(h)} alto={96} vacio="sin imagen"/>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px" }}>
               <span className="mono" style={{ color: "var(--ink-3)" }}>{i + 1}</span>
               <button type="button" onClick={() => quitarFondo("hojas", i)}
@@ -191,8 +238,23 @@ const FestivalPage = () => {
             onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) subirFondo("hojas", f); }}/>
         </label>
       </div>
+
+      {/* Cada imagen se guarda al subirla, pero eso no se ve: quien acaba de
+          subir tres fondos no sabe si el pasaporte ya los tiene. Este botón
+          recarga los ajustes que usa el resto de la aplicación y lo confirma,
+          y el enlace de al lado lleva a mirarlo. */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 22 }}>
+        <button className="btn btn-primary" disabled={aplicando} onClick={aplicar} style={{ justifyContent: "center" }}>
+          {aplicando ? "Aplicando…" : "Guardar y aplicar al pasaporte"}
+        </button>
+        <a href="/pasaporte" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>
+          Ver el pasaporte →
+        </a>
+      </div>
+
+      <EstadoAlmacen/>
     </AdminShell>
   );
 };
 
-Object.assign(window, { FestivalPage });
+Object.assign(window, { FestivalPage, Miniatura, FondoRanura });

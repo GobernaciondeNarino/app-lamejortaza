@@ -57,8 +57,11 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
           no es un muro. */}
       <InvitacionCorreo/>
 
-      <section className="lmt-three-wrap" ref={(el) => { if (el && window.LMTThree && !el.dataset.threeMounted) window.LMTThree.mount(el); }} data-three-bg
-               className="seccion" style={{ paddingTop: 48, paddingBottom: 32, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 36, alignItems: "flex-end", position: "relative", overflow: "hidden", minHeight: 320 }}>
+      {/* Una sola `className`: estaba dos veces y la segunda pisaba a la
+          primera, así que `lmt-three-wrap` no llegaba nunca al DOM. */}
+      <section className="lmt-three-wrap seccion" data-three-bg
+               ref={(el) => { if (el && window.LMTThree && !el.dataset.threeMounted) window.LMTThree.mount(el); }}
+               style={{ paddingTop: 48, paddingBottom: 32, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 36, alignItems: "flex-end", position: "relative", overflow: "hidden", minHeight: 320 }}>
         <div>
           <div className="mono">Ranking público</div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: "min(96px, 12vw)", fontWeight: 400, margin: "8px 0 0", lineHeight: 0.9, letterSpacing: "-0.03em" }}>
@@ -180,9 +183,12 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
                 <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 20, letterSpacing: "-0.01em" }}>{s.nombre}</div>
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{(s.descripcion || "").slice(0, 80)}{s.descripcion && s.descripcion.length > 80 ? "…" : ""}</div>
               </div>
-              <div className="rank-meta" style={{ fontSize: 13 }}>{s.municipio}</div>
+              {/* Municipio y votos son DOS celdas distintas de la rejilla. Con
+                  la misma clase, en móvil las dos caían en el mismo área y se
+                  dibujaban una encima de la otra. */}
+              <div className="rank-meta rank-municipio" style={{ fontSize: 13 }}>{s.municipio}</div>
               <div className="rank-puntaje" style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 24 }}>{calcScore(s.votos).toFixed(0)}</div>
-              <div className="rank-meta" style={{ fontSize: 13, color: "var(--ink-2)" }}>{totalVotos(s.votos)} votos</div>
+              <div className="rank-meta rank-votos" style={{ fontSize: 13, color: "var(--ink-2)" }}>{totalVotos(s.votos)} votos</div>
               <div className="rank-barra"><BarraVotos votos={s.votos}/></div>
             </a>
           ))}
@@ -238,7 +244,7 @@ const MapaNarino = ({ stands, onDetail }) => {
     <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 22, position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
         <div className="mono">Mapa · Nariño</div>
-        <div className="mono" style={{ color: "var(--ink-3)" }}>{stands.length} stands ubicados</div>
+        <div className="mono" style={{ color: "var(--ink-3)" }}>{stands.length} establecimientos / fincas</div>
       </div>
       <div style={{ aspectRatio: `${vw} / ${vh}`, position: "relative", background: "var(--paper-2)", borderRadius: "var(--r-sm)", overflow: "hidden", maxHeight: 440, margin: "0 auto" }} className="paper-texture">
         <svg width="100%" height="100%" viewBox={mapa ? mapa.viewBox : "0 0 1000 1068"} preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0 }}>
@@ -304,10 +310,59 @@ const MapaNarino = ({ stands, onDetail }) => {
   );
 };
 
+/**
+ * Ficha del stand. Se MIRA, no se vota.
+ *
+ * Antes esta pantalla llevaba un botón «Votar este stand», y con él el
+ * pasaporte se podía llenar entero desde el sofá. El festival existe para que
+ * la gente camine el recinto: el voto sólo se abre escaneando el QR que está
+ * pegado en el puesto, y aquí se explica en vez de esconderlo.
+ *
+ * Lo que sí enseña: cómo contactar y dónde queda, la votación de todo el
+ * festival y —si esta persona ya votó— la suya, cada una con su título.
+ */
 const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
-  const commentsForStand = comentarios.filter((c) => c.stand === stand.id);
+  // Sólo los que escribieron algo: un voto sin comentario aparecía como un par
+  // de comillas vacías con su hora, que no le dice nada a nadie.
+  const commentsForStand = comentarios.filter((c) => c.stand === stand.id && (c.texto || "").trim());
   const rank = [...allStands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos)).findIndex((x) => x.id === stand.id) + 1;
   const totalv = totalVotos(stand.votos) || 0;
+  const titulos = window.titulosEstrellas();
+
+  // Lo que esta persona votó aquí. Llega del pasaporte y sólo con su testigo:
+  // el endpoint es público y la calificación de alguien no lo es.
+  const [mio, setMio] = React.useState(null);
+  React.useEffect(() => {
+    const correo = (window.LMTPerfil && window.LMTPerfil.correoConocido()) || "";
+    if (!correo) return;
+    let vivo = true;
+    const intentar = async () => {
+      if (!vivo || !window.LMTApi || !window.LMTApi.enabled) return;
+      try {
+        const t = (window.LMTPerfil && window.LMTPerfil.testigoDe(correo)) || "";
+        const p = await window.LMTApi.getPasaporte(correo, t);
+        if (!vivo) return;
+        setMio({
+          visitado: (p.visitados || []).indexOf(stand.id) >= 0,
+          estrellas: (p.estrellas_mias || {})[stand.id] || null,
+          emoji: (p.valoraciones || {})[stand.id] || "",
+          cuando: (p.sellado_en || {})[stand.id] || "",
+        });
+      } catch (_) { /* sin pasaporte todavía: la ficha se ve igual */ }
+    };
+    intentar();
+    window.addEventListener("lmt:auth", intentar);
+    return () => { vivo = false; window.removeEventListener("lmt:auth", intentar); };
+  }, [stand.id]);
+
+  const contacto = [
+    stand.direccion && { k: "Dirección", v: stand.direccion },
+    (stand.municipio || stand.region) && { k: "Dónde", v: [stand.municipio, stand.region].filter(Boolean).join(" · ") },
+    stand.correo && { k: "Correo", v: stand.correo, href: "mailto:" + stand.correo },
+    stand.telefono && { k: "Teléfono", v: stand.telefono, href: "tel:" + stand.telefono },
+    stand.sitio_web && { k: "Sitio web", v: stand.sitio_web, href: stand.sitio_web },
+  ].filter(Boolean);
+
   return (
     <div style={{ minHeight: "100dvh", background: "var(--paper)" }}>
       <PublicHeader/>
@@ -319,7 +374,9 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
             {stand.nombre}
           </h1>
           <p style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 18, maxWidth: 540, lineHeight: 1.6 }}>{stand.descripcion}</p>
-          <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+          {/* auto-fit: en un teléfono, tres columnas fijas parten «Calificación»
+              en dos líneas y descuadran las tres tarjetas. */}
+          <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))", gap: 14 }}>
             {[
               { k: "Calificación", v: calcScore(stand.votos).toFixed(0), sub: "/ 100" },
               { k: "Votos", v: totalv, sub: "totales" },
@@ -332,6 +389,47 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
               </div>
             ))}
           </div>
+          {/* Las tres valoraciones de todo el festival, con los títulos que
+              haya puesto el organizador. */}
+          <div style={{ marginTop: 24, padding: 18, border: "1px solid var(--line)", borderRadius: "var(--r-md)" }}>
+            <div className="mono" style={{ marginBottom: 10 }}>Votación del festival</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 340 }}>
+              {ESTRELLA_CAMPOS.map((campo) => (
+                <EstrellasLectura key={campo} etiqueta={titulos[campo]} tam={16}
+                  valor={(stand.estrellas || {})[ESTRELLA_CLAVES[campo]]}/>
+              ))}
+            </div>
+            <div className="mono" style={{ marginTop: 10, color: "var(--ink-3)" }}>
+              {(stand.estrellas && stand.estrellas.n) || 0} personas puntuaron con estrellas
+            </div>
+          </div>
+
+          {/* Y la de quien está mirando, si votó aquí. */}
+          {mio && mio.visitado && (
+            <div style={{ marginTop: 16, padding: 18, border: "1px solid var(--cafeto)", borderRadius: "var(--r-md)", background: "var(--paper-2)" }}>
+              <div className="mono" style={{ marginBottom: 10, color: "var(--cafeto)" }}>✓ Mi votación</div>
+              {mio.estrellas ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 340 }}>
+                  {ESTRELLA_CAMPOS.map((campo) => (
+                    <EstrellasLectura key={campo} etiqueta={titulos[campo]} tam={16}
+                      valor={mio.estrellas[ESTRELLA_CLAVES[campo]]}/>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                  Votaste con un toque, sin estrellas.
+                </div>
+              )}
+              {mio.emoji && (
+                <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 8 }}>
+                  Tu calificación: <strong style={{ fontWeight: 500 }}>
+                    {{ bueno: "Excelente", regular: "Regular", malo: "Mejorable" }[mio.emoji] || mio.emoji}
+                  </strong>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ marginTop: 24, padding: 18, background: "var(--paper-2)", borderRadius: "var(--r-md)" }}>
             <div className="mono" style={{ marginBottom: 10 }}>Distribución</div>
             {[
@@ -354,17 +452,51 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
           </div>
         </div>
         <aside>
-          <div style={{ aspectRatio: "1/1.3", background: stand.color, borderRadius: "var(--r-md)", padding: 28, color: "var(--paper)", display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative", overflow: "hidden" }}>
+          {/* Sin el botón de votar, la proporción fija dejaba medio bloque de
+              color vacío. Crece con lo que tenga dentro. */}
+          <div style={{ minHeight: 260, background: stand.color, borderRadius: "var(--r-md)", padding: 28, color: "var(--paper)", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 24, position: "relative", overflow: "hidden" }}>
             <div className="mono" style={{ color: "oklch(0.95 0.01 75)" }}>#{stand.id.toUpperCase()}</div>
             <div>
               <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, lineHeight: 0.95, letterSpacing: "-0.02em" }}>{stand.nombre}</div>
               <div style={{ fontSize: 13, marginTop: 12, opacity: 0.85 }}>{stand.direccion}</div>
               <div style={{ fontSize: 13, marginTop: 4, opacity: 0.85 }}>{stand.correo}</div>
             </div>
-            <a href={"/s/" + stand.id} data-route className="btn" style={{ background: "var(--paper)", color: "var(--ink)", justifyContent: "center", padding: 14, textDecoration: "none" }}>
-              Votar este stand →
-            </a>
+            {/* Aquí iba «Votar este stand». Se quitó a propósito: con él el
+                pasaporte se llenaba entero sin pisar el recinto. */}
+            <div style={{
+              background: "rgba(255,255,255,0.15)", borderRadius: "var(--r-sm)",
+              padding: "12px 14px", fontSize: 13, lineHeight: 1.55,
+            }}>
+              {mio && mio.visitado
+                ? "Ya sellaste este stand en tu pasaporte."
+                : "Para votar, escanea el código QR que está en el puesto. Así el sello dice que estuviste ahí."}
+            </div>
           </div>
+
+          {contacto.length > 0 && (
+            <div style={{ marginTop: 20, border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 18 }}>
+              <div className="mono" style={{ marginBottom: 10 }}>Contacto</div>
+              {contacto.map((c) => (
+                <div key={c.k} style={{ display: "flex", gap: 10, padding: "5px 0", fontSize: 13, alignItems: "baseline" }}>
+                  <span className="mono" style={{ color: "var(--ink-3)", flex: "0 0 80px" }}>{c.k}</span>
+                  <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
+                    {c.href
+                      ? <a href={c.href} target={c.href.startsWith("http") ? "_blank" : undefined} rel="noopener" style={{ color: "var(--cafeto)" }}>{c.v}</a>
+                      : c.v}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {typeof stand.lat === "number" && typeof stand.lng === "number" && (
+            <div style={{ marginTop: 20 }}>
+              <div className="mono" style={{ marginBottom: 10 }}>Dónde queda</div>
+              <SelectorUbicacion lat={stand.lat} lng={stand.lng} municipio={stand.municipio}
+                alto={260} soloLectura onCambio={() => {}}/>
+            </div>
+          )}
+
           <div style={{ marginTop: 20 }}>
             <div className="mono" style={{ marginBottom: 10 }}>Comentarios recientes</div>
             {commentsForStand.length === 0 && (

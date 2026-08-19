@@ -89,24 +89,47 @@ final class Validate
         return $v;
     }
 
-    /** Teléfono: dígitos, espacios y los signos habituales. */
+    /**
+     * Teléfono: SÓLO dígitos, y se guardan sólo dígitos.
+     *
+     * Se aceptan los separadores al escribir —«315 778 8990», «(2) 731 4455»—
+     * y se descartan al guardar. La forma en que cada persona escribe su
+     * número no es un dato: lo único que importa es el número, y guardarlo tal
+     * cual metía en la base el mismo teléfono de cuatro maneras distintas, que
+     * luego no cuadra al buscar ni al comparar.
+     *
+     * De 7 a 15 dígitos: cabe un fijo de Pasto y un móvil con indicativo de
+     * país, y no cabe una cédula tecleada en la casilla equivocada.
+     */
     public static function telefono($value): ?string
     {
         if (!is_scalar($value)) return null;
         $v = trim((string) $value);
         if ($v === '') return null;
+        // Sólo se descartan separadores; una letra invalida el campo entero,
+        // porque casi siempre significa que ahí va otra cosa.
         if (!preg_match('/\A[0-9+()\-. ]{7,32}\z/', $v)) return null;
-        return $v;
+        $d = preg_replace('/\D+/', '', $v) ?? '';
+        return (strlen($d) >= 7 && strlen($d) <= 15) ? $d : null;
     }
 
-    /** Documento de identidad o NIT: alfanumérico con guiones y puntos. */
+    /**
+     * Documento de identidad o NIT: SÓLO dígitos, y se guardan sólo dígitos.
+     *
+     * Mismo criterio que el teléfono. Una cédula se escribe con puntos, sin
+     * puntos o con espacios, y un NIT con el dígito de verificación separado
+     * por un guion; todo eso son formas de escribir el mismo número. Se
+     * conserva el dígito de verificación —es parte del NIT—, sólo desaparece
+     * el guion.
+     */
     public static function documento($value): ?string
     {
         if (!is_scalar($value)) return null;
         $v = trim((string) $value);
         if ($v === '') return null;
-        if (!preg_match('/\A[0-9A-Za-z.\-]{4,32}\z/', $v)) return null;
-        return $v;
+        if (!preg_match('/\A[0-9.\- ]{4,32}\z/', $v)) return null;
+        $d = preg_replace('/\D+/', '', $v) ?? '';
+        return (strlen($d) >= 4 && strlen($d) <= 20) ? $d : null;
     }
 
     /** URL http/https. Rechaza javascript:, data: y demás esquemas. */

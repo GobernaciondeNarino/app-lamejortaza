@@ -43,6 +43,7 @@ function register_routes_pasaportes(\LMT\Router $r): void
                 'correo'    => Validate::maskEmail($correo),
                 'nombre'    => '',
                 'numero'    => pasaporte_numero($correo),
+                'numero_qr' => pasaporte_numero_qr($correo),
                 'inicio'    => null,
                 'visitados' => [],
                 'valoraciones' => [],
@@ -59,8 +60,18 @@ function register_routes_pasaportes(\LMT\Router $r): void
             // que el correo salvo su inicial, suficiente para que se reconozca.
             'nombre'    => Validate::iniciales((string) ($row['nombre'] ?? '')),
             'numero'    => pasaporte_numero((string) $row['correo']),
+            // El número, ya dibujado como QR para la hoja de datos. Lo dibuja
+            // el servidor porque el generador vive aquí, y codifica el número
+            // —no el correo—: esa hoja se enseña y se fotografía.
+            'numero_qr' => pasaporte_numero_qr((string) $row['correo']),
             'inicio'    => $row['inicio'] ?? null,
             'visitados' => array_values(array_filter($visitados, [Validate::class, 'standId'])),
+            // Cuándo se selló cada stand, y cuándo fue la última visita. Mismo
+            // testigo que las calificaciones: la lista de stands visitados ya
+            // es pública en este endpoint, pero la HORA de cada visita dice
+            // dónde estuvo alguien y cuándo, y eso no lo damos a un desconocido.
+            'sellado_en'    => pasaporte_sellos($correo, is_string($_GET['t'] ?? null) ? $_GET['t'] : ''),
+            'ultima_visita' => pasaporte_ultima_visita($correo, is_string($_GET['t'] ?? null) ? $_GET['t'] : ''),
             // Qué puntuó en cada stand. Va SÓLO con el testigo del perfil: este
             // endpoint es público, y saber que alguien calificó un stand como
             // «malo» no es lo mismo que saber que lo visitó. Sin testigo, la
@@ -99,6 +110,60 @@ function pasaporte_estrellas(string $correo, string $token): array
         ];
     }
     return $out;
+}
+
+/**
+ * Cuándo se selló cada stand, indexado por stand.
+ *
+ * Es la fecha que va en el sello del pasaporte. Antes la hoja llevaba una fecha
+ * escrita a mano en el código, igual para todos los sellos y para todo el
+ * mundo: bonita en la maqueta y falsa en cuanto alguien miraba dos hojas.
+ *
+ * @return array<string, string>  'Y-m-d H:i:s'; vacío si el testigo no vale
+ */
+function pasaporte_sellos(string $correo, string $token): array
+{
+    if (!\visitante_token_valido($correo, $token)) return [];
+
+    $q = Db::pdo()->prepare('SELECT stand_id, created_at FROM votos WHERE correo = :c');
+    $q->execute([':c' => $correo]);
+    $out = [];
+    foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $v) {
+        if (empty($v['created_at'])) continue;
+        $out[(string) $v['stand_id']] = (string) $v['created_at'];
+    }
+    return $out;
+}
+
+/** El sello más reciente. Va en la hoja de datos, como «última visita». */
+function pasaporte_ultima_visita(string $correo, string $token): ?string
+{
+    if (!\visitante_token_valido($correo, $token)) return null;
+
+    $q = Db::pdo()->prepare('SELECT MAX(created_at) FROM votos WHERE correo = :c');
+    $q->execute([':c' => $correo]);
+    $v = $q->fetchColumn();
+    return $v ? (string) $v : null;
+}
+
+/**
+ * El número de pasaporte dibujado como QR, en data URI.
+ *
+ * Codifica el NÚMERO, no el correo ni una URL con el correo dentro: la hoja de
+ * datos se enseña y se fotografía, y un QR es justo lo que alguien escanea sin
+ * pensar. El número ya está impreso encima en letras grandes, así que el código
+ * no añade nada que no estuviera a la vista.
+ */
+function pasaporte_numero_qr(string $correo): ?string
+{
+    try {
+        return 'data:image/png;base64,' . base64_encode(
+            \LMT\QrCode::png(pasaporte_numero($correo), 4, 2)
+        );
+    } catch (\Throwable $e) {
+        error_log('[lmt][pasaporte][qr] ' . $e->getMessage());
+        return null;
+    }
 }
 
 /**

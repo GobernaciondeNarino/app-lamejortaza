@@ -263,6 +263,12 @@
 
   /** Logo de un stand desde el panel de administración. */
   async function infoUploads()              { return request("/admin/uploads"); }
+  async function repararPermisosUploads()   { await ensureCsrf(); return request("/admin/uploads/permisos", { method: "POST" }); }
+  async function inventarioSistema()        { return request("/admin/sistema/inventario"); }
+  async function reiniciarSistema(ambitos, confirmacion) {
+    await ensureCsrf();
+    return request("/admin/sistema/reiniciar", { method: "POST", body: { ambitos, confirmacion } });
+  }
   async function subirLogoStand(file) {
     await ensureCsrf();
     return request("/stands/logo", { method: "POST", body: archivoFormData(file) });
@@ -285,10 +291,6 @@
   async function cambiarEstadoPromotor(id, estado) {
     await ensureCsrf();
     return request("/admin/promotores/" + id + "/estado", { method: "POST", body: { estado } });
-  }
-  async function vincularStand(id, standId) {
-    await ensureCsrf();
-    return request("/admin/promotores/" + id + "/stand", { method: "PUT", body: { stand_id: standId || null } });
   }
   async function listarEmails(limit)        { return request("/admin/emails" + (limit ? "?limit=" + encodeURIComponent(limit) : "")); }
 
@@ -417,6 +419,9 @@
     subirLogoInscripcion,
     subirLogoStand,
     infoUploads,
+    repararPermisosUploads,
+    inventarioSistema,
+    reiniciarSistema,
     subirFotoProducto,
     listarPromotores,
     verPromotor,
@@ -425,7 +430,6 @@
     reemitirQrPromotor,
     rechazarPromotor,
     cambiarEstadoPromotor,
-    vincularStand,
     listarEmails,
     getCorreoConfig,
     guardarCorreoConfig,

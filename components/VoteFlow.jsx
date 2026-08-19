@@ -38,6 +38,9 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
     return () => window.removeEventListener("lmt:festival", refrescar);
   }, []);
   const [submitError, setSubmitError] = React.useState("");
+  // «Ya votaste aquí» no es un error como los demás: no hay nada que corregir,
+  // así que en vez de dejar a la persona parada se le ofrece por dónde seguir.
+  const [yaVoto, setYaVoto] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const emailRef = React.useRef(null);
 
@@ -52,7 +55,7 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
   // Envía el voto. Recibe emoji y correo explícitos para no depender del
   // estado asíncrono de React tras un toque.
   const submitVote = async (emojiId, correo) => {
-    setSubmitError("");
+    setSubmitError(""); setYaVoto(false);
     setSubmitting(true);
     try {
       const payload = {
@@ -73,7 +76,7 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
       onComplete(data);
     } catch (e) {
       const code = String((e && (e.code || e.message)) || e);
-      if (code.includes("ya_votaste")) setSubmitError("Ya registraste un voto para este stand con ese correo.");
+      if (code.includes("ya_votaste")) { setSubmitError("Ya registraste un voto para este stand con ese correo."); setYaVoto(true); }
       else if (code.includes("rate_limited")) setSubmitError("Demasiados votos seguidos. Espera un momento e intenta de nuevo.");
       else if (code.includes("correo_invalido")) setSubmitError("El correo no es válido.");
       else if (code.includes("emoji_invalido")) setSubmitError("Selecciona una calificación.");
@@ -188,7 +191,10 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
         )}
       </div>
 
-      {/* Emojis grandes en fila — acción principal de un toque */}
+      {/* La pregunta que de verdad envía el voto. Sin ella los tres emoji
+          aparecían sueltos al final de un formulario largo y no quedaba claro
+          qué se estaba puntuando ni que tocarlos ya era enviar. */}
+      <div className="mono" style={{ marginBottom: 10 }}>¿Cómo te pareció nuestro espacio?</div>
       <div style={{ display: "flex", gap: 10 }}>
         {EMOJIS.map(e => {
           const selected = data.emoji === e.id;
@@ -267,6 +273,19 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
         </div>
       )}
 
+      {/* Ya había votado aquí. El mensaje solo dejaba a la persona parada en
+          una pantalla sin salida; lo que quiere es seguir con su recorrido. */}
+      {yaVoto && (
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          <a href="/recorrido" data-route className="btn btn-primary" style={{ justifyContent: "center", padding: 14 }}>
+            Regresar a ver mi recorrido →
+          </a>
+          <a href="/pasaporte" data-route className="btn btn-ghost" style={{ justifyContent: "center", padding: 14 }}>
+            Ver mi pasaporte
+          </a>
+        </div>
+      )}
+
       <p className="mono" style={{ textAlign: "center", marginTop: 20, lineHeight: 1.6, color: "var(--ink-3)" }}>
         Al votar aceptas el tratamiento<br/>de datos del festival.
       </p>
@@ -276,6 +295,10 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
 
 const VoteConfirm = ({ stand, onGoPassport, onGoDashboard }) => {
   const [stamped, setStamped] = React.useState(false);
+  // De dónde venía: si esta persona ya tiene recorrido empezado, lo que quiere
+  // después de sellar es volver a él y ver qué le falta.
+  const volverAlRecorrido = React.useMemo(
+    () => !!(window.LMTPerfil && window.LMTPerfil.correoConocido()), []);
   React.useEffect(() => {
     const t = setTimeout(() => setStamped(true), 250);
     return () => clearTimeout(t);
@@ -313,9 +336,18 @@ const VoteConfirm = ({ stand, onGoPassport, onGoDashboard }) => {
         </div>
       </div>
       <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
-        <button className="btn btn-primary" onClick={onGoPassport} style={{ justifyContent: "center", padding: 14 }}>
-          Ver mi pasaporte →
-        </button>
+        {/* Quien viene de «Mi recorrido» quiere volver ahí: es la pantalla que
+            le dice cuáles le faltan, y es lo siguiente que va a hacer. Quien
+            llegó escaneando el QR sin más va al pasaporte, que es su sello
+            recién puesto. */}
+        <a href={volverAlRecorrido ? "/recorrido" : "/pasaporte"} data-route className="btn btn-primary"
+          style={{ justifyContent: "center", padding: 14 }}>
+          {volverAlRecorrido ? "Regresar a ver mi recorrido →" : "Ver mi pasaporte →"}
+        </a>
+        <a href={volverAlRecorrido ? "/pasaporte" : "/recorrido"} data-route className="btn btn-ghost"
+          style={{ justifyContent: "center", padding: 14 }}>
+          {volverAlRecorrido ? "Ver mi pasaporte" : "Ver mi recorrido"}
+        </a>
         <button className="btn btn-ghost" onClick={onGoDashboard} style={{ justifyContent: "center", padding: 14 }}>
           Ver ranking del festival
         </button>

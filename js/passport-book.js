@@ -369,6 +369,65 @@
     ctx.restore();
   }
 
+  /**
+   * Rayado diagonal, el mismo que en CSS marca «aquí falta una imagen».
+   * Lo usa el recuadro del retrato cuando el visitante no subió foto.
+   */
+  function rayadoDiagonal(ctx, x, y, w, h, c1, c2, paso) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.fillStyle = c1; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = c2;
+    for (var i = -h; i < w + h; i += paso * 2) {
+      ctx.beginPath();
+      ctx.moveTo(x + i, y + h);
+      ctx.lineTo(x + i + paso, y + h);
+      ctx.lineTo(x + i + paso + h, y);
+      ctx.lineTo(x + i + h, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** Camino de una estrella de cinco puntas centrada en (cx, cy). */
+  function caminoEstrella(ctx, cx, cy, r) {
+    ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+      var ang = -Math.PI / 2 + i * Math.PI / 5;
+      var rr = i % 2 === 0 ? r : r * 0.45;
+      var x = cx + Math.cos(ang) * rr, y = cy + Math.sin(ang) * rr;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  /**
+   * Una estrella con `relleno` (0-1) de su ancho pintado.
+   *
+   * Se dibuja, no se escribe «★»: el carácter lo pinta cada sistema a su
+   * manera y no admite media estrella. Es el mismo criterio que el componente
+   * <Estrella> del render CSS, para que las dos vistas no enseñen dos cosas.
+   */
+  function estrellaPintada(ctx, cx, cy, r, relleno, lleno, vacio) {
+    ctx.save();
+    caminoEstrella(ctx, cx, cy, r);
+    ctx.strokeStyle = vacio;
+    ctx.lineWidth = Math.max(1, r * 0.14);
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    var f = Math.max(0, Math.min(1, relleno));
+    if (f > 0) {
+      ctx.beginPath();
+      ctx.rect(cx - r, cy - r, r * 2 * f, r * 2);
+      ctx.clip();
+      caminoEstrella(ctx, cx, cy, r);
+      ctx.fillStyle = lleno;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function textoCentradoEspaciado(ctx, txt, cx, y, espaciado) {
     var w = anchoEspaciado(ctx, txt, espaciado);
     var prev = ctx.textAlign;
@@ -453,37 +512,73 @@
     // sin él, una foto con contraste se traga la hoja entera.
     var conFondo = pagina.fondo && dibujarFondo(ctx, pagina.fondo, W, H, pal);
     if (!conFondo) grano(ctx, W, H);
-    // Ni la hoja de datos ni la del recorrido llevan renglones: son fichas, no
-    // páginas para escribir. Con ellos parecían un cuaderno.
-    if (!conFondo && tipo !== "contraportada" && tipo !== "indice" && tipo !== "travesia") {
+    // La del recorrido no lleva renglones: es una lista y con ellos se leía a
+    // trompicones. La de datos sí, como en la hoja del titular de un pasaporte.
+    if (!conFondo && tipo !== "contraportada" && tipo !== "travesia") {
       renglones(ctx, W, H, pal["--line"], k);
     }
 
+    // A partir de aquí las hojas se describen en las MISMAS medidas que el
+    // render CSS: `u` es un píxel del diseño de 380×528 en el que está hecha
+    // <PaginaDatos>. Antes cada posición era un porcentaje del alto, y cambiar
+    // algo en una vista obligaba a traducirlo a mano en la otra —que es como
+    // acabaron enseñando cosas distintas—.
+    var u = H / 528;
+    // Con la línea base alfabética, `y` sería la base del texto. El diseño
+    // habla de la CAJA, así que se baja el equivalente al ascendente.
+    function lineaEn(txt, x, y, tam) { ctx.fillText(txt, x, y + tam * 0.78); }
+
     if (tipo === "indice") {
-      // Hoja de datos, como la página del titular en un pasaporte de verdad:
-      // recuadro de la foto a la izquierda, ficha a la derecha y banda de
-      // lectura mecánica abajo. Antes era un índice de casillas vacías.
+      // Hoja del titular: marco, retrato a la izquierda, ficha a la derecha,
+      // firma con el código del pasaporte y banda de lectura mecánica abajo.
       var sellados = pagina.visitados | 0;
+      var pad = 11 * u;
+      var mx = pad + 13 * u;                 // margen interior izquierdo
+      var mDer = W - pad - 13 * u;
+      var ancho = mDer - mx;
 
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
-      textoEspaciado(ctx, "REPÚBLICA DE COLOMBIA · NARIÑO", W * 0.09, H * 0.075, 1.4 * k);
-      ctx.textAlign = "right";
-      textoEspaciado(ctx, "P·CAFÉ", W * 0.91, H * 0.075, 1.4 * k);
-      ctx.textAlign = "left";
-      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
-      ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.095); ctx.lineTo(W * 0.91, H * 0.095); ctx.stroke();
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * u;
+      rectRedondo(ctx, pad + 0.5, pad + 0.5, W - pad * 2 - 1, H - pad * 2 - 1, 4 * u);
+      ctx.stroke();
 
-      // Recuadro de la foto: inicial y número de sellos.
-      var fx = W * 0.09, fy = H * 0.118, fw = W * 0.26, fh = H * 0.215;
-      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1.5 * k;
-      // Donde iría la foto en un pasaporte de verdad: la del visitante si la
-      // subió, el emoji que eligió, o la inicial de su nombre.
+      var rayaEntre = function (x1, x2, yy) {
+        ctx.strokeStyle = pal["--line"]; ctx.lineWidth = 1 * u;
+        ctx.beginPath();
+        ctx.moveTo(x1, Math.round(yy) + 0.5);
+        ctx.lineTo(x2, Math.round(yy) + 0.5);
+        ctx.stroke();
+      };
+      var raya = function (yy) { rayaEntre(mx, mDer, yy); };
+      // Etiqueta pequeña arriba y valor debajo. Devuelve el alto ocupado, que
+      // es lo que necesita quien apila los campos uno tras otro.
+      var campo = function (etiqueta, valor, x, y, maxAncho, tam, mono) {
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 11 * u);
+        lineaEn(etiqueta, x, y, 11 * u);
+        ctx.fillStyle = pal["--ink"]; ctx.font = familia(mono ? "mono" : "sans", tam * u);
+        lineaEn(recortar(ctx, String(valor == null || valor === "" ? "——" : valor), maxAncho),
+                x, y + 14.3 * u + 2 * u, tam * u);
+        return (14.3 + 2 + tam * 1.2) * u;
+      };
+
+      var y = pad + 11 * u;
+
+      // Cabecera: el país y el departamento, y la taza a la derecha.
+      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("mono", 11 * u);
+      textoEspaciado(ctx, "REPÚBLICA DE COLOMBIA", mx, y + 11 * 0.78 * u, 1.2 * u);
+      textoEspaciado(ctx, "DEPARTAMENTO DE NARIÑO", mx, y + (11 * 0.78 + 16.5) * u, 1.2 * u);
+      logoTaza(ctx, mDer - 24 * u, y, 24 * u, pal["--grano"], pal["--grano"]);
+      y += 33 * u;
+
+      y += 8 * u; raya(y); y += 9 * u;
+
+      // Retrato: la foto que subió, o el rayado con su emoji o sus iniciales.
+      var fx = mx, fy = y, fw = 98 * u, fh = 118 * u;
       var conFoto = false;
       if (pagina.retrato_foto) {
         var im = imagenCacheada(pagina.retrato_foto);
         if (im) {
           ctx.save();
-          ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.clip();
+          rectRedondo(ctx, fx, fy, fw, fh, 4 * u); ctx.clip();
           var e2 = Math.max(fw / im.width, fh / im.height);   // «cover»
           var iw = im.width * e2, ih = im.height * e2;
           ctx.drawImage(im, fx + (fw - iw) / 2, fy + (fh - ih) / 2, iw, ih);
@@ -492,177 +587,254 @@
         }
       }
       if (!conFoto) {
+        rayadoDiagonal(ctx, fx, fy, fw, fh, pal["--paper-2"], pal["--paper-3"], 7 * u);
+        var dcx = fx + fw / 2, dcy = fy + 45 * u;
+        ctx.fillStyle = pal["--grano"];
+        ctx.beginPath(); ctx.arc(dcx, dcy, 27 * u, 0, Math.PI * 2); ctx.fill();
         ctx.textAlign = "center";
         if (pagina.retrato_emoji) {
-          ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 50 * k);
-          ctx.fillText(String(pagina.retrato_emoji), fx + fw / 2, fy + fh * 0.50);
+          ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 28 * u);
+          ctx.fillText(String(pagina.retrato_emoji), dcx, dcy + 10 * u);
         } else {
-          ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 58 * k);
-          ctx.fillText(String(pagina.nombre || "V").trim().charAt(0).toUpperCase(), fx + fw / 2, fy + fh * 0.46);
+          ctx.fillStyle = pal["--paper"]; ctx.font = familia("display", 23 * u);
+          ctx.fillText(String(pagina.iniciales || "V"), dcx, dcy + 8 * u);
         }
-        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-        textoCentradoEspaciado(ctx, "SELLOS", fx + fw / 2, fy + fh * 0.72, 1.4 * k);
-        ctx.fillStyle = pal["--ink"]; ctx.font = familia("mono", 24 * k);
-        ctx.fillText(("0" + sellados).slice(-2), fx + fw / 2, fy + fh * 0.94);
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * u);
+        textoCentradoEspaciado(ctx, "FOTOGRAFÍA", dcx, fy + 92 * u, 1.2 * u);
         ctx.textAlign = "left";
       }
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * u;
+      rectRedondo(ctx, fx + 0.5, fy + 0.5, fw - 1, fh - 1, 4 * u); ctx.stroke();
 
-      // Ficha: etiqueta pequeña arriba, valor grande debajo. En un teléfono
-      // esta hoja se mira a un palmo: los cuerpos de 10-12 px no se leían.
-      function campo(etiqueta, valor, x, y, maxAncho, tam) {
-        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-        textoEspaciado(ctx, etiqueta, x, y, 1.2 * k);
-        ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", (tam || 21) * k);
-        ctx.fillText(recortar(ctx, String(valor == null || valor === "" ? "——" : valor), maxAncho), x, y + 27 * k);
-      }
+      // Columna de la derecha: número, apellidos y nombres.
+      var cx = fx + fw + 13 * u;
+      var cw = mDer - cx;
+      var cy2 = y;
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 11 * u);
+      lineaEn("NÚMERO DE PASAPORTE", cx, cy2, 11 * u);
+      ctx.fillStyle = pal["--grano"]; ctx.font = familia("mono", 20 * u);
+      lineaEn(recortar(ctx, String(pagina.numero || "——"), cw), cx, cy2 + 16.3 * u, 20 * u);
+      cy2 += 40.3 * u;
+      cy2 += 6 * u; rayaEntre(cx, mDer, cy2); cy2 += 6 * u;
+      cy2 += campo("APELLIDOS", pagina.apellidos, cx, cy2, cw, 17);
+      cy2 += 6 * u; rayaEntre(cx, mDer, cy2); cy2 += 6 * u;
+      cy2 += campo("NOMBRES", pagina.nombres, cx, cy2, cw, 17);
 
-      // El nombre, en display y grande: es lo primero que se mira.
-      var cx = W * 0.40;
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-      textoEspaciado(ctx, "PORTADOR / BEARER", cx, H * 0.140, 1.2 * k);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 30 * k);
-      ctx.fillText(recortar(ctx, String(pagina.nombre || "——"), W * 0.51), cx, H * 0.178);
+      y = Math.max(fy + fh, cy2);
 
-      campo("SEXO", pagina.sexo, cx, H * 0.235, W * 0.22);
-      campo("EDAD", pagina.edad, W * 0.66, H * 0.235, W * 0.25);
-
-      campo("PROCEDENCIA", pagina.procedencia, W * 0.09, H * 0.395, W * 0.82, 22);
-      campo("Nº DE PASAPORTE", pagina.numero, W * 0.09, H * 0.470, W * 0.82, 24);
-      campo("EXPEDIDO", pagina.expedido, W * 0.09, H * 0.545, W * 0.38);
-      campo("SELLOS", sellados + " de " + (pagina.totalStands | 0), W * 0.52, H * 0.545, W * 0.39);
-      campo("VISITANTE", pagina.visitante, W * 0.09, H * 0.620, W * 0.82, 19);
+      var mitad = mx + ancho * 0.5;
+      y += 9 * u; raya(y); y += 9 * u;
+      campo("CIUDAD DE ORIGEN", pagina.procedencia, mx, y, ancho * 0.47, 16);
+      y += campo("NACIONALIDAD", pagina.nacionalidad, mitad, y, ancho * 0.47, 16);
+      y += 7 * u; raya(y); y += 7 * u;
+      campo("EXPEDICIÓN", pagina.expedido, mx, y, ancho * 0.47, 15, true);
+      y += campo("VÁLIDO HASTA", pagina.valido, mitad, y, ancho * 0.47, 15, true);
+      y += 7 * u; raya(y); y += 7 * u;
+      campo("ÚLTIMA VISITA", pagina.ultima, mx, y, ancho * 0.47, 15, true);
+      y += campo("SELLOS", sellados + " de " + (pagina.totalStands | 0), mitad, y, ancho * 0.47, 15, true);
+      y += 7 * u; raya(y); y += 7 * u;
+      y += campo("CORREO REGISTRADO", pagina.correo, mx, y, ancho, 15);
 
       if (!pagina.conPerfil) {
-        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 16 * k);
-        parrafo(ctx, "Completa tu perfil de visitante y esta hoja se llena con tus datos.",
-                W * 0.09, H * 0.700, W * 0.82, 21 * k, 2);
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 12 * u);
+        lineaEn(recortar(ctx, "Completa tu perfil y esta hoja se llena sola.", ancho), mx, y + 8 * u, 12 * u);
       }
 
-      // Banda de lectura mecánica, con quién expide justo encima.
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-      textoEspaciado(ctx, "EXPIDE · GOBERNACIÓN DE NARIÑO", W * 0.09, H * 0.855, 1.4 * k);
-      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
-      ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.875); ctx.lineTo(W * 0.91, H * 0.875); ctx.stroke();
-      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("mono", 16 * k);
-      ctx.fillText(String(pagina.mrz1 || ""), W * 0.09, H * 0.918);
-      ctx.fillText(String(pagina.mrz2 || ""), W * 0.09, H * 0.955);
+      // Banda mecánica y firma, ancladas abajo: lo que sobre queda en medio,
+      // que es lo que hace que la hoja no se descuadre con un nombre largo.
+      var yMrz = H - pad - 10 * u - 33 * u;
+      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("mono", 11 * u);
+      lineaEn(String(pagina.mrz1 || ""), mx, yMrz, 11 * u);
+      lineaEn(String(pagina.mrz2 || ""), mx, yMrz + 16.5 * u, 11 * u);
+
+      var yFirma = yMrz - 8 * u - 50 * u;
+      var qr = pagina.numero_qr ? imagenCacheada(pagina.numero_qr) : null;
+      if (qr) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(qr, mDer - 50 * u, yFirma, 50 * u, 50 * u);
+        ctx.imageSmoothingEnabled = true;
+      }
+      ctx.fillStyle = pal["--grano"]; ctx.font = familia("display", 22 * u);
+      lineaEn(recortar(ctx, String(pagina.nombre || ""), ancho - 62 * u), mx, yFirma, 22 * u);
+      ctx.strokeStyle = pal["--ink-3"]; ctx.lineWidth = 1 * u;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(mx, Math.round(yFirma + 28 * u) + 0.5);
+      ctx.lineTo(mx + 165 * u, Math.round(yFirma + 28 * u) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * u);
+      lineaEn("FIRMA DEL PORTADOR", mx, yFirma + 33 * u, 10 * u);
     } else if (tipo === "sello") {
       var s = pagina.stand || {};
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
-      textoEspaciado(ctx, ("SELLO · " + (s.municipio || "")).toUpperCase(), W * 0.09, H * 0.09, 1.6 * k);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 32 * k);
-      ctx.fillText(String(s.nombre || ""), W * 0.085, H * 0.14);
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * k);
-      ctx.fillText(String(s.region || ""), W * 0.09, H * 0.172);
+      var pad2 = 20 * u;
+      var anchoS = W - pad2 * 2;
+
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+      textoEspaciado(ctx, ("SELLO · " + (s.municipio || "")).toUpperCase(), pad2, pad2 + 12 * 0.78 * u, 1.6 * u);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 28 * u);
+      lineaEn(recortar(ctx, String(s.nombre || ""), anchoS), pad2 - 2 * u, pad2 + 20 * u, 28 * u);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * u);
+      lineaEn(String(s.region || ""), pad2, pad2 + 52 * u, 13 * u);
+
+      // Lo de abajo primero, porque el sello se centra en lo que sobre.
+      var estrellas = Array.isArray(pagina.estrellas) ? pagina.estrellas : [];
+      var altoEstrellas = estrellas.length ? estrellas.length * 19 * u + 8 * u : 0;
+      var altoVeredicto = (!estrellas.length && pagina.veredicto) ? 20 * u : 0;
+      var altoPie = (pagina.fecha || pagina.hora) ? 30 * u : 0;
+      ctx.font = familia("display", 13 * u);
+      var yCita = H - pad2 - altoPie - 62 * u;     // hueco para tres líneas
+      var yBloque = yCita - altoEstrellas - altoVeredicto;
 
       // El logo del stand, en círculo y debajo del sello.
+      var centroY = (pad2 + 74 * u + yBloque) / 2;
+      var centroX = W * 0.54;
       if (s.logo) {
-        var rl = W * 0.30;
-        if (imagenEnCirculo(ctx, s.logo, W * 0.52, H * 0.48, rl)) {
+        var rl = 66 * u;
+        if (imagenEnCirculo(ctx, s.logo, centroX, centroY, rl)) {
           // Velo de papel: un logo oscuro se traga la tinta del sello y no se
           // lee ni una cosa ni la otra. El logo se reconoce y el sello manda.
           ctx.save();
           ctx.globalAlpha = 0.62;
           ctx.fillStyle = pal["--paper"];
-          ctx.beginPath(); ctx.arc(W * 0.52, H * 0.48, rl, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(centroX, centroY, rl, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
-        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
-        ctx.beginPath(); ctx.arc(W * 0.52, H * 0.48, rl, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * u;
+        ctx.beginPath(); ctx.arc(centroX, centroY, rl, 0, Math.PI * 2); ctx.stroke();
       }
 
       // El sello encima, descolocado: viene resuelto desde Passport.jsx para
       // que las dos vistas lo pongan en el mismo sitio.
       var rot = (((String(s.id || "x").charCodeAt(String(s.id || "x").length - 1) || 0) % 20) - 10) * Math.PI / 180;
-      var dx = (pagina.desvio_x || 0) * k, dy = (pagina.desvio_y || 0) * k;
-      selloCircular(ctx, W * 0.52 + dx, H * 0.48 + dy, W * 0.34, s, fecha, rot,
+      var dx = (pagina.desvio_x || 0) * u, dy = (pagina.desvio_y || 0) * u;
+      selloCircular(ctx, W * 0.46 + dx, centroY + dy, 75 * u, s, pagina.fecha || fecha, rot,
                     progresoSello === undefined ? 1 : progresoSello, pal);
 
-      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("display", 19 * k);
-      parrafo(ctx, "“" + (s.descripcion || "") + "”", W * 0.09, H * 0.845, W * 0.82, 24 * k, 3);
+      // La votación de esta persona en este stand.
+      var yv = yBloque;
+      for (var e = 0; e < estrellas.length; e++) {
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 11 * u);
+        lineaEn(recortar(ctx, String(estrellas[e].titulo || "").toUpperCase(), 120 * u), pad2, yv, 11 * u);
+        var val = Number(estrellas[e].valor) || 0;
+        for (var n = 0; n < 5; n++) {
+          var relleno = Math.max(0, Math.min(1, val - n));
+          estrellaPintada(ctx, pad2 + (152 + n * 19) * u, yv + 7 * u, 7.5 * u, relleno,
+                          pal["--meh"], relleno >= 0.5 ? pal["--meh"] : pal["--line-2"]);
+        }
+        yv += 19 * u;
+      }
+      if (!estrellas.length && pagina.veredicto) {
+        ctx.fillStyle = pal[pagina.veredictoPal] || pal["--ink-3"];
+        ctx.font = familia("mono", 12 * u);
+        lineaEn(String(pagina.veredicto).toUpperCase(), pad2, yv, 12 * u);
+      }
+
+      ctx.fillStyle = pal["--ink-2"]; ctx.font = familia("display", 13 * u);
+      parrafo(ctx, "“" + (s.descripcion || "") + "”", pad2, yCita + 10 * u, anchoS, 19 * u, 3);
+
+      if (altoPie) {
+        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * u;
+        var yLinea = H - pad2 - 20 * u;
+        ctx.beginPath();
+        ctx.moveTo(pad2, Math.round(yLinea) + 0.5); ctx.lineTo(W - pad2, Math.round(yLinea) + 0.5);
+        ctx.stroke();
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+        lineaEn(String(pagina.fecha || ""), pad2, yLinea + 8 * u, 12 * u);
+        ctx.textAlign = "right";
+        lineaEn(String(pagina.hora || ""), W - pad2, yLinea + 8 * u, 12 * u);
+        ctx.textAlign = "left";
+      }
     } else if (tipo === "travesia") {
       // Hoja del recorrido, al final: número, stand y la calificación que le
       // puso. Las filas vienen ya resueltas desde Passport.jsx para que esta
       // vista y la de CSS no puedan decir cosas distintas.
       var filas = Array.isArray(pagina.filas) ? pagina.filas : [];
+      var padT = 22 * u;
 
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
-      textoEspaciado(ctx, "RECORRIDO", W * 0.09, H * 0.09, 1.6 * k);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 34 * k);
-      ctx.fillText("Tu travesía.", W * 0.085, H * 0.135);
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * k);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+      textoEspaciado(ctx, "RECORRIDO", padT, padT + 12 * 0.78 * u, 1.6 * u);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 30 * u);
+      lineaEn("Tu travesía.", padT - 2 * u, padT + 22 * u, 30 * u);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("sans", 13 * u);
       parrafo(ctx, filas.length === 1 ? "El stand que sellaste." : "Los " + filas.length + " stands que sellaste.",
-              W * 0.09, H * 0.172, W * 0.82, 17 * k, 2);
+              padT, padT + 68 * u, W - padT * 2, 19 * u, 2);
 
-      var y = H * 0.225;
-      var pasoF = Math.min(46 * k, (H * 0.63) / Math.max(1, filas.length));
+      var yPie = H - 46 * u;                       // donde empieza el resumen
+      var y = padT + 92 * u;
+      var pasoF = Math.min(37 * u, (yPie - y - 8 * u) / Math.max(1, filas.length));
       for (var f = 0; f < filas.length; f++) {
         var fila = filas[f];
-        if (y > H * 0.86) {                       // no cabe: se dice cuántas faltan
-          ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-          ctx.fillText("+" + (filas.length - f) + " más", W * 0.13, y);
+        if (y + pasoF > yPie) {                    // no cabe: se dice cuántas faltan
+          ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+          lineaEn("+" + (filas.length - f) + " más", padT + 20 * u, y, 12 * u);
           break;
         }
-        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-        ctx.fillText(fila.n, W * 0.09, y);
+        var yTxt = y + 4 * u;                      // caja del nombre
+        ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+        lineaEn(fila.n, padT, yTxt, 12 * u);
 
         // Logo del stand en círculo, delante del nombre. Sin logo, la inicial
         // sobre el color de su sello: la fila no pierde el ritmo.
-        var rc = 13 * k, ccx = W * 0.175, ccy = y - 5 * k;
+        var rc = 14 * u, ccx = padT + 34 * u, ccy = y + 13 * u;
         if (!fila.logo || !imagenEnCirculo(ctx, fila.logo, ccx, ccy, rc)) {
           ctx.fillStyle = resolverColor(fila.color, pal["--grano"]);
           ctx.beginPath(); ctx.arc(ccx, ccy, rc, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = pal["--paper"]; ctx.font = familia("display", 15 * k);
+          ctx.fillStyle = pal["--paper"]; ctx.font = familia("display", 16 * u);
           ctx.textAlign = "center";
-          ctx.fillText(String(fila.inicial || "?"), ccx, ccy + 5 * k);
+          ctx.fillText(String(fila.inicial || "?"), ccx, ccy + 5.5 * u);
           ctx.textAlign = "left";
         }
-        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
+        ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * u;
         ctx.beginPath(); ctx.arc(ccx, ccy, rc, 0, Math.PI * 2); ctx.stroke();
 
-        ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 16 * k);
-        ctx.fillText(recortar(ctx, fila.nombre, W * 0.44), W * 0.235, y);
+        var xNombre = padT + 56 * u;
+        var anchoNombre = W - xNombre - padT - 62 * u;
+        ctx.fillStyle = pal["--ink"]; ctx.font = familia("sans", 15 * u);
+        lineaEn(recortar(ctx, fila.nombre, anchoNombre), xNombre, yTxt - 4 * u, 15 * u);
         if (fila.municipio) {
-          ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 10 * k);
-          ctx.fillText(recortar(ctx, fila.municipio.toUpperCase(), W * 0.44), W * 0.235, y + 14 * k);
+          ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 11 * u);
+          lineaEn(recortar(ctx, fila.municipio.toUpperCase(), anchoNombre), xNombre, yTxt + 14 * u, 11 * u);
         }
         if (fila.valoracion) {
           ctx.fillStyle = pal[fila.colorPal] || pal["--ink-3"];
-          ctx.font = familia("mono", 10 * k);
+          ctx.font = familia("mono", 11 * u);
           ctx.textAlign = "right";
-          ctx.fillText(fila.valoracion.toUpperCase(), W * 0.91, y);
+          lineaEn(fila.valoracion.toUpperCase(), W - padT, y + 6 * u, 11 * u);
           ctx.textAlign = "left";
         }
         y += pasoF;
       }
 
-      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
-      ctx.beginPath(); ctx.moveTo(W * 0.09, H * 0.915); ctx.lineTo(W * 0.91, H * 0.915); ctx.stroke();
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-      textoEspaciado(ctx, filas.length + " SELLADOS", W * 0.09, H * 0.955, 1.4 * k);
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * u;
+      ctx.beginPath();
+      ctx.moveTo(padT, Math.round(yPie) + 0.5); ctx.lineTo(W - padT, Math.round(yPie) + 0.5);
+      ctx.stroke();
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+      textoEspaciado(ctx, filas.length + " SELLADOS", padT, yPie + 22 * u, 1.4 * u);
       ctx.textAlign = "right";
-      ctx.fillText(Math.max(0, (pagina.totalStands | 0) - filas.length) + " FALTANTES", W * 0.91, H * 0.955);
+      ctx.fillText(Math.max(0, (pagina.totalStands | 0) - filas.length) + " FALTANTES", W - padT, yPie + 22 * u);
       ctx.textAlign = "left";
     } else if (tipo === "final") {
       ctx.textAlign = "center";
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 13 * k);
-      textoCentradoEspaciado(ctx, "FIN DEL PASAPORTE", W * 0.5, H * 0.36, 1.6 * k);
-      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 38 * k);
-      ctx.fillText("Gracias por", W * 0.5, H * 0.45);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+      textoCentradoEspaciado(ctx, "FIN DEL PASAPORTE", W * 0.5, H * 0.35, 1.6 * u);
+      ctx.fillStyle = pal["--ink"]; ctx.font = familia("display", 32 * u);
+      ctx.fillText("Gracias por", W * 0.5, H * 0.43);
       ctx.fillText("caminar el café", W * 0.5, H * 0.50);
-      ctx.fillText("con nosotros.", W * 0.5, H * 0.55);
+      ctx.fillText("con nosotros.", W * 0.5, H * 0.57);
 
-      ctx.font = familia("sans", 15 * k);
+      ctx.font = familia("sans", 14 * u);
       var txt = "Vuelve el próximo festival";
       var wTxt = ctx.measureText(txt).width;
-      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * k;
-      rectRedondo(ctx, W * 0.5 - wTxt / 2 - 22 * k, H * 0.62, wTxt + 44 * k, 42 * k, 21 * k);
+      ctx.strokeStyle = pal["--line-2"]; ctx.lineWidth = 1 * u;
+      rectRedondo(ctx, W * 0.5 - wTxt / 2 - 18 * u, H * 0.63, wTxt + 36 * u, 40 * u, 20 * u);
       ctx.stroke();
       ctx.fillStyle = pal["--ink-2"];
-      ctx.fillText(txt, W * 0.5, H * 0.648);
+      ctx.fillText(txt, W * 0.5, H * 0.63 + 25 * u);
 
-      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * k);
-      textoCentradoEspaciado(ctx, (pagina.visitados | 0) + " / " + (pagina.totalStands | 0) + " STANDS", W * 0.5, H * 0.73, 1.4 * k);
+      ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
+      textoCentradoEspaciado(ctx, (pagina.visitados | 0) + " / " + (pagina.totalStands | 0) + " STANDS", W * 0.5, H * 0.75, 1.4 * u);
       ctx.textAlign = "left";
     } else if (tipo === "contraportada") {
       ctx.fillStyle = pal["--grano"]; ctx.fillRect(0, 0, W, H);

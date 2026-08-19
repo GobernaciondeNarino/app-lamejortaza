@@ -132,7 +132,7 @@ function register_routes_stands(\LMT\Router $r): void
         Security::requireAdmin();
         $dir = \LMT\Uploads::raiz();
         $carpetas = [];
-        foreach (['stands', 'inscripciones', 'promotores'] as $sub) {
+        foreach (['stands', 'inscripciones', 'promotores', 'pasaporte', 'visitantes'] as $sub) {
             $ruta = $dir . '/' . $sub;
             $n = 0; $bytes = 0;
             if (is_dir($ruta)) {
@@ -156,8 +156,24 @@ function register_routes_stands(\LMT\Router $r): void
             'max_bytes'  => \LMT\Uploads::maxBytes(),
             'max_dim'    => \LMT\Uploads::maxDim(),
             'protegida'  => is_file($dir . '/.htaccess'),
+            // Cuántas imágenes no puede leer el servidor web. Es la respuesta a
+            // «subí el logo y sale roto»: en un hosting compartido, PHP escribe
+            // con un usuario y Apache sirve los estáticos con otro.
+            'permisos'   => \LMT\Uploads::auditarPermisos(),
             'carpetas'   => $carpetas,
         ]);
+    });
+
+    /**
+     * Corrige los permisos de todo lo que ya está subido.
+     *
+     * Cambiar el código no arregla los ficheros que ya están en disco con los
+     * permisos antiguos, y quien administra el festival no tiene por qué entrar
+     * por SSH a hacer un chmod. Es idempotente.
+     */
+    $r->post('/admin/uploads/permisos', function () {
+        Security::requireAdmin();
+        Response::ok(\LMT\Uploads::repararPermisos() + ['permisos' => \LMT\Uploads::auditarPermisos()]);
     });
 
     $r->delete('/stands/:id', function (array $p) {
@@ -285,7 +301,9 @@ function stand_payload(array $b, bool $needsId): array
     $descripcion = Validate::comment((string)($b['descripcion'] ?? ''), 800);
     $correo    = Validate::email($b['correo'] ?? null) ?? '';
 
-    $telefono              = Validate::telefono($b['telefono'] ?? null);
+    // Opcionales, pero si se escriben tienen que ser números: guardar null
+    // porque venían mal borraba el dato sin decírselo a nadie.
+    $telefono              = stand_numero_opcional($b['telefono'] ?? null, 'telefono_invalido', [Validate::class, 'telefono']);
     // Mismo criterio que en la inscripción: fuera del rectángulo de Nariño no
     // se guarda nada, porque sólo puede ser un error.
     $lat = is_numeric($b['lat'] ?? null) ? (float) $b['lat'] : null;
@@ -294,8 +312,8 @@ function stand_payload(array $b, bool $needsId): array
         $lat = null; $lng = null;
     }
     $propietario           = Validate::nombre($b['propietario'] ?? null, 120);
-    $propietario_documento = Validate::documento($b['propietario_documento'] ?? null);
-    $nit                   = Validate::documento($b['nit'] ?? null);
+    $propietario_documento = stand_numero_opcional($b['propietario_documento'] ?? null, 'documento_invalido', [Validate::class, 'documento']);
+    $nit                   = stand_numero_opcional($b['nit'] ?? null, 'nit_invalido', [Validate::class, 'documento']);
     $sitio_web             = Validate::url($b['sitio_web'] ?? null, 255);
     // null = "no toques el logo". El UPDATE lo trata con COALESCE.
     $logo_path             = stand_logo_reclamado($b['logo'] ?? null);
@@ -318,10 +336,26 @@ function stand_payload(array $b, bool $needsId): array
 }
 
 /** Ruta de imagen que se puede devolver al cliente, o null. */
+/** Campo numérico opcional: vacío pasa, mal escrito no. Ver promotores.php. */
+function stand_numero_opcional($valor, string $error, callable $validador): ?string
+{
+    if ($valor === null) return null;
+    if (is_string($valor) && trim($valor) === '') return null;
+    $v = $validador($valor);
+    if ($v === null) Response::error(422, $error);
+    return $v;
+}
+
 function stand_ruta_publica(?string $ruta): ?string
 {
     if (!is_string($ruta) || $ruta === '') return null;
-    return preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(jpg|png|webp)$#', $ruta) ? $ruta : null;
+    // Lo que subió su promotor.
+    if (preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(jpg|png|webp)$#', $ruta)) return $ruta;
+    // Los emblemas de ejemplo de los stands del prototipo (db/seed.sql). Van
+    // en el repositorio, no en uploads/: nadie los sube ni los puede escribir,
+    // así que basta con reconocer la forma exacta del nombre.
+    if (preg_match('#^assets/logos/[a-z0-9-]{2,32}\.png$#', $ruta)) return $ruta;
+    return null;
 }
 
 /**

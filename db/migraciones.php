@@ -210,7 +210,47 @@ function lmt_migrar(PDO $pdo, bool $dryRun = false): array
         foreach ($r['errores'] as $e) $errores[] = $e;
     }
 
+    // Logos de los stands de ejemplo.
+    if (!$dryRun) {
+        $r = lmt_logos_ejemplo($pdo);
+        foreach ($r['log'] as $l) $log[] = $l;
+        foreach ($r['errores'] as $e) $errores[] = $e;
+    }
+
     return ['log' => $log, 'tablas' => $tablas, 'columnas' => $columnas, 'errores' => $errores];
+}
+
+/**
+ * Da su emblema a los stands del prototipo que todavía no tengan logo.
+ *
+ * Los ocho `st-0N` de `db/seed.sql` sólo reciben el logo en una instalación
+ * nueva; una que ya venía funcionando se quedaba con las hojas del pasaporte a
+ * medias. Toca ÚNICAMENTE esos ids y sólo cuando el logo está vacío: un stand
+ * real con imagen propia no se pisa, y volver a ejecutarlo no cambia nada.
+ */
+function lmt_logos_ejemplo(PDO $pdo): array
+{
+    $log = []; $errores = [];
+    if (lmt_columnas($pdo, $pdo->getAttribute(PDO::ATTR_DRIVER_NAME), 'stands') === null) {
+        return ['log' => [], 'errores' => []];
+    }
+    $raiz = dirname(__DIR__);
+    $puestos = 0;
+    try {
+        $upd = $pdo->prepare("UPDATE stands SET logo_path = :l
+                              WHERE id = :id AND (logo_path IS NULL OR logo_path = '')");
+        for ($n = 1; $n <= 8; $n++) {
+            $id = sprintf('st-%02d', $n);
+            $ruta = 'assets/logos/' . $id . '.png';
+            if (!is_file($raiz . '/' . $ruta)) continue;
+            $upd->execute([':l' => $ruta, ':id' => $id]);
+            $puestos += $upd->rowCount();
+        }
+        if ($puestos > 0) $log[] = "· {$puestos} stand(s) de ejemplo reciben su logo.";
+    } catch (\Throwable $e) {
+        $errores[] = 'No se pudieron poner los logos de ejemplo: ' . $e->getMessage();
+    }
+    return ['log' => $log, 'errores' => $errores];
 }
 
 /**

@@ -128,11 +128,20 @@ const PassportPage = ({ stands }) => {
 
   const passport = {
     nombre: (perfil && perfil.nombre) || data.nombre || "Visitante",
-    correo: data.correo || email,
+    // El correo que escribió esta persona, no el que enmascara la API: el
+    // pasaporte se abre en su propio teléfono y en la hoja de datos va el suyo
+    // completo, como en un documento de verdad. La máscara sigue protegiendo a
+    // quien consulte el endpoint desde fuera.
+    correo: email || data.correo || "",
     numero: data.numero || "",
+    numeroQr: data.numero_qr || "",
     inicio: data.inicio || "",
+    ultimaVisita: data.ultima_visita || "",
     visitados: visitadosIds,
     valoraciones: data.valoraciones || {},
+    // Las tres estrellas y la fecha de cada sello, para la hoja de ese stand.
+    estrellas: data.estrellas_mias || {},
+    sellos: data.sellado_en || {},
     perfil: perfil,
   };
   // El recorrido va AL FINAL: primero la hoja de datos, luego los sellos que se
@@ -211,7 +220,7 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
         stand: Object.assign({}, s, { logo: urlImagen(s.logo) || "" }),
         desvio_x: desvioSello(s.id).x,
         desvio_y: desvioSello(s.id).y,
-      }, interior())),
+      }, datosSello(passport, s), interior())),
       Object.assign({
         tipo: "travesia",
         filas: filasTravesia(passport, visitados),
@@ -221,7 +230,8 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
       { tipo: "final", visitados: visitados.length, totalStands: stands.length, fondo: fondos.contraportada },
     ];
   }, [pagesKey, passport.nombre, passport.correo, passport.inicio, passport.numero,
-      passport.perfil, passport.valoraciones, festivalTick]);
+      passport.perfil, passport.valoraciones, passport.estrellas, passport.sellos,
+      passport.numeroQr, passport.ultimaVisita, festivalTick]);
 
   const paginasRef = React.useRef(paginasLibro);
   paginasRef.current = paginasLibro;
@@ -229,6 +239,10 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
   React.useEffect(() => {
     const cont = wrapRef.current;
     if (!cont || !window.LMTPassportBook || !window.LMTPassportBook.soportado()) return;
+    // `?libro=0` deja a la vista el render CSS. Es el mismo camino que toma un
+    // navegador sin WebGL, y sin una forma de pedirlo a propósito esa vista
+    // sólo se comprueba el día que falla en un teléfono de alguien.
+    try { if (new URLSearchParams(location.search).get("libro") === "0") return; } catch (_) {}
 
     const libro = window.LMTPassportBook.mount(cont, {
       paginas: paginasRef.current,
@@ -383,27 +397,120 @@ const etiquetaPerfil = (campo, valor) => {
   return tabla[valor] || valor;
 };
 
-const fechaCorta = (iso) => {
-  if (!iso) return DATO_VACIO;
+const fechaISO = (iso) => {
+  if (!iso) return null;
   const d = new Date(String(iso).replace(" ", "T"));
-  if (isNaN(d)) return DATO_VACIO;
-  const meses = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
-  return String(d.getDate()).padStart(2, "0") + " " + meses[d.getMonth()] + " " + d.getFullYear();
+  return isNaN(d) ? null : d;
+};
+
+const MESES_CORTOS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+const MESES_LARGOS = ["enero","febrero","marzo","abril","mayo","junio","julio",
+                      "agosto","septiembre","octubre","noviembre","diciembre"];
+
+const fechaCorta = (iso) => {
+  const d = fechaISO(iso);
+  if (!d) return DATO_VACIO;
+  return String(d.getDate()).padStart(2, "0") + " " + MESES_CORTOS[d.getMonth()] + " " + d.getFullYear();
+};
+
+/** «14 abril 2026», como se lee en la hoja del titular de un pasaporte. */
+const fechaLarga = (iso) => {
+  const d = fechaISO(iso);
+  if (!d) return DATO_VACIO;
+  return d.getDate() + " " + MESES_LARGOS[d.getMonth()] + " " + d.getFullYear();
+};
+
+/** «14·ABR·2026», que es como va en la tinta del sello. */
+const fechaSello = (iso) => {
+  const d = fechaISO(iso);
+  if (!d) return "";
+  return String(d.getDate()).padStart(2, "0") + "·" + MESES_CORTOS[d.getMonth()] + "·" + d.getFullYear();
+};
+
+const horaSello = (iso) => {
+  const d = fechaISO(iso);
+  if (!d) return "";
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+};
+
+/** La misma fecha un año después: la vigencia del pasaporte del festival. */
+const unAnioDespues = (iso) => {
+  const d = fechaISO(iso);
+  if (!d) return DATO_VACIO;
+  const f = new Date(d.getTime());
+  f.setFullYear(f.getFullYear() + 1);
+  return fechaLarga(f.toISOString());
+};
+
+/**
+ * Nombres y apellidos, a partir del único campo de nombre que guarda el perfil.
+ *
+ * No hay forma de acertar siempre: aquí se usan dos apellidos y quien escribe
+ * «María Fernanda Erazo» está dando dos nombres y uno. La convención —la mitad
+ * de atrás, redondeando hacia abajo, son apellidos— acierta con los repartos
+ * habituales (2+2, 2+1, 1+1) y nunca deja el campo vacío. Es una presentación,
+ * no un dato: en la base sigue habiendo un nombre y nada más.
+ */
+const partirNombre = (completo) => {
+  const partes = String(completo || "").trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return { nombres: DATO_VACIO, apellidos: DATO_VACIO };
+  if (partes.length === 1) return { nombres: partes[0], apellidos: DATO_VACIO };
+  const nAp = Math.floor(partes.length / 2);
+  return {
+    nombres:   partes.slice(0, partes.length - nAp).join(" "),
+    apellidos: partes.slice(partes.length - nAp).join(" "),
+  };
+};
+
+/** Nacionalidad a partir del país del perfil. Sin país, la del festival. */
+const nacionalidadDe = (pais) => {
+  const p = String(pais || "").trim();
+  if (p === "" || /^colombia$/i.test(p)) return "Colombiana";
+  return p;
 };
 
 // Banda de lectura mecánica: el remate que hace que la hoja se lea como un
 // pasaporte. Va con los datos que ya están arriba, nada nuevo.
-const MRZ_ANCHO = 31;   // las dos líneas miden lo mismo o la banda se ve torcida
+const MRZ_ANCHO = 34;   // las dos líneas miden lo mismo o la banda se ve torcida
 
 const bandaMecanica = (passport) => {
   const limpia = (s, n) => String(s || "")
     .toUpperCase().normalize("NFD").replace(/\p{Diacritic}/gu, "")
     .replace(/[^A-Z0-9]/g, "<").slice(0, n).padEnd(n, "<");
   const p = passport.perfil || {};
-  const l1 = ("PC<COL" + limpia(passport.nombre, 25)).slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
+  const { nombres, apellidos } = partirNombre(passport.nombre);
+  // Formato de documento de verdad: apellidos, dos '<', y los nombres.
+  const l1 = ("P<COL" + limpia(apellidos, 12) + "<<" + limpia(nombres, 15))
+    .slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
   const l2 = (limpia(passport.numero, 12) + "COL" + limpia(p.municipio || "NARINO", 16))
     .slice(0, MRZ_ANCHO).padEnd(MRZ_ANCHO, "<");
   return [l1, l2];
+};
+
+/**
+ * Lo que enseña la hoja de un sello: las estrellas que puso esta persona a ese
+ * stand y cuándo lo selló. Se resuelve en un solo sitio para las dos vistas.
+ *
+ * Sin estrellas —votó de un toque, que es lo normal— se devuelve la lista
+ * vacía y la hoja enseña el veredicto del emoji, que sí tiene.
+ */
+const datosSello = (passport, stand) => {
+  const est = (passport.estrellas || {})[stand.id] || null;
+  const titulos = window.titulosEstrellas ? window.titulosEstrellas() : {};
+  const estrellas = est ? ESTRELLA_CAMPOS.map((campo) => ({
+    titulo: titulos[campo] || campo,
+    valor: Number(est[ESTRELLA_CLAVES[campo]]) || 0,
+  })).filter((e) => e.valor > 0) : [];
+
+  const cuando = (passport.sellos || {})[stand.id] || "";
+  const v = VALORACION[(passport.valoraciones || {})[stand.id]] || null;
+  return {
+    estrellas,
+    veredicto: estrellas.length ? "" : (v ? v.texto : ""),
+    veredictoPal: v ? v.token : "--ink-3",
+    fecha: fechaSello(cuando),
+    hora: horaSello(cuando),
+  };
 };
 
 // Los mismos valores que pinta <PaginaDatos>, en plano, para el libro 3D.
@@ -424,131 +531,187 @@ const retratoDe = (passport) => {
 const datosPagina = (passport, totalStands) => {
   const p = passport.perfil || {};
   const [mrz1, mrz2] = bandaMecanica(passport);
+  const { nombres, apellidos } = partirNombre(passport.nombre);
   return {
     nombre:      passport.nombre,
+    nombres:     nombres,
+    apellidos:   apellidos,
     correo:      passport.correo,
     numero:      passport.numero || DATO_VACIO,
+    numero_qr:   passport.numeroQr || "",
     sexo:        etiquetaPerfil("genero", p.genero),
     edad:        etiquetaPerfil("rango_edad", p.rango_edad),
     procedencia: [p.municipio, p.departamento].filter(Boolean).join(", ") || p.pais || DATO_VACIO,
+    nacionalidad: nacionalidadDe(p.pais),
     visitante:   p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante),
-    expedido:    fechaCorta(passport.inicio),
+    expedido:    fechaLarga(passport.inicio),
+    valido:      unAnioDespues(passport.inicio),
+    ultima:      passport.ultimaVisita ? fechaLarga(passport.ultimaVisita) : fechaLarga(passport.inicio),
+    sellos:      passport.visitados.length,
     conPerfil:   !!passport.perfil,
     totalStands: totalStands,
     retrato_foto:  retratoDe(passport).foto,
     retrato_emoji: retratoDe(passport).emoji,
+    iniciales:   iniciales(passport.nombre),
     mrz1, mrz2,
   };
+};
+
+/** Las iniciales del portador, para el retrato cuando no hay foto ni emoji. */
+const iniciales = (completo) => {
+  const partes = String(completo || "").trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return "V";
+  if (partes.length === 1) return partes[0].charAt(0).toUpperCase();
+  return (partes[0].charAt(0) + partes[partes.length - 1].charAt(0)).toUpperCase();
 };
 
 // Un dato de la ficha. `tam` sube el tamaño del valor: la hoja se mira en un
 // teléfono y a 12 px no se leía nada, así que lo importante va grande y la
 // etiqueta pequeña, que es además como se ven los documentos de verdad.
-const CampoDato = ({ etiqueta, valor, ancho, tam = 16 }) => (
+const CampoDato = ({ etiqueta, valor, ancho, tam = 18, mono = false }) => (
   <div style={{ flex: ancho || 1, minWidth: 0 }}>
-    <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", lineHeight: 1.4 }}>{etiqueta}</div>
-    <div style={{
+    <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.3 }}>{etiqueta}</div>
+    <div className={mono ? "mono" : undefined} style={{
       fontSize: tam, lineHeight: 1.2, marginTop: 2,
+      // Las fechas y los números van en la mono, como en un documento real; en
+      // ella la caja de mayúsculas es la misma y la línea no se descuadra.
+      textTransform: mono ? "none" : undefined,
       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
     }}>{valor}</div>
   </div>
 );
 
+/** Renglón fino entre campos, como los de la hoja del titular. */
+const RayaFina = ({ margen = "6px 0" }) => (
+  <div style={{ height: 1, background: "var(--line)", margin: margen }}/>
+);
+
+/**
+ * El recuadro del retrato.
+ *
+ * Con foto, la foto llena el recuadro. Sin foto, el fondo rayado en diagonal
+ * —el mismo del resto de la interfaz para lo que falta— y encima el emoji que
+ * eligió o sus iniciales en un disco, que es lo que hace que el hueco se lea
+ * como «aquí va una foto» y no como un error.
+ */
+const RetratoPortador = ({ retrato, iniciales: ini }) => (
+  <div style={{
+    width: 98, height: 118, flexShrink: 0,
+    border: "1px solid var(--line-2)", borderRadius: 4,
+    position: "relative", overflow: "hidden",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    background: retrato.foto ? "var(--paper-2)"
+      : "repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 7px, var(--paper-3) 7px, var(--paper-3) 14px)",
+  }}>
+    {retrato.foto ? (
+      <img src={retrato.foto} alt="" style={{
+        position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover",
+      }}/>
+    ) : (
+      <React.Fragment>
+        <div style={{
+          width: 54, height: 54, borderRadius: "50%", background: "var(--grano)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--paper)",
+        }}>
+          {retrato.emoji
+            ? <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">{retrato.emoji}</span>
+            : <span style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 23, lineHeight: 1 }}>{ini}</span>}
+        </div>
+        <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 10 }}>FOTOGRAFÍA</div>
+      </React.Fragment>
+    )}
+  </div>
+);
+
 const PaginaDatos = ({ passport, totalStands }) => {
-  const p = passport.perfil || {};
-  const procedencia = [p.municipio, p.departamento].filter(Boolean).join(", ")
-    || p.pais || DATO_VACIO;
-  const entidad = p.entidad || etiquetaPerfil("tipo_visitante", p.tipo_visitante);
-  const [mrz1, mrz2] = bandaMecanica(passport);
-  const sellos = passport.visitados.length;
+  const d = datosPagina(passport, totalStands);
   const retrato = retratoDe(passport);
 
   return (
-    <div style={{ height: "100%", padding: "18px 18px 0", display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <div className="mono" style={{ fontSize: 10 }}>REPÚBLICA DE COLOMBIA · NARIÑO</div>
-        <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)" }}>P·CAFÉ</div>
-      </div>
-      <div style={{ height: 1, background: "var(--line-2)", margin: "9px 0 14px" }}/>
+    <div style={{ height: "100%", padding: 11, display: "flex", flexDirection: "column" }}>
+      {/* Marco interior: en la hoja del titular de un pasaporte todo el bloque
+          de datos va dentro de un recuadro, y sin él esto parecía un formulario. */}
+      <div style={{
+        flex: 1, minHeight: 0, border: "1px solid var(--line-2)", borderRadius: 4,
+        padding: "11px 13px 10px", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)", lineHeight: 1.4 }}>
+            REPÚBLICA DE COLOMBIA<br/>DEPARTAMENTO DE NARIÑO
+          </div>
+          <LogoTaza size={24}/>
+        </div>
+        <RayaFina margen="8px 0 9px"/>
 
-      <div style={{ display: "flex", gap: 15 }}>
-        {/* Donde va la foto: aquí, la inicial y los sellos conseguidos. */}
-        <div style={{
-          width: 86, height: 108, flexShrink: 0, border: "1px solid var(--line-2)",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          background: "var(--paper-2, transparent)",
-          position: "relative", overflow: "hidden",
-        }}>
-          {/* Donde iría la foto en un pasaporte de verdad: la del visitante si
-              la subió, el emoji que eligió, o la inicial de su nombre. */}
-          {retrato.foto ? (
-            <img src={retrato.foto} alt="" style={{
-              position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover",
-            }}/>
-          ) : (
-            <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, lineHeight: 1 }}>
-              {retrato.emoji
-                ? <span style={{ fontStyle: "normal", fontSize: 38 }} aria-hidden="true">{retrato.emoji}</span>
-                : (passport.nombre || "V").trim().charAt(0).toUpperCase()}
-            </div>
-          )}
-          {!retrato.foto && (
-            <React.Fragment>
-              <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 10 }}>SELLOS</div>
-              <div className="mono" style={{ fontSize: 18 }}>{String(sellos).padStart(2, "0")}</div>
-            </React.Fragment>
-          )}
+        <div style={{ display: "flex", gap: 13 }}>
+          <RetratoPortador retrato={retrato} iniciales={d.iniciales}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* El número es lo que identifica el documento: va primero, grande
+                y en el color del sello, como el número impreso en rojo de un
+                pasaporte de verdad. */}
+            <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.3 }}>NÚMERO DE PASAPORTE</div>
+            <div className="mono" style={{
+              fontSize: 19, lineHeight: 1.2, marginTop: 2, color: "var(--grano)",
+              textTransform: "none", letterSpacing: "0.01em",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>{d.numero}</div>
+            <RayaFina margen="5px 0"/>
+            <CampoDato etiqueta="APELLIDOS" valor={d.apellidos} tam={16}/>
+            <RayaFina margen="5px 0"/>
+            <CampoDato etiqueta="NOMBRES" valor={d.nombres} tam={16}/>
+          </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-          {/* El nombre es lo que se mira primero en un pasaporte: va grande y
-              en la tipografía de display, no como un campo más de la retícula. */}
-          <div style={{ minWidth: 0 }}>
-            <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", lineHeight: 1.4 }}>PORTADOR / BEARER</div>
+        <RayaFina margen="9px 0"/>
+        <div style={{ display: "flex", gap: 12 }}>
+          <CampoDato etiqueta="CIUDAD DE ORIGEN" valor={d.procedencia} tam={16}/>
+          <CampoDato etiqueta="NACIONALIDAD" valor={d.nacionalidad} tam={16}/>
+        </div>
+        <RayaFina/>
+        <div style={{ display: "flex", gap: 12 }}>
+          <CampoDato etiqueta="EXPEDICIÓN" valor={d.expedido} tam={15} mono/>
+          <CampoDato etiqueta="VÁLIDO HASTA" valor={d.valido} tam={15} mono/>
+        </div>
+        <RayaFina/>
+        <div style={{ display: "flex", gap: 12 }}>
+          <CampoDato etiqueta="ÚLTIMA VISITA" valor={d.ultima} tam={15} mono/>
+          <CampoDato etiqueta="SELLOS" valor={d.sellos + " de " + totalStands} tam={15} mono/>
+        </div>
+        <RayaFina/>
+        <CampoDato etiqueta="CORREO REGISTRADO" valor={d.correo} tam={15}/>
+
+        {!passport.perfil && (
+          <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.4, margin: "8px 0 0", whiteSpace: "nowrap" }}>
+            Completa tu perfil y esta hoja se llena sola.
+          </p>
+        )}
+
+        {/* Firma y código, abajo del todo como en el documento real. */}
+        <div style={{ marginTop: "auto", paddingTop: 6, flexShrink: 0, display: "flex", alignItems: "flex-end", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 22,
-              lineHeight: 1.15, marginTop: 2,
-              overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 21,
+              lineHeight: 1.1, color: "var(--grano)",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>{passport.nombre}</div>
+            <div style={{ height: 1, background: "var(--ink-3)", opacity: 0.5, margin: "4px 0 4px", maxWidth: 165 }}/>
+            <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)" }}>FIRMA DEL PORTADOR</div>
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <CampoDato etiqueta="SEXO" valor={etiquetaPerfil("genero", p.genero)}/>
-            <CampoDato etiqueta="EDAD" valor={etiquetaPerfil("rango_edad", p.rango_edad)} ancho={1.3}/>
-          </div>
+          {d.numero_qr && (
+            <img src={d.numero_qr} alt={"Código del pasaporte " + d.numero} width={46} height={46}
+              style={{ width: 46, height: 46, imageRendering: "pixelated", flexShrink: 0 }}/>
+          )}
         </div>
-      </div>
 
-      <div style={{ marginTop: 14 }}>
-        <CampoDato etiqueta="PROCEDENCIA" valor={procedencia} tam={17}/>
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <CampoDato etiqueta="Nº DE PASAPORTE" valor={passport.numero || DATO_VACIO} tam={18}/>
-      </div>
-      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
-        <CampoDato etiqueta="EXPEDIDO" valor={fechaCorta(passport.inicio)}/>
-        <CampoDato etiqueta="SELLOS" valor={sellos + " de " + totalStands}/>
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <CampoDato etiqueta="VISITANTE" valor={entidad} tam={15}/>
-      </div>
-
-      {!passport.perfil && (
-        <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 14 }}>
-          Completa tu perfil de visitante y esta hoja se llena con tus datos.
-        </p>
-      )}
-
-      <div style={{ marginTop: "auto" }}>
-        <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)", marginBottom: 8 }}>
-          EXPIDE · GOBERNACIÓN DE NARIÑO
-        </div>
-        <div style={{ height: 1, background: "var(--line-2)" }}/>
         <div className="mono" style={{
-          fontSize: 10, letterSpacing: "0.06em", lineHeight: 1.7,
-          padding: "8px 0 14px", color: "var(--ink-2)",
-          whiteSpace: "nowrap", overflow: "hidden",
+          fontSize: 11, letterSpacing: "0.02em", lineHeight: 1.5,
+          marginTop: 8, color: "var(--ink-2)", textTransform: "none",
+          // Sin esto, el flex la encoge en vez de desbordar y la SEGUNDA línea
+          // de la banda desaparecía sin que nada lo delatara.
+          flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden",
         }}>
-          {mrz1}<br/>{mrz2}
+          {d.mrz1}<br/>{d.mrz2}
         </div>
       </div>
     </div>
@@ -626,11 +789,11 @@ const PaginaTravesia = ({ passport, visitados, totalStands }) => {
 
   return (
     <div style={{ height: "100%", padding: "22px 22px 0", display: "flex", flexDirection: "column" }}>
-      <div className="mono" style={{ marginBottom: 6 }}>Recorrido</div>
-      <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 28, fontWeight: 400, margin: "0 0 4px", lineHeight: 1 }}>
+      <div className="mono" style={{ fontSize: 12, marginBottom: 6 }}>Recorrido</div>
+      <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, fontWeight: 400, margin: "0 0 4px", lineHeight: 1 }}>
         Tu travesía.
       </h2>
-      <p style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5, margin: "0 0 14px" }}>
+      <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5, margin: "0 0 14px" }}>
         {filas.length === 1 ? "El stand que sellaste" : `Los ${filas.length} stands que sellaste`}
         {passport.valoraciones && Object.keys(passport.valoraciones).length ? ", con tu calificación." : "."}
       </p>
@@ -638,24 +801,24 @@ const PaginaTravesia = ({ passport, visitados, totalStands }) => {
       <div style={{ display: "flex", flexDirection: "column", gap: 9, overflow: "hidden" }}>
         {filas.map((f) => (
           <div key={f.n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="mono" style={{ width: 18, flexShrink: 0, color: "var(--ink-3)" }}>{f.n}</span>
-            <LogoRedondo fila={f} tam={26}/>
+            <span className="mono" style={{ fontSize: 12, width: 20, flexShrink: 0, color: "var(--ink-3)" }}>{f.n}</span>
+            <LogoRedondo fila={f} tam={28}/>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontSize: 15, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {f.nombre}
               </div>
               {f.municipio && (
-                <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)" }}>{f.municipio}</div>
+                <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>{f.municipio}</div>
               )}
             </div>
             {f.valoracion && (
-              <span className="mono" style={{ fontSize: 9, color: f.color, flexShrink: 0 }}>{f.valoracion}</span>
+              <span className="mono" style={{ fontSize: 11, color: f.color, flexShrink: 0 }}>{f.valoracion}</span>
             )}
           </div>
         ))}
       </div>
 
-      <div className="mono" style={{ marginTop: "auto", padding: "14px 0 18px", borderTop: "1px solid var(--line-2)" }}>
+      <div className="mono" style={{ fontSize: 12, marginTop: "auto", padding: "14px 0 18px", borderTop: "1px solid var(--line-2)" }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span>{filas.length} sellados</span>
           <span>{faltan} faltantes</span>
@@ -712,6 +875,50 @@ const CapaFondo = ({ url }) => {
  * El fondo se pone aquí y no dentro de cada tipo de página porque son cinco
  * tipos distintos y cada uno tendría que acordarse; así lo tiene cualquiera.
  */
+/**
+ * Hoja de tamaño fijo, escalada al hueco que tenga.
+ *
+ * Todas las hojas se diseñan sobre 380×528 —la misma proporción 0.72 del
+ * libro— y se escalan enteras. Es lo que ya hacía el libro 3D, que dibuja
+ * sobre un lienzo de proporción fija, y hasta ahora el render CSS era el
+ * único que no: con medidas en píxeles fijos, la hoja de datos cabía en un
+ * teléfono de 390 y se salía por abajo en uno de 360, perdiendo la firma y la
+ * banda mecánica. Escalando, las dos vistas enseñan exactamente lo mismo en
+ * cualquier pantalla y un tamaño de letra decidido aquí significa lo mismo en
+ * todas partes.
+ */
+const HOJA_ANCHO = 380;
+const HOJA_ALTO = Math.round(HOJA_ANCHO / 0.72);
+
+const HojaEscalada = ({ children }) => {
+  const ref = React.useRef(null);
+  const [k, setK] = React.useState(1);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const medir = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0) setK(r.width / HOJA_ANCHO);
+    };
+    medir();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(medir) : null;
+    if (ro) ro.observe(el); else window.addEventListener("resize", medir);
+    return () => {
+      if (ro) ro.disconnect(); else window.removeEventListener("resize", medir);
+    };
+  }, []);
+
+  return (
+    <div ref={ref} style={{ height: "100%", overflow: "hidden" }}>
+      <div style={{
+        width: HOJA_ANCHO, height: HOJA_ALTO,
+        transformOrigin: "top left", transform: `scale(${k})`,
+      }}>{children}</div>
+    </div>
+  );
+};
+
 const PassportPage_Page = (props) => {
   // La portada se pinta su propio fondo: es oscura, y el velo de papel de las
   // hojas la dejaría lavada y con el texto claro ilegible.
@@ -720,7 +927,7 @@ const PassportPage_Page = (props) => {
     <div style={{ height: "100%", position: "relative", overflow: "hidden" }}>
       {!propio && <CapaFondo url={props.pageData.fondo || ""}/>}
       <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
-        <PaginaContenido {...props}/>
+        <HojaEscalada><PaginaContenido {...props}/></HojaEscalada>
       </div>
     </div>
   );
@@ -766,7 +973,12 @@ const PaginaContenido = ({ pageData, passport, visitados, totalSlots, totalStand
   }
 
   if (pageData.type === "index") {
-    return <PaginaDatos passport={passport} totalStands={totalStands}/>;
+    // Con renglones, como el resto de las hojas: es papel del mismo cuaderno.
+    return (
+      <div style={{ height: "100%", ...lineBg }}>
+        <PaginaDatos passport={passport} totalStands={totalStands}/>
+      </div>
+    );
   }
 
   if (pageData.type === "travesia") {
@@ -778,53 +990,80 @@ const PaginaContenido = ({ pageData, passport, visitados, totalSlots, totalStand
     const rot = ((s.id.charCodeAt(s.id.length - 1) || 0) % 20) - 10;
     const desv = desvioSello(s.id);
     const logo = urlImagen(s.logo);
+    const sello = datosSello(passport, s);
     return (
-      <div style={{ height: "100%", padding: 22, ...lineBg, position: "relative", overflow: "hidden" }}>
-        <div className="mono" style={{ marginBottom: 6 }}>Sello · {s.municipio}</div>
-        <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 26, fontWeight: 400, margin: "0 0 4px", lineHeight: 1 }}>
+      <div style={{ height: "100%", padding: 20, ...lineBg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="mono" style={{ fontSize: 12, marginBottom: 6 }}>Sello · {s.municipio}</div>
+        <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 28, fontWeight: 400, margin: "0 0 4px", lineHeight: 1 }}>
           {s.nombre}
         </h2>
-        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{s.region}</div>
+        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{s.region}</div>
 
-        {/* El logo del stand, centrado y en círculo, DEBAJO del sello. Si el
-            caficultor no subió ninguno no se dibuja nada y el sello queda como
-            estaba: no se inventa un hueco vacío. */}
-        {logo && (
-          <div style={{
-            position: "absolute", top: "48%", left: "52%",
-            transform: "translate(-50%, -50%)",
-            width: 132, height: 132, borderRadius: "50%", overflow: "hidden",
-            border: "1px solid var(--line-2)",
-          }}>
-            <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}/>
-            {/* Velo de papel sobre el logo. Sin él, un logo oscuro se traga la
-                tinta del sello y no se lee ni una cosa ni la otra. Así el logo
-                se reconoce y el sello manda, que es el orden correcto. */}
+        {/* La zona del sello se lleva el espacio que sobre: así la votación y
+            el pie quedan siempre abajo, con muchos stands o con pocos. */}
+        <div style={{ flex: 1, minHeight: 120, position: "relative" }}>
+          {/* El logo del stand, centrado y en círculo, DEBAJO del sello. Si el
+              caficultor no subió ninguno no se dibuja nada y el sello queda como
+              estaba: no se inventa un hueco vacío. */}
+          {logo && (
             <div style={{
-              position: "absolute", inset: 0, borderRadius: "50%",
-              background: "var(--paper)", opacity: 0.62,
-            }}/>
+              position: "absolute", top: "50%", left: "54%",
+              transform: "translate(-50%, -50%)",
+              width: 132, height: 132, borderRadius: "50%", overflow: "hidden",
+              border: "1px solid var(--line-2)",
+            }}>
+              <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}/>
+              {/* Velo de papel sobre el logo. Sin él, un logo oscuro se traga la
+                  tinta del sello y no se lee ni una cosa ni la otra. Así el logo
+                  se reconoce y el sello manda, que es el orden correcto. */}
+              <div style={{
+                position: "absolute", inset: 0, borderRadius: "50%",
+                background: "var(--paper)", opacity: 0.62,
+              }}/>
+            </div>
+          )}
+
+          {/* El sello, encima y descolocado a propósito: un sello puesto a mano
+              nunca cae centrado, y verlo clavado sobre el logo delataba que lo
+              pinta un programa. El desvío es estable por stand, no cambia al
+              pasar la página. */}
+          <div style={{
+            position: "absolute",
+            top: `calc(50% + ${desv.y}px)`, left: `calc(46% + ${desv.x}px)`,
+            transform: "translate(-50%, -50%)",
+            "--stamp-rot": rot + "deg",
+            animation: "stamp-land 0.6s cubic-bezier(.2,.8,.2,1.2) forwards",
+          }}>
+            <SelloCircular stand={s} size={150} rotation={rot} fecha={sello.fecha}/>
+          </div>
+        </div>
+
+        {/* Lo que esta persona votó en este stand. Es suyo y de nadie más: sin
+            el testigo del perfil el servidor no lo manda, y aquí no se enseña. */}
+        {sello.estrellas.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8, maxWidth: 250 }}>
+            {sello.estrellas.map((e) => (
+              <EstrellasLectura key={e.titulo} valor={e.valor} tam={15} etiqueta={e.titulo}/>
+            ))}
+          </div>
+        )}
+        {sello.veredicto && (
+          <div className="mono" style={{ fontSize: 12, color: `var(${sello.veredictoPal})`, marginBottom: 8 }}>
+            {sello.veredicto}
           </div>
         )}
 
-        {/* El sello, encima y descolocado a propósito: un sello puesto a mano
-            nunca cae centrado, y verlo clavado sobre el logo delataba que lo
-            pinta un programa. El desvío es estable por stand, no cambia al
-            pasar la página. */}
-        <div style={{
-          position: "absolute",
-          top: `calc(48% + ${desv.y}px)`, left: `calc(52% + ${desv.x}px)`,
-          transform: "translate(-50%, -50%)",
-          "--stamp-rot": rot + "deg",
-          animation: "stamp-land 0.6s cubic-bezier(.2,.8,.2,1.2) forwards",
-        }}>
-          <SelloCircular stand={s} size={150} rotation={rot}/>
+        <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5, fontStyle: "italic", fontFamily: "var(--font-display)" }}>
+          "{s.descripcion}"
         </div>
-        <div style={{ position: "absolute", bottom: 22, left: 22, right: 22 }}>
-          <div style={{ fontSize: 11, color: "var(--ink-2)", lineHeight: 1.5, fontStyle: "italic", fontFamily: "var(--font-display)" }}>
-            "{s.descripcion}"
+
+        {/* Pie: cuándo se selló. La hora es la del voto, no la de ahora. */}
+        {(sello.fecha || sello.hora) && (
+          <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--line-2)", display: "flex", justifyContent: "space-between" }}>
+            <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{sello.fecha}</span>
+            <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{sello.hora}</span>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -832,11 +1071,11 @@ const PaginaContenido = ({ pageData, passport, visitados, totalSlots, totalStand
   if (pageData.type === "end") {
     return (
       <div style={{ height: "100%", padding: 28, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", ...lineBg }}>
-        <div className="mono">Fin del pasaporte</div>
-        <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, fontWeight: 400, margin: "12px 0 8px", lineHeight: 1 }}>
+        <div className="mono" style={{ fontSize: 12 }}>Fin del pasaporte</div>
+        <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 32, fontWeight: 400, margin: "12px 0 8px", lineHeight: 1 }}>
           Gracias por<br/>caminar el café<br/>con nosotros.
         </h2>
-        <div style={{ marginTop: 20, padding: "12px 18px", border: "1px solid var(--line-2)", borderRadius: 999, fontSize: 12 }}>
+        <div style={{ marginTop: 20, padding: "12px 18px", border: "1px solid var(--line-2)", borderRadius: 999, fontSize: 14 }}>
           Vuelve el próximo festival
         </div>
       </div>
@@ -848,4 +1087,4 @@ const PaginaContenido = ({ pageData, passport, visitados, totalSlots, totalStand
 // `datosPagina` sale al exterior porque es el único sitio donde se decide qué
 // dice la hoja de datos, y las dos vistas (CSS y libro 3D) la comparten: poder
 // comprobarla directamente evita tener que leer píxeles de un canvas.
-Object.assign(window, { PassportPage, datosPagina });
+Object.assign(window, { PassportPage, datosPagina, datosSello, partirNombre });
