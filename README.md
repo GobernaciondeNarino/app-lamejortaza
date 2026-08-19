@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.4.0.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.5.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -24,6 +24,7 @@ desplegada se consulta en `/api/health` con sesión de administrador.
    - [Mi recorrido](#1sexies-mi-recorrido)
    - [Actividad económica](#1septies-actividad-económica)
    - [Personalización](#1octies-personalización)
+   - [Empezar de cero](#1nonies-empezar-de-cero)
 2. [Arquitectura](#2-arquitectura)
 3. [Requisitos](#3-requisitos)
 4. [Instalación local](#4-instalación-local)
@@ -45,7 +46,7 @@ desplegada se consulta en `/api/health` con sesión de administrador.
 | URL                                  | Audiencia | Qué hace                                                  |
 | ------------------------------------ | --------- | --------------------------------------------------------- |
 | `/`                                  | Público   | Dashboard: podio, mapa, ranking, votos en vivo.           |
-| `/festival/{standId}`                | Público   | Detalle del stand + botón "Votar este stand →".           |
+| `/festival/{standId}`                | Público   | Ficha del stand (sólo lectura: contacto, mapa, votación). |
 | `/s/{standId}`                       | Móvil     | **Página real de votación** que abre el QR del stand.     |
 | `/pasaporte`                         | Móvil     | Libreta del usuario con sus sellos reales, como libro 3D. |
 | `/recorrido`                         | Público   | **Mi recorrido**: todos los stands, los visitados a color. |
@@ -61,6 +62,7 @@ desplegada se consulta en `/api/health` con sesión de administrador.
 | `/admin/economia`                    | Admin     | **Actividad económica**: compras del evento y por stand.  |
 | `/admin/festival`                    | Admin     | **Personalización**: títulos, columnas y fondos.          |
 | `/admin/correos`                     | Admin     | Bitácora de correo saliente (¿salió la clave?).           |
+| `/admin/sistema`                     | Propietario | **Empezar de cero**: borrar los datos de prueba.        |
 | `/install.php`                       | One-shot  | Asistente de instalación (auto-bloquea al terminar).      |
 | `/api/...`                           | Backend   | Front controller PHP (auth, stands, votos, pasaportes).   |
 
@@ -206,9 +208,21 @@ Módulo completo de inscripción para quienes exhiben en el festival.
 1. El caficultor entra a `/inscripcion` y envía **todos los datos de su stand**
    —él y su stand son la misma cosa—: nombre y documento del propietario,
    teléfono, empresa, nombre del stand, municipio, región, dirección, NIT,
-   sitio web, descripción, el **logo de su producto** (cuadrado, máx.
-   1600×1600 px y 3 MB) y la **ubicación marcada en el mapa de Nariño**. Queda
-   `pendiente`. Recibe un acuse por correo; los administradores reciben un aviso.
+   sitio web, descripción, el **logo de su producto** (obligatorio, cuadrado,
+   máx. 1600×1600 px y 3 MB) y la **ubicación marcada en el mapa de Nariño**.
+   Queda `pendiente`. Recibe un acuse por correo; los administradores reciben
+   un aviso.
+
+   **El logo es obligatorio** desde la v2.5.0: es lo que identifica al stand en
+   la tarjeta de «Mi recorrido» y bajo el sello del pasaporte, y pedirlo
+   después —cuando el caficultor ya se fue— no lo consigue nadie.
+
+   **Documento, teléfono y NIT sólo aceptan números**, y se guardan sólo
+   dígitos. Se filtra al escribir, no al enviar: un aviso al final obliga a
+   volver arriba a buscar el campo, y en un formulario largo rellenado en el
+   móvil eso es media inscripción perdida. El servidor lo vuelve a comprobar y
+   **rechaza lo que esté mal escrito en vez de guardarlo como vacío**, que era
+   lo que hacía desaparecer una cédula sin decir nada.
 
    El formulario público y el alta interna (`/admin/stands/new`) piden **los
    mismos trece datos**; sólo el identificador del stand, el color de su sello y
@@ -314,6 +328,17 @@ y lo está pidiendo—, y esa reemplaza a la anterior.
 El formulario de acceso **pregunta el método en vez de deducirlo del correo**.
 Consultarlo antes de autenticar convertiría el login en un comprobador de «¿está
 inscrito este correo?», que es justo lo que el resto del módulo evita.
+
+**Aprobar pasa por una revisión.** El botón del panel abre primero la ficha
+completa de la inscripción —la persona, el stand que va a nacer, el logo y el
+punto en el mapa— y desde ahí se aprueba. Aprobar crea el stand tal cual y lo
+publica; hasta la v2.5.0 eso se veía después, ya publicado.
+
+**Un promotor y su stand son la misma cosa.** No hay forma de emparejarlos a
+mano: el stand nace al aprobar, con los datos de la inscripción. El desplegable
+«Stand vinculado» que había en el panel se retiró en la v2.5.0 porque sólo
+servía para dejar dos promotores apuntando al mismo puesto. Si un stand quedó
+mal, se corrige en el editor de stands.
 
 **Si el correo no sale** (hosting sin MTA, SMTP mal configurado), la respuesta
 de «verificar» devuelve la clave al administrador para que la entregue por otro
@@ -546,6 +571,14 @@ Los sellados se ordenan primero. El **número de columnas** se configura por
 separado para computador y para móvil desde *Panel → Personalización*: en una
 pantalla de sala caben cuatro y en un teléfono a veces conviene una sola.
 
+Al tocar una tarjeta se abre una **ficha de sólo lectura**: contacto, ubicación
+en el mapa, la votación del festival y —si ya votó— «Mi votación», cada bloque
+con su título. **Desde ahí no se vota.** El voto sale únicamente de escanear el
+QR que está en el puesto, que es lo que obliga a pasar por el stand; sin esa
+regla el recorrido se haría entero desde el sofá y el pasaporte dejaría de
+significar nada. La ficha lo dice con todas las letras en vez de esconder el
+botón.
+
 Sin correo, la página pide primero identificarse: es **mi** recorrido y hay que
 saber de quién. Basta con escribirlo, sin contraseña (ver «Perfil del
 visitante»). Quien todavía no ha votado entra igual y ve el catálogo entero
@@ -592,10 +625,94 @@ Sobre cada fondo va un velo —de papel en las hojas, oscuro en la portada, dond
 el texto es claro— para que lo escrito se siga leyendo. **Si no se sube nada, el
 pasaporte conserva el diseño del sistema**, que es lo que se ve hoy.
 
+Cada imagen subida se **previsualiza en su miniatura**, y la miniatura distingue
+tres cosas que antes parecían la misma: que aún está cargando, que se ve bien, y
+que el servidor la guardó pero **no la entrega** al navegador. Ese tercer caso
+casi siempre son permisos del archivo, y la propia miniatura enlaza al botón que
+los corrige (ver «Permisos de las imágenes» más abajo). Un cuadro gris roto no
+dice cuál de los tres es.
+
+Al terminar se pulsa **«Guardar y aplicar al pasaporte»**: guarda los ajustes,
+los vuelve a leer del servidor y refresca el pasaporte en caliente, sin recargar
+la página. Al lado queda el enlace **«Ver el pasaporte →»** para comprobar cómo
+quedaron las hojas de verdad, que es donde se nota si una foto queda demasiado
+oscura debajo del velo.
+
 Todo se guarda en la tabla `ajustes` bajo la clave `festival`, y el cliente lo
 lee una sola vez al arrancar: lo pinta media interfaz y pedirlo en cada
 componente sería una ráfaga de peticiones para algo que no cambia durante la
 visita.
+
+### Permisos de las imágenes
+
+Síntoma: la imagen se sube «bien», el servidor responde `200`, y en el navegador
+sale rota. No es la subida: es **quién puede leer el archivo**.
+
+En un hosting compartido (Plesk, cPanel) PHP corre con el usuario del sitio y
+**Apache sirve los estáticos con otro usuario**. Un archivo guardado en `0640` lo
+lee PHP y no lo lee Apache, así que el navegador recibe un `403` y pinta el
+cuadro roto. Desde la versión 2.5.0 todo lo que se sube se guarda en **`0644`** y
+las carpetas en **`0755`**, que es lo mínimo para que el servidor web las
+entregue.
+
+Las imágenes subidas **antes** de esa versión siguen con los permisos viejos. En
+*Panel → Stands* y en *Panel → Personalización* hay un bloque de **estado del
+almacenamiento** que cuenta cuántas están ilegibles y trae el botón **«Corregir
+permisos de las imágenes»** (`POST /api/admin/uploads/permisos`), que recorre
+`assets/uploads/` y las arregla. Es idempotente: se puede pulsar las veces que
+haga falta.
+
+Si el hosting no deja cambiar permisos desde PHP, hay que darlos por FTP o desde
+el gestor de archivos del panel: **`755` a las carpetas y `644` a los archivos**
+de `assets/uploads/` (`logos/`, `pasaporte/`, `visitantes/`).
+
+---
+
+## 1.nonies. Empezar de cero
+
+`/admin/sistema` — borrar los datos de ejemplo y de las pruebas antes de abrir al
+público. **Sólo la ve un propietario.**
+
+Entre montar el sistema y el día del evento hay semanas de pruebas: stands de
+ejemplo, inscripciones de mentira, votos para comprobar que el pasaporte sella.
+Nada de eso puede quedar cuando llegue la gente, y borrarlo a mano desde
+phpMyAdmin es exactamente donde alguien se lleva por delante su propia cuenta.
+
+La pantalla es deliberadamente incómoda, en este orden:
+
+1. **Enseña qué hay** — stands, votos, pasaportes, promotores, empresas,
+   productos, visitantes, correos y administradores. Se lee antes de decidir, no
+   después.
+2. **Obliga a elegir qué se va.** Cinco conjuntos independientes:
+
+   | Conjunto | Qué borra | Qué NO toca |
+   | --- | --- | --- |
+   | Votos y pasaportes | Votos, pasaportes y los contadores de cada stand | Los stands |
+   | Visitantes | Caracterización del público, fotos y claves de perfil | — |
+   | Promotores | Inscripciones, empresas y productos | Los stands ya creados |
+   | Stands | El catálogo entero **y** los votos y pasaportes que lo apuntaban | — |
+   | Bitácora de correos | El historial de mensajes enviados | A nadie |
+
+3. **Pide escribir `BORRAR TODO`** tal cual. El botón está apagado hasta que la
+   frase coincide exactamente.
+
+Detalles que importan:
+
+- **Las cuentas de administración nunca se borran.** No es una opción de la
+  pantalla: si se borraran, nadie podría volver a entrar a arreglarlo.
+- Borrar «Stands» arrastra votos y pasaportes **a propósito**: quedarían
+  apuntando a puestos que ya no existen.
+- Todo va dentro de una **transacción**, y los archivos de imagen se borran del
+  disco después de que la transacción confirme, no antes.
+- Se limpian siempre los contadores de `rate_limits`, para que las pruebas no
+  dejen a nadie bloqueado.
+- Queda registro en el log del servidor de quién la ejecutó y qué eligió.
+
+No hay papelera ni «deshacer». Si se quiere poder volver atrás, hay que hacer una
+copia de la base de datos desde el panel del hosting **antes**.
+
+Después de una puesta a cero conviene volver a generar los QR de los stands
+nuevos desde *Códigos QR* y comprobar el envío desde *Correo*.
 
 ---
 
@@ -989,7 +1106,11 @@ Todas las respuestas usan `application/json` y la forma:
 | `GET`   | `/api/admin/correo`           | admin        | Configuración efectiva + diagnóstico. |
 | `PUT/DELETE` | `/api/admin/correo`      | propietario  | Guardar o volver a la del archivo. |
 | `POST`  | `/api/admin/correo/prueba`    | admin        | Envía una prueba y devuelve el diálogo SMTP. |
-| `GET`   | `/api/admin/uploads`          | admin        | Dónde se guardan las imágenes y si la carpeta es escribible. |
+| `GET`   | `/api/admin/uploads`          | admin        | Dónde se guardan las imágenes, si la carpeta es escribible y cuántas están ilegibles. |
+| `POST`  | `/api/admin/uploads/permisos` | admin        | Repara los permisos (`0755`/`0644`) de lo ya subido. |
+| **Sistema** | | | |
+| `GET`   | `/api/admin/sistema/inventario` | propietario | Qué hay en la base y la frase de confirmación. |
+| `POST`  | `/api/admin/sistema/reiniciar` | propietario | Borra los conjuntos elegidos. Exige la frase exacta. |
 | **QR** | | | |
 | `GET`   | `/api/qr/{id}.png`            | público      | PNG del QR de un stand.            |
 
@@ -1138,18 +1259,23 @@ la-mejor-taza/
 ├── router.php                 # router para `php -S` en desarrollo
 ├── .htaccess                  # cabeceras globales + rewrites
 ├── components/                # JSX precompilado a js/components.build.js
-│   ├── Shared.jsx             # Logo, sello, QR, avisos, SubirImagen, BloqueForm
+│   ├── Shared.jsx             # Logo, sello, QR, avisos, SubirImagen, CampoNumerico, EstadoAlmacen
 │   ├── Admin.jsx              # login + AdminShell + StandsList + StandEditor
 │   ├── QRPrint.jsx            # cartel A5 + hojas de impresión + actividad
 │   ├── VoteFlow.jsx           # MobileVotePage real (full-screen)
 │   ├── Passport.jsx           # PassportPage real (libreta del usuario)
 │   ├── Dashboard.jsx          # PublicDashboard + MapaNarino + PublicDetail
+│   ├── Recorrido.jsx          # «Mi recorrido»: catálogo con los sellos a color
 │   ├── Promotores.jsx         # inscripción, portal del promotor, revisión
 │   ├── Mapa.jsx               # selector de ubicación sobre el mapa de Nariño
 │   ├── Cuentas.jsx            # cuentas de administración + cambio de clave
 │   ├── Correo.jsx             # configuración, diagnóstico y prueba de envío
+│   ├── Economia.jsx           # actividad económica declarada al votar
+│   ├── Festival.jsx           # personalización: títulos, columnas y fondos
+│   ├── Sistema.jsx            # puesta a cero (propietario)
 │   ├── Perfil.jsx             # perfil del visitante (/perfil)
-│   └── Caracterizacion.jsx    # resumen del público en el panel
+│   ├── Caracterizacion.jsx    # resumen del público en el panel
+│   └── App.jsx                # rutas de la SPA y guardas de acceso
 ├── js/
 │   ├── router.js              # router cliente (pushState + popstate)
 │   ├── api.js                 # cliente del backend PHP (fetch + CSRF)
@@ -1178,7 +1304,7 @@ la-mejor-taza/
 │   │   └── Router.php
 │   └── routes/
 │       ├── auth.php
-│       ├── stands.php
+│       ├── stands.php          # + estado y reparación de permisos de uploads
 │       ├── votos.php
 │       ├── pasaportes.php
 │       ├── dashboard.php
@@ -1187,7 +1313,10 @@ la-mejor-taza/
 │       ├── promotores.php
 │       ├── administradores.php
 │       ├── visitantes.php
-│       └── correo.php
+│       ├── correo.php
+│       ├── festival.php        # ajustes de personalización
+│       ├── sistema.php         # inventario y puesta a cero (propietario)
+│       └── health.php
 ├── db/
 │   ├── schema.mysql.sql
 │   ├── schema.sqlite.sql
@@ -1244,6 +1373,16 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 - [ ] Comprobar que `curl https://tu-sitio/db/la-mejor-taza.sqlite` devuelve 403
       y que `curl https://tu-sitio/api/config.php` no muestra nada.
 - [ ] `uploads/` escribible por PHP y con su `.htaccess` presente.
+- [ ] **Permisos de las imágenes corregidos.** Si vienes de una versión anterior
+      a la 2.5.0, entra en *Panel → Personalización*, mira el estado del
+      almacenamiento y pulsa «Corregir permisos de las imágenes». Con los
+      permisos viejos (`0640`) el navegador recibe un `403` y los logos salen
+      rotos aunque estén subidos.
+- [ ] **Sistema en cero.** Desde *Panel → Empezar de cero* (`/admin/sistema`,
+      sólo propietario) borra los stands de ejemplo, las inscripciones de prueba,
+      los votos y los visitantes de las pruebas. Haz antes una copia de la base
+      de datos: no hay «deshacer». Después vuelve a generar los QR de los stands
+      reales desde *Códigos QR*.
 
 ### Verificación rápida tras instalar
 

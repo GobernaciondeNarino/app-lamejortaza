@@ -214,6 +214,7 @@ const PromotorRegistroPage = () => {
     if (!form.nombre.trim()) { setError(ERRORES.nombre_invalido); return; }
     if (!sec || !sec.isEmail(form.email.trim())) { setError(ERRORES.email_invalido); return; }
     if (!form.municipio.trim()) { setError("Indica el municipio de tu stand."); return; }
+    if (!logo) { setError(ERRORES.logo_requerido); return; }
     if (!acepta) { setError(ERRORES.debe_aceptar_tratamiento_datos); return; }
     // El acceso se comprueba aquí para dar el mensaje concreto; el servidor lo
     // vuelve a comprobar, que es quien decide.
@@ -305,15 +306,12 @@ const PromotorRegistroPage = () => {
               <input id="in-nombre" value={form.nombre} onChange={(e) => set("nombre", e.target.value)} maxLength={120} required autoComplete="name"/>
             </div>
             <div className="grid-2">
-              <div className="field">
-                <label htmlFor="in-doc">Documento de identidad</label>
-                <input id="in-doc" value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32} inputMode="numeric"/>
-                <span className="ayuda">Cédula del propietario, sin puntos.</span>
-              </div>
-              <div className="field">
-                <label htmlFor="in-tel">Teléfono</label>
-                <input id="in-tel" value={form.telefono} onChange={(e) => set("telefono", e.target.value)} maxLength={32} inputMode="tel" autoComplete="tel"/>
-              </div>
+              <CampoNumerico id="in-doc" etiqueta="Documento de identidad"
+                valor={form.documento} onCambio={(v) => set("documento", v)}
+                ayuda="Cédula del propietario, sólo números."/>
+              <CampoNumerico id="in-tel" etiqueta="Teléfono" telefono maxLength={15}
+                valor={form.telefono} onCambio={(v) => set("telefono", v)}
+                ayuda="Sólo números, sin espacios ni guiones."/>
             </div>
             <div className="field">
               <label htmlFor="in-email">Correo electrónico *</label>
@@ -346,11 +344,9 @@ const PromotorRegistroPage = () => {
               <input id="in-dir" value={form.stand_direccion} onChange={(e) => set("stand_direccion", e.target.value)} maxLength={255} placeholder="Vereda El Ingenio"/>
             </div>
             <div className="grid-2">
-              <div className="field">
-                <label htmlFor="in-nit">NIT o RUT</label>
-                <input id="in-nit" value={form.stand_nit} onChange={(e) => set("stand_nit", e.target.value)} maxLength={32}/>
-                <span className="ayuda">Si estás constituido como empresa.</span>
-              </div>
+              <CampoNumerico id="in-nit" etiqueta="NIT o RUT"
+                valor={form.stand_nit} onCambio={(v) => set("stand_nit", v)}
+                ayuda="Si estás constituido como empresa. Sólo números, con el dígito de verificación al final."/>
               <div className="field">
                 <label htmlFor="in-web">Sitio web o red social</label>
                 <input id="in-web" type="url" value={form.stand_sitio_web} onChange={(e) => set("stand_sitio_web", e.target.value)} maxLength={255}
@@ -364,12 +360,20 @@ const PromotorRegistroPage = () => {
                 style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
               <span className="ayuda">Se muestra en la ficha pública de tu stand.</span>
             </div>
+            {/* Obligatorio: es lo que identifica al stand en la tarjeta de
+                «Mi recorrido» y bajo el sello del pasaporte. */}
             <SubirImagen
               actual={logo ? urlImagen(logo) : ""}
-              etiqueta="Logo de tu producto"
+              etiqueta="Logo de tu producto *"
               cuadrada
               ruta={logo}
               onSubir={subirLogo}/>
+            {!logo && (
+              <span className="ayuda" style={{ color: "var(--meh)" }}>
+                Hace falta para terminar la inscripción: con él se te reconoce en el
+                pasaporte de los visitantes y en la lista del festival.
+              </span>
+            )}
           </BloqueForm>
 
           <BloqueForm titulo="¿Dónde estás?"
@@ -842,10 +846,8 @@ const EmpresaEditor = ({ empresa, logoUrl, onGuardar, onLogo }) => {
         <input value={form.nombre} onChange={(e) => set("nombre", e.target.value)} maxLength={120} required/>
       </div>
       <div className="grid-2">
-        <div className="field">
-          <label>NIT</label>
-          <input value={form.nit || ""} onChange={(e) => set("nit", e.target.value)} maxLength={32}/>
-        </div>
+        <CampoNumerico id="emp-nit" etiqueta="NIT" valor={form.nit || ""}
+          onCambio={(v) => set("nit", v)}/>
         <SelectorMunicipio id="emp-mun" valor={form.municipio || ""} requerido
           onCambio={(municipio) => set("municipio", municipio)}/>
       </div>
@@ -854,10 +856,8 @@ const EmpresaEditor = ({ empresa, logoUrl, onGuardar, onLogo }) => {
         <input value={form.direccion || ""} onChange={(e) => set("direccion", e.target.value)} maxLength={255}/>
       </div>
       <div className="grid-2">
-        <div className="field">
-          <label>Teléfono</label>
-          <input value={form.telefono || ""} onChange={(e) => set("telefono", e.target.value)} maxLength={32} inputMode="tel"/>
-        </div>
+        <CampoNumerico id="emp-tel" etiqueta="Teléfono" telefono maxLength={15}
+          valor={form.telefono || ""} onCambio={(v) => set("telefono", v)}/>
         <div className="field">
           <label>Sitio web</label>
           <input value={form.sitio_web || ""} onChange={(e) => set("sitio_web", e.target.value)} maxLength={255} placeholder="https://…"/>
@@ -918,14 +918,10 @@ const PerfilEditor = ({ promotor, onGuardar }) => {
         <input value={form.nombre} onChange={(e) => set("nombre", e.target.value)} maxLength={120} required/>
       </div>
       <div className="grid-2">
-        <div className="field">
-          <label>Teléfono</label>
-          <input value={form.telefono} onChange={(e) => set("telefono", e.target.value)} maxLength={32} inputMode="tel"/>
-        </div>
-        <div className="field">
-          <label>Documento</label>
-          <input value={form.documento} onChange={(e) => set("documento", e.target.value)} maxLength={32} inputMode="numeric"/>
-        </div>
+        <CampoNumerico id="pr-tel" etiqueta="Teléfono" telefono maxLength={15}
+          valor={form.telefono} onCambio={(v) => set("telefono", v)}/>
+        <CampoNumerico id="pr-doc" etiqueta="Documento"
+          valor={form.documento} onCambio={(v) => set("documento", v)}/>
       </div>
       <SelectorMunicipio id="pr-mun" valor={form.municipio} requerido
         onCambio={(municipio) => set("municipio", municipio)}/>
@@ -972,6 +968,115 @@ const PromotorPage = () => {
 // 5. Panel del administrador: revisar y verificar solicitudes
 // ---------------------------------------------------------------------------
 
+/**
+ * La ficha completa de una inscripción, para revisarla antes de aprobar.
+ *
+ * Aprobar crea el stand con estos datos y le abre el acceso al promotor: es el
+ * momento en que la solicitud deja de ser un borrador. Hasta ahora el panel
+ * sólo enseñaba nombre, correo y municipio, y el resto —la descripción que verá
+ * el público, el logo, el punto en el mapa— se descubría después, ya publicado.
+ */
+const RevisionInscripcion = ({ id, onAprobar, onCerrar, ocupado }) => {
+  const [datos, setDatos] = React.useState(null);
+  const [error, setError] = React.useState("");
+
+  React.useEffect(() => {
+    let vivo = true;
+    window.LMTApi.verPromotor(id)
+      .then((d) => { if (vivo) setDatos(d); })
+      .catch((e) => { if (vivo) setError(mensajeError(e, "No fue posible cargar la inscripción.")); });
+    return () => { vivo = false; };
+  }, [id]);
+
+  if (error) return <Aviso>{error}</Aviso>;
+  if (!datos) return <div className="splash">Cargando la ficha…</div>;
+
+  const p = datos.promotor || {};
+  const b = datos.stand_borrador || {};
+  const g = datos.gestion || {};
+  const fila = (k, v) => (v ? (
+    <div key={k} style={{ display: "flex", gap: 12, padding: "6px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}>
+      <span className="mono" style={{ color: "var(--ink-3)", flex: "0 0 150px" }}>{k}</span>
+      <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{v}</span>
+    </div>
+  ) : null);
+
+  return (
+    <div style={{ border: "2px solid var(--ink)", borderRadius: "var(--r-md)", padding: 22, margin: "18px 0", background: "var(--paper)" }}>
+      <div className="mono" style={{ marginBottom: 4 }}>Revisar antes de aprobar</div>
+      <h2 className="titulo-xl" style={{ margin: "0 0 4px" }}>{b.nombre || p.nombre}</h2>
+      <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, margin: "0 0 18px", maxWidth: 620 }}>
+        Al aprobar, esto se convierte en el stand del festival tal cual está: el nombre y la
+        descripción los verá el público, y el logo saldrá en el pasaporte de cada visitante.
+        Si algo está mal, es mejor rechazarlo con el motivo y que lo vuelva a enviar.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 24 }}>
+        <div>
+          <div className="mono" style={{ marginBottom: 8 }}>La persona</div>
+          {fila("Nombre", p.nombre)}
+          {fila("Documento", p.documento)}
+          {fila("Correo", p.email)}
+          {fila("Teléfono", p.telefono)}
+          {fila("Cómo entrará", ACCESO_FRASE[g.acceso_metodo] || "la contraseña que le enviemos")}
+          {fila("Se inscribió", g.created_at)}
+          {g.mensaje && (
+            <p style={{ fontSize: 13, marginTop: 10, fontStyle: "italic", fontFamily: "var(--font-display)", color: "var(--ink-2)" }}>
+              “{g.mensaje}”
+            </p>
+          )}
+        </div>
+        <div>
+          <div className="mono" style={{ marginBottom: 8 }}>El stand que se creará</div>
+          {fila("Nombre", b.nombre)}
+          {fila("Municipio", b.municipio)}
+          {fila("Región", b.region)}
+          {fila("Dirección", b.direccion)}
+          {fila("NIT", b.nit)}
+          {fila("Sitio web", b.sitio_web)}
+          {fila("Ubicación", b.lat != null ? b.lat.toFixed(5) + ", " + b.lng.toFixed(5) : "sin marcar en el mapa")}
+          {b.descripcion && (
+            <p style={{ fontSize: 13, marginTop: 10, color: "var(--ink-2)", lineHeight: 1.6 }}>{b.descripcion}</p>
+          )}
+        </div>
+        <div>
+          <div className="mono" style={{ marginBottom: 8 }}>Logo</div>
+          {b.logo
+            ? (
+              <a href={urlImagen(b.logo)} target="_blank" rel="noopener">
+                <img src={urlImagen(b.logo)} alt="Logo del stand"
+                  style={{ width: 150, height: 150, objectFit: "cover", borderRadius: "var(--r-md)", border: "1px solid var(--line)" }}/>
+              </a>
+            )
+            : <Placeholder width={150} height={150} label="sin logo"/>}
+          {!b.logo && (
+            <p style={{ fontSize: 12, color: "var(--meh)", marginTop: 8, lineHeight: 1.5 }}>
+              Se inscribió antes de que el logo fuera obligatorio. Su tarjeta y su hoja del
+              pasaporte saldrán con la inicial.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {b.lat != null && (
+        <div style={{ marginTop: 20 }}>
+          <div className="mono" style={{ marginBottom: 8 }}>Dónde queda</div>
+          <SelectorUbicacion lat={b.lat} lng={b.lng} municipio={b.municipio} alto={260} soloLectura onCambio={() => {}}/>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap" }}>
+        <button className="btn btn-primary" disabled={ocupado} onClick={onAprobar} style={{ justifyContent: "center" }}>
+          {ocupado ? "Aprobando…" : "✓ Aprobar y crear el stand"}
+        </button>
+        <button className="btn btn-ghost" disabled={ocupado} onClick={onCerrar} style={{ justifyContent: "center" }}>
+          Cerrar sin aprobar
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const AdminPromotores = ({ stands }) => {
   const [lista, setLista] = React.useState([]);
   const [filtro, setFiltro] = React.useState("");
@@ -982,6 +1087,9 @@ const AdminPromotores = ({ stands }) => {
   // QR recién reemitido. Se enseña una sola vez, igual que al promotor: el
   // organizador lo imprime o se lo pasa en mano, y al cerrar desaparece.
   const [qr, setQr] = React.useState(null);
+  // Inscripción abierta para revisar. Aprobar pasa por aquí: es lo último que
+  // se puede mirar antes de que el stand exista de cara al público.
+  const [revisando, setRevisando] = React.useState(null);
 
   const cargar = React.useCallback(async (estado) => {
     setCargando(true);
@@ -1006,11 +1114,18 @@ const AdminPromotores = ({ stands }) => {
     } finally { setOcupado(0); }
   };
 
-  const verificar = (p) => accion(p.id, () => window.LMTApi.verificarPromotor(p.id), (res) => (
-    res.correo_enviado
-      ? { tipo: "ok", texto: `Verificado. La contraseña temporal salió hacia ${p.email}.` }
-      : { tipo: "error", texto: `Verificado, pero el correo NO pudo enviarse. Entrega esta clave a ${p.email} por un canal seguro: ${res.clave_temporal}` }
-  ));
+  const verificar = (p) => accion(p.id, () => window.LMTApi.verificarPromotor(p.id), (res) => {
+    setRevisando(null);
+    if (res.acceso_propio) {
+      return { tipo: res.correo_enviado ? "ok" : "error",
+        texto: res.correo_enviado
+          ? `Aprobado. El stand ya existe y ${p.email} entra con ${ACCESO_FRASE[res.acceso_propio] || "su acceso"}.`
+          : (res.aviso || "Aprobado, pero el correo no pudo enviarse.") };
+    }
+    return res.correo_enviado
+      ? { tipo: "ok", texto: `Aprobado. El stand ya existe y la contraseña temporal salió hacia ${p.email}.` }
+      : { tipo: "error", texto: `Aprobado, pero el correo NO pudo enviarse. Entrega esta clave a ${p.email} por un canal seguro: ${res.clave_temporal}` };
+  });
 
   const reenviar = (p) => accion(p.id, () => window.LMTApi.reenviarClave(p.id), (res) => (
     res.correo_enviado
@@ -1035,9 +1150,6 @@ const AdminPromotores = ({ stands }) => {
   const suspender = (p) => accion(p.id,
     () => window.LMTApi.cambiarEstadoPromotor(p.id, p.estado === "suspendido" ? "activo" : "suspendido"),
     () => ({ tipo: "ok", texto: p.estado === "suspendido" ? "Cuenta reactivada." : "Cuenta suspendida." }));
-
-  const vincular = (p, standId) => accion(p.id, () => window.LMTApi.vincularStand(p.id, standId),
-    () => ({ tipo: "ok", texto: standId ? "Promotor vinculado al stand." : "Vínculo con el stand eliminado." }));
 
   const filtros = [
     { id: "", label: "Todos" },
@@ -1088,6 +1200,15 @@ const AdminPromotores = ({ stands }) => {
         </div>
       )}
 
+      {revisando && (
+        <RevisionInscripcion id={revisando} ocupado={ocupado === revisando}
+          onCerrar={() => setRevisando(null)}
+          onAprobar={() => {
+            const p = lista.find((x) => x.id === revisando);
+            if (p) verificar(p);
+          }}/>
+      )}
+
       {cargando ? (
         <div className="splash">Cargando…</div>
       ) : lista.length === 0 ? (
@@ -1134,10 +1255,13 @@ const AdminPromotores = ({ stands }) => {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch", minWidth: 200, flex: "1 1 200px" }}>
+                  {/* Aprobar pasa siempre por la ficha completa: es lo que se
+                      va a publicar, y hasta ahora se veía después. */}
                   {p.estado === "pendiente" && (
-                    <button className="btn btn-primary" disabled={ocupado === p.id} onClick={() => verificar(p)}
+                    <button className="btn btn-primary" disabled={ocupado === p.id}
+                      onClick={() => setRevisando(revisando === p.id ? null : p.id)}
                       style={{ justifyContent: "center", opacity: ocupado === p.id ? 0.6 : 1 }}>
-                      {ocupado === p.id ? "Enviando…" : "✓ Verificar y enviar clave"}
+                      {revisando === p.id ? "Cerrar la ficha" : "Revisar la inscripción →"}
                     </button>
                   )}
                   {(p.estado === "verificado" || p.estado === "activo") && (
@@ -1163,15 +1287,15 @@ const AdminPromotores = ({ stands }) => {
                       {p.estado === "suspendido" ? "Reactivar" : "Suspender"}
                     </button>
                   )}
-                  <label className="field" style={{ marginTop: 4 }}>
-                    <span className="mono">Stand vinculado</span>
-                    <select value={p.stand_id || ""} disabled={ocupado === p.id}
-                      onChange={(e) => vincular(p, e.target.value)}
-                      style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-sm)", padding: "7px 8px", background: "var(--paper)" }}>
-                      <option value="">— sin vincular —</option>
-                      {(stands || []).map((s) => (<option key={s.id} value={s.id}>{s.nombre}</option>))}
-                    </select>
-                  </label>
+                  {/* El stand no se elige de una lista: nace al aprobar esta
+                      inscripción, con estos mismos datos. Aquí sólo se dice
+                      cuál salió, y se abre para corregirlo si hizo falta. */}
+                  {p.stand_id && (
+                    <a href={"/admin/stands/" + p.stand_id + "/edit"} data-route className="mono"
+                      style={{ marginTop: 4, color: "var(--ink-3)", textDecoration: "underline", textAlign: "center" }}>
+                      Su stand: {p.stand_id} · editar
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -1229,6 +1353,7 @@ Object.assign(window, {
   PromotorPortalPage,
   PromotorPage,
   AdminPromotores,
+  RevisionInscripcion,
   AdminCorreos,
   EstadoPill,
   TarjetaQrAcceso,

@@ -341,6 +341,10 @@ const ERRORES = {
     "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
   csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
   clave_incorrecta: "Esa clave no es la de este perfil.",
+  logo_requerido: "Sube el logo de tu producto: es lo que te identifica en el pasaporte de los visitantes.",
+  documento_invalido: "El documento de identidad debe ser sólo números.",
+  telefono_invalido: "El teléfono debe ser sólo números, entre 7 y 15 dígitos.",
+  nit_invalido: "El NIT debe ser sólo números.",
   clave_corta: "La clave debe tener al menos 6 caracteres.",
   internal_error:
     "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado.",
@@ -364,6 +368,91 @@ const Aviso = ({ tipo = "error", children }) => {
       border: `1px solid ${color}`, color, borderRadius: "var(--r-sm)",
       background: `color-mix(in oklch, ${color} 6%, var(--paper))`,
     }}>{children}</div>
+  );
+};
+
+/**
+ * Campo que sólo acepta dígitos: cédula, NIT, teléfono.
+ *
+ * Filtra al escribir en vez de avisar al enviar. Un aviso al final obliga a
+ * volver arriba a buscar el campo, y en un formulario largo rellenado en el
+ * móvil eso es media inscripción perdida. El teclado numérico se abre solo.
+ *
+ * El servidor vuelve a comprobarlo y guarda sólo dígitos: quien pega
+ * «12.345.678» desde otro sitio no debe acabar con puntos en la base.
+ */
+const CampoNumerico = ({ id, etiqueta, valor, onCambio, ayuda, requerido = false,
+                         maxLength = 20, telefono = false, placeholder }) => (
+  <div className="field">
+    <label htmlFor={id}>{etiqueta}{requerido ? " *" : ""}</label>
+    <input id={id} value={valor} required={requerido} maxLength={maxLength}
+      inputMode="numeric" pattern="[0-9]*" autoComplete={telefono ? "tel" : "off"}
+      placeholder={placeholder}
+      onChange={(e) => onCambio(e.target.value.replace(/\D+/g, "").slice(0, maxLength))}/>
+    {ayuda && <span className="ayuda">{ayuda}</span>}
+  </div>
+);
+
+/**
+ * Dónde acaban las imágenes y si el servidor puede servirlas.
+ *
+ * Existe por un fallo que se repite y que desde la interfaz no se distingue de
+ * «la subida no funcionó»: la imagen se guarda bien y el navegador la recibe
+ * como 403. En un hosting compartido PHP escribe con un usuario y Apache sirve
+ * los estáticos con otro, así que un fichero sin permiso de lectura para el
+ * resto del sistema se sube y no se ve. El botón lo arregla desde aquí, sin
+ * pedirle a nadie que entre por SSH a hacer un chmod.
+ */
+const EstadoAlmacen = ({ compacto = false }) => {
+  const [info, setInfo] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [aviso, setAviso] = React.useState("");
+
+  const cargar = React.useCallback(() => {
+    if (!window.LMTApi || !window.LMTApi.infoUploads) return;
+    window.LMTApi.infoUploads().then(setInfo).catch(() => {});
+  }, []);
+  React.useEffect(cargar, [cargar]);
+
+  const reparar = async () => {
+    setBusy(true); setAviso("");
+    try {
+      const r = await window.LMTApi.repararPermisosUploads();
+      setInfo((v) => (v ? { ...v, permisos: r.permisos } : v));
+      setAviso(r.fallos > 0
+        ? `Corregidos ${r.archivos} archivos, pero ${r.fallos} no se pudieron cambiar: el usuario de PHP no es su dueño. Hay que hacerlo desde el panel del hosting.`
+        : `Listo: ${r.archivos} archivo${r.archivos === 1 ? "" : "s"} y ${r.carpetas} carpeta${r.carpetas === 1 ? "" : "s"} con permisos de lectura.`);
+    } catch (err) {
+      setAviso(mensajeError(err, "No fue posible corregir los permisos."));
+    } finally { setBusy(false); }
+  };
+
+  if (!info) return null;
+  const perm = info.permisos || { total: 0, ilegibles: 0 };
+
+  return (
+    <div className="ruta" style={{ marginTop: compacto ? -8 : 12, lineHeight: 1.7 }}>
+      Las imágenes se guardan en <strong>{info.dir}</strong>
+      {" · "}se sirven desde <strong>{info.url_base}</strong>
+      {!info.escribible && (
+        <span style={{ color: "var(--bad)" }}><br/>Esa carpeta NO tiene permiso de escritura: las subidas fallarán.</span>
+      )}
+      {!info.protegida && (
+        <span style={{ color: "var(--meh)" }}><br/>Falta el .htaccess que impide ejecutar código ahí; se creará con la próxima subida.</span>
+      )}
+      {perm.ilegibles > 0 && (
+        <span style={{ color: "var(--bad)" }}>
+          <br/>{perm.ilegibles} de {perm.total} imágenes no las puede leer el servidor web: se subieron
+          pero el navegador recibe un 403 y la previsualización sale rota.
+        </span>
+      )}
+      {aviso && <span style={{ color: "var(--ink-2)" }}><br/>{aviso}</span>}
+      <br/>
+      <button type="button" className="btn btn-ghost" disabled={busy} onClick={reparar}
+        style={{ marginTop: 8, padding: "6px 12px", fontSize: 12 }}>
+        {busy ? "Corrigiendo…" : "Corregir permisos de las imágenes"}
+      </button>
+    </div>
   );
 };
 
@@ -716,5 +805,5 @@ Object.assign(window, {
   Estrella, EstrellasEntrada, EstrellasLectura,
   ESTRELLA_CAMPOS, ESTRELLA_CLAVES, titulosEstrellas, pesos,
   MenuPublico, MENU_PUBLICO,
-  usarPuerta, PuertaCorreo, InvitacionCorreo,
+  usarPuerta, PuertaCorreo, InvitacionCorreo, EstadoAlmacen, CampoNumerico,
 });

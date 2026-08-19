@@ -55,8 +55,11 @@ function register_routes_promotores(\LMT\Router $r): void
 
         $email     = Validate::email($b['email'] ?? null);
         $nombre    = Validate::nombre($b['nombre'] ?? null, 120);
-        $telefono  = Validate::telefono($b['telefono'] ?? null);
-        $documento = Validate::documento($b['documento'] ?? null);
+        // Opcionales, pero si se escriben tienen que ser números. Antes un
+        // «CC 12.345.678» se guardaba como NULL sin decir nada y la cédula
+        // desaparecía; ahora el formulario lo rechaza y se ve por qué.
+        $telefono  = promotor_numero_opcional($b['telefono'] ?? null, 'telefono_invalido', [Validate::class, 'telefono']);
+        $documento = promotor_numero_opcional($b['documento'] ?? null, 'documento_invalido', [Validate::class, 'documento']);
         // El municipio se resuelve contra el catálogo del DANE: lo que no sea
         // uno de los 64 de Nariño no entra. Antes era texto libre y en la base
         // acabaron «Pasto» y «San Juan de Pasto» como municipios distintos.
@@ -74,7 +77,7 @@ function register_routes_promotores(\LMT\Router $r): void
         $standRegion  = $municipio !== null ? \LMT\Territorio::subregion($municipio) : null;
         $standDir     = Validate::texto($b['stand_direccion'] ?? null, 255);
         $standDesc    = Validate::texto($b['stand_descripcion'] ?? null, 800);
-        $standNit     = Validate::documento($b['stand_nit'] ?? null);
+        $standNit     = promotor_numero_opcional($b['stand_nit'] ?? null, 'nit_invalido', [Validate::class, 'documento']);
         $standWeb     = Validate::url($b['stand_sitio_web'] ?? null, 255);
         $logo         = promotor_logo_reclamado($b['logo'] ?? null);
         // Punto elegido en el mapa. Fuera de Nariño no se guarda: sólo puede
@@ -111,6 +114,11 @@ function register_routes_promotores(\LMT\Router $r): void
         if (!$email)  Response::error(422, 'email_invalido');
         if (!$nombre) Response::error(422, 'nombre_invalido');
         if (!$municipio) Response::error(422, 'municipio_invalido');
+        // El logo es obligatorio: es lo que identifica al stand en la tarjeta
+        // de «Mi recorrido» y bajo el sello del pasaporte. Sin él esas dos
+        // pantallas se ven a medias, y pedirlo después —cuando el caficultor ya
+        // se fue— no lo consigue nadie.
+        if (!$logo) Response::error(422, 'logo_requerido');
         if (!$acepta) Response::error(422, 'debe_aceptar_tratamiento_datos');
 
         $pdo = Db::pdo();
@@ -420,8 +428,8 @@ function register_routes_promotores(\LMT\Router $r): void
              WHERE id = :id'
         )->execute([
             ':n'   => $nombre,
-            ':tel' => Validate::telefono($b['telefono'] ?? null),
-            ':doc' => Validate::documento($b['documento'] ?? null),
+            ':tel' => promotor_numero_opcional($b['telefono'] ?? null, 'telefono_invalido', [Validate::class, 'telefono']),
+            ':doc' => promotor_numero_opcional($b['documento'] ?? null, 'documento_invalido', [Validate::class, 'documento']),
             ':mun' => $municipio,
             ':reg' => \LMT\Territorio::subregion($municipio),
             ':id'  => $id,
@@ -442,11 +450,11 @@ function register_routes_promotores(\LMT\Router $r): void
 
         $datos = [
             ':n'    => $nombre,
-            ':nit'  => Validate::documento($b['nit'] ?? null),
+            ':nit'  => promotor_numero_opcional($b['nit'] ?? null, 'nit_invalido', [Validate::class, 'documento']),
             ':desc' => Validate::texto($b['descripcion'] ?? null, 1500) ?: null,
             ':mun'  => $municipio,
             ':dir'  => Validate::texto($b['direccion'] ?? null, 255) ?: null,
-            ':tel'  => Validate::telefono($b['telefono'] ?? null),
+            ':tel'  => promotor_numero_opcional($b['telefono'] ?? null, 'telefono_invalido', [Validate::class, 'telefono']),
             ':web'  => Validate::url($b['sitio_web'] ?? null, 255),
             ':pid'  => $id,
         ];
@@ -759,33 +767,17 @@ function register_routes_promotores(\LMT\Router $r): void
         Response::ok(['estado' => $nuevo]);
     });
 
-    /** Vincula (o desvincula, con stand=null) el promotor a un stand. */
-    $r->put('/admin/promotores/:id/stand', function (array $params) {
-        Security::requireAdmin();
-        $id = Validate::entero($params['id'] ?? null, 1, PHP_INT_MAX);
-        if ($id === null) Response::error(400, 'bad_id');
-
-        $b = Security::jsonBody();
-        $standRaw = $b['stand_id'] ?? null;
-        $stand = $standRaw === null || $standRaw === '' ? null : Validate::standId(is_string($standRaw) ? $standRaw : null);
-        if ($standRaw !== null && $standRaw !== '' && $stand === null) Response::error(422, 'stand_invalido');
-
-        $pdo = Db::pdo();
-        if ($stand !== null) {
-            $chk = $pdo->prepare('SELECT 1 FROM stands WHERE id = :s');
-            $chk->execute([':s' => $stand]);
-            if (!$chk->fetchColumn()) Response::error(404, 'stand_no_existe');
-        }
-
-        $stmt = $pdo->prepare('UPDATE promotores SET stand_id = :s, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-        $stmt->execute([':s' => $stand, ':id' => $id]);
-        if ($stmt->rowCount() === 0) {
-            $chk = $pdo->prepare('SELECT 1 FROM promotores WHERE id = :id');
-            $chk->execute([':id' => $id]);
-            if (!$chk->fetchColumn()) Response::error(404, 'not_found');
-        }
-        Response::ok(['stand_id' => $stand]);
-    });
+    // Aquí vivía PUT /admin/promotores/:id/stand, que permitía enganchar un
+    // promotor a un stand cualquiera de la lista.
+    //
+    // Se quitó porque partía de una idea equivocada: un promotor y su stand
+    // NO son dos cosas que haya que emparejar, son la misma. El stand nace al
+    // aprobar la inscripción, con los datos que esa persona escribió, y a
+    // partir de ahí el vínculo no es algo que se elija. Poder cambiarlo a mano
+    // sólo servía para dejar dos promotores apuntando al mismo puesto, o a uno
+    // que no era el suyo.
+    //
+    // Si un stand quedó mal, se corrige en el editor de stands.
 
     /** Bitácora de correos: ¿salió del servidor la clave que enviamos? */
     $r->get('/admin/emails', function () {
@@ -1292,6 +1284,22 @@ function promotor_acceso_etiqueta(?string $metodo): string
     ][$metodo ?? ''] ?? 'la contraseña que te enviamos';
 }
 
+/**
+ * Campo numérico opcional: vacío pasa, mal escrito NO pasa.
+ *
+ * Los validadores devuelven null tanto para «no lo puso» como para «puso algo
+ * que no es un número», y guardar null en los dos casos hacía desaparecer el
+ * dato sin avisar. Aquí se distinguen: sólo lo que llega vacío se queda vacío.
+ */
+function promotor_numero_opcional($valor, string $error, callable $validador): ?string
+{
+    if ($valor === null) return null;
+    if (is_string($valor) && trim($valor) === '') return null;
+    $v = $validador($valor);
+    if ($v === null) Response::error(422, $error);
+    return $v;
+}
+
 function promotor_logo_reclamado($valor): ?string
 {
     if (!is_string($valor) || $valor === '') return null;
@@ -1359,7 +1367,9 @@ function promotor_perfil_completo(int $promotorId, bool $paraAdmin = false): ?ar
     $stmt = $pdo->prepare(
         'SELECT id, email, nombre, documento, telefono, municipio, estado, stand_id,
                 empresa_tentativa, mensaje, created_at, verificado_at, ultimo_acceso,
-                must_change_password, motivo
+                must_change_password, motivo, acceso_metodo,
+                stand_nombre, stand_region, stand_direccion, stand_descripcion,
+                stand_nit, stand_sitio_web, logo_path, stand_lat, stand_lng
          FROM promotores WHERE id = :id'
     );
     $stmt->execute([':id' => $promotorId]);
@@ -1403,9 +1413,29 @@ function promotor_perfil_completo(int $promotorId, bool $paraAdmin = false): ?ar
             'empresa_tentativa' => (string) ($p['empresa_tentativa'] ?? ''),
             'mensaje'           => (string) ($p['mensaje'] ?? ''),
             'motivo'            => (string) ($p['motivo'] ?? ''),
+            'acceso_metodo'     => (string) ($p['acceso_metodo'] ?? ''),
             'created_at'        => $p['created_at'] ?? null,
             'verificado_at'     => $p['verificado_at'] ?? null,
             'ultimo_acceso'     => $p['ultimo_acceso'] ?? null,
+        ];
+        // El borrador del stand: exactamente lo que se convertirá en stand al
+        // aprobar. Se enseña para revisarlo ANTES, que es cuando se puede
+        // corregir; después hay que ir al editor de stands a arreglarlo.
+        $salida['stand_borrador'] = [
+            'nombre'      => (string) ($p['stand_nombre'] ?: $p['empresa_tentativa'] ?: $p['nombre']),
+            'municipio'   => (string) ($p['municipio'] ?? ''),
+            'region'      => (string) ($p['stand_region'] ?? ''),
+            'direccion'   => (string) ($p['stand_direccion'] ?? ''),
+            'descripcion' => (string) ($p['stand_descripcion'] ?? ''),
+            'nit'         => (string) ($p['stand_nit'] ?? ''),
+            'sitio_web'   => (string) ($p['stand_sitio_web'] ?? ''),
+            'correo'      => (string) $p['email'],
+            'telefono'    => (string) ($p['telefono'] ?? ''),
+            'propietario' => (string) $p['nombre'],
+            'propietario_documento' => (string) ($p['documento'] ?? ''),
+            'logo'        => promotor_ruta_publica($p['logo_path'] ?? null),
+            'lat'         => $p['stand_lat'] !== null ? (float) $p['stand_lat'] : null,
+            'lng'         => $p['stand_lng'] !== null ? (float) $p['stand_lng'] : null,
         ];
     }
     return $salida;

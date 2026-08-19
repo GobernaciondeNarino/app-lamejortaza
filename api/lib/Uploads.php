@@ -98,7 +98,16 @@ final class Uploads
             // imagen real y con nombre y extensión controlados por nosotros.
             if (!@move_uploaded_file($tmp, $destino)) throw new \RuntimeException('no_se_pudo_guardar');
         }
-        @chmod($destino, 0640);
+        // 0644, no 0640.
+        //
+        // Estas imágenes las sirve el SERVIDOR WEB como archivos estáticos, y
+        // en un hosting compartido (Plesk, cPanel) Apache corre con un usuario
+        // distinto del que ejecuta PHP. Con 0640 el fichero se guardaba bien y
+        // luego el navegador recibía un 403: la subida «funcionaba» y la
+        // previsualización salía rota, que es exactamente lo que se veía en el
+        // panel de personalización. No hay nada que proteger con 0640: son
+        // imágenes públicas a las que se llega por su URL.
+        @chmod($destino, 0644);
 
         return 'uploads/' . $rel . '/' . $name;
     }
@@ -158,9 +167,13 @@ final class Uploads
     {
         $raiz = self::raiz();
         $dir = $raiz . '/' . self::subRelativa($sub);
-        if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) {
+        // 0755 por el mismo motivo que los ficheros van a 0644: con 0750 el
+        // usuario del servidor web no puede ni atravesar la carpeta, así que
+        // ninguna imagen de dentro llega al navegador.
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
             throw new \RuntimeException('no_se_pudo_crear_directorio');
         }
+        @chmod($dir, 0755);
         self::protegerRaiz($raiz);
         return $dir;
     }
@@ -207,6 +220,76 @@ final class Uploads
 </IfModule>
 HT;
         @file_put_contents($ht, $contenido);
+    }
+
+    /**
+     * ¿Puede el servidor web leer lo que hay dentro?
+     *
+     * Cuenta las imágenes cuyos permisos no dejan leer al «resto» del sistema.
+     * En un hosting donde Apache sirve los estáticos con otro usuario, ésas son
+     * exactamente las que el navegador recibe como 403: la subida parece
+     * correcta y la previsualización sale rota. Es lo primero que hay que mirar
+     * cuando alguien dice «subí el logo y no se ve».
+     *
+     * @return array{total:int, ilegibles:int}
+     */
+    public static function auditarPermisos(): array
+    {
+        $total = 0; $malos = 0;
+        foreach (self::recorrer(self::raiz()) as $f) {
+            $total++;
+            $modo = @fileperms($f);
+            if ($modo !== false && ($modo & 0004) === 0) $malos++;
+        }
+        return ['total' => $total, 'ilegibles' => $malos];
+    }
+
+    /**
+     * Vuelve a poner 0755 en las carpetas y 0644 en las imágenes.
+     *
+     * Las que ya estaban subidas conservan los permisos con los que se
+     * guardaron, así que corregir el código no arregla lo que ya está en
+     * disco. Esto sí, y se puede repetir sin efecto.
+     *
+     * @return array{carpetas:int, archivos:int, fallos:int}
+     */
+    public static function repararPermisos(): array
+    {
+        $raiz = self::raiz();
+        $carpetas = 0; $archivos = 0; $fallos = 0;
+        if (!is_dir($raiz)) return ['carpetas' => 0, 'archivos' => 0, 'fallos' => 0];
+
+        if (@chmod($raiz, 0755)) $carpetas++; else $fallos++;
+        foreach (self::recorrer($raiz, true) as $ruta) {
+            $esDir = is_dir($ruta);
+            if (@chmod($ruta, $esDir ? 0755 : 0644)) {
+                $esDir ? $carpetas++ : $archivos++;
+            } else {
+                $fallos++;
+            }
+        }
+        return ['carpetas' => $carpetas, 'archivos' => $archivos, 'fallos' => $fallos];
+    }
+
+    /**
+     * Recorre uploads/. Por defecto sólo las imágenes; con $incluirDirs también
+     * las carpetas, que es lo que necesita el reparador de permisos.
+     *
+     * @return \Generator<string>
+     */
+    private static function recorrer(string $dir, bool $incluirDirs = false): \Generator
+    {
+        if (!is_dir($dir)) return;
+        foreach (scandir($dir) ?: [] as $entrada) {
+            if ($entrada === '.' || $entrada === '..') continue;
+            $ruta = $dir . '/' . $entrada;
+            if (is_dir($ruta)) {
+                if ($incluirDirs) yield $ruta;
+                yield from self::recorrer($ruta, $incluirDirs);
+            } elseif (preg_match('/\.(jpg|png|webp)$/i', $entrada)) {
+                yield $ruta;
+            }
+        }
     }
 
     /**

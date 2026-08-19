@@ -222,18 +222,23 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @media (max-width: 760px) {
   .rank-fila {
     grid-template-columns: 40px minmax(0, 1fr) auto;
+    /* Municipio y votos van en áreas DISTINTAS. Cuando compartían la misma
+       ("meta meta"), la rejilla apilaba las dos celdas en el mismo sitio y en
+       el teléfono se leía «247 votos» escrito encima del municipio. */
     grid-template-areas:
       "pos nombre puntaje"
-      ".   meta   meta"
+      ".   meta   votos"
       ".   barra  barra";
     gap: 4px 12px;
     padding: 14px 16px;
   }
-  .rank-fila > .rank-pos     { grid-area: pos; align-self: start; padding-top: 4px; }
-  .rank-fila > .rank-nombre  { grid-area: nombre; }
-  .rank-fila > .rank-puntaje { grid-area: puntaje; align-self: start; text-align: right; }
-  .rank-fila > .rank-meta    { grid-area: meta; display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
-  .rank-fila > .rank-barra   { grid-area: barra; margin-top: 6px; }
+  .rank-fila > .rank-pos       { grid-area: pos; align-self: start; padding-top: 4px; }
+  .rank-fila > .rank-nombre    { grid-area: nombre; }
+  .rank-fila > .rank-puntaje   { grid-area: puntaje; align-self: start; text-align: right; }
+  .rank-fila > .rank-meta      { font-size: 12px; color: var(--ink-3); min-width: 0; }
+  .rank-fila > .rank-municipio { grid-area: meta; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-fila > .rank-votos     { grid-area: votos; text-align: right; white-space: nowrap; }
+  .rank-fila > .rank-barra     { grid-area: barra; margin-top: 6px; }
 }
 
 /* Secciones con relleno lateral que encoge. */

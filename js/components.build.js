@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Correo.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Sistema.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 1bac3ef148c789d1
+// Huella de las fuentes: fba3252883e8d261
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -487,6 +487,10 @@ const ERRORES = {
   origin_not_allowed: "El servidor rechazó la petición por el dominio de origen. Añade el dominio real del sitio a 'allowed_origins' en api/config.php.",
   csrf_invalid: "Tu sesión caducó. Recarga la página y vuelve a intentarlo.",
   clave_incorrecta: "Esa clave no es la de este perfil.",
+  logo_requerido: "Sube el logo de tu producto: es lo que te identifica en el pasaporte de los visitantes.",
+  documento_invalido: "El documento de identidad debe ser sólo números.",
+  telefono_invalido: "El teléfono debe ser sólo números, entre 7 y 15 dígitos.",
+  nit_invalido: "El NIT debe ser sólo números.",
   clave_corta: "La clave debe tener al menos 6 caracteres.",
   internal_error: "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado."
 };
@@ -515,6 +519,99 @@ const Aviso = ({
       background: `color-mix(in oklch, ${color} 6%, var(--paper))`
     }
   }, children);
+};
+const CampoNumerico = ({
+  id,
+  etiqueta,
+  valor,
+  onCambio,
+  ayuda,
+  requerido = false,
+  maxLength = 20,
+  telefono = false,
+  placeholder
+}) => React.createElement("div", {
+  className: "field"
+}, React.createElement("label", {
+  htmlFor: id
+}, etiqueta, requerido ? " *" : ""), React.createElement("input", {
+  id: id,
+  value: valor,
+  required: requerido,
+  maxLength: maxLength,
+  inputMode: "numeric",
+  pattern: "[0-9]*",
+  autoComplete: telefono ? "tel" : "off",
+  placeholder: placeholder,
+  onChange: e => onCambio(e.target.value.replace(/\D+/g, "").slice(0, maxLength))
+}), ayuda && React.createElement("span", {
+  className: "ayuda"
+}, ayuda));
+const EstadoAlmacen = ({
+  compacto = false
+}) => {
+  const [info, setInfo] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [aviso, setAviso] = React.useState("");
+  const cargar = React.useCallback(() => {
+    if (!window.LMTApi || !window.LMTApi.infoUploads) return;
+    window.LMTApi.infoUploads().then(setInfo).catch(() => {});
+  }, []);
+  React.useEffect(cargar, [cargar]);
+  const reparar = async () => {
+    setBusy(true);
+    setAviso("");
+    try {
+      const r = await window.LMTApi.repararPermisosUploads();
+      setInfo(v => v ? {
+        ...v,
+        permisos: r.permisos
+      } : v);
+      setAviso(r.fallos > 0 ? `Corregidos ${r.archivos} archivos, pero ${r.fallos} no se pudieron cambiar: el usuario de PHP no es su dueño. Hay que hacerlo desde el panel del hosting.` : `Listo: ${r.archivos} archivo${r.archivos === 1 ? "" : "s"} y ${r.carpetas} carpeta${r.carpetas === 1 ? "" : "s"} con permisos de lectura.`);
+    } catch (err) {
+      setAviso(mensajeError(err, "No fue posible corregir los permisos."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!info) return null;
+  const perm = info.permisos || {
+    total: 0,
+    ilegibles: 0
+  };
+  return React.createElement("div", {
+    className: "ruta",
+    style: {
+      marginTop: compacto ? -8 : 12,
+      lineHeight: 1.7
+    }
+  }, "Las im\xE1genes se guardan en ", React.createElement("strong", null, info.dir), " · ", "se sirven desde ", React.createElement("strong", null, info.url_base), !info.escribible && React.createElement("span", {
+    style: {
+      color: "var(--bad)"
+    }
+  }, React.createElement("br", null), "Esa carpeta NO tiene permiso de escritura: las subidas fallar\xE1n."), !info.protegida && React.createElement("span", {
+    style: {
+      color: "var(--meh)"
+    }
+  }, React.createElement("br", null), "Falta el .htaccess que impide ejecutar c\xF3digo ah\xED; se crear\xE1 con la pr\xF3xima subida."), perm.ilegibles > 0 && React.createElement("span", {
+    style: {
+      color: "var(--bad)"
+    }
+  }, React.createElement("br", null), perm.ilegibles, " de ", perm.total, " im\xE1genes no las puede leer el servidor web: se subieron pero el navegador recibe un 403 y la previsualizaci\xF3n sale rota."), aviso && React.createElement("span", {
+    style: {
+      color: "var(--ink-2)"
+    }
+  }, React.createElement("br", null), aviso), React.createElement("br", null), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: reparar,
+    style: {
+      marginTop: 8,
+      padding: "6px 12px",
+      fontSize: 12
+    }
+  }, busy ? "Corrigiendo…" : "Corregir permisos de las imágenes"));
 };
 const usarPuerta = alEntrar => {
   const [correo, setCorreo] = React.useState(() => window.LMTPerfil && window.LMTPerfil.correoConocido() || "");
@@ -1064,7 +1161,9 @@ Object.assign(window, {
   MENU_PUBLICO,
   usarPuerta,
   PuertaCorreo,
-  InvitacionCorreo
+  InvitacionCorreo,
+  EstadoAlmacen,
+  CampoNumerico
 });
 })();
 
@@ -1478,6 +1577,11 @@ const AdminShell = ({
     label: "Administradores",
     sub: "Cuentas de acceso",
     path: "/admin/cuentas"
+  }, {
+    id: "sistema",
+    label: "Empezar de cero",
+    sub: "Borrar datos de prueba",
+    path: "/admin/sistema"
   }] : []);
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
@@ -1887,6 +1991,10 @@ const AdminPage = ({
   }, React.createElement(AdminCuentas, {
     user: user
   }));
+  if (section === "sistema") return React.createElement(AdminShell, {
+    active: "sistema",
+    user: user
+  }, React.createElement(SistemaPage, null));
   return React.createElement(AdminShell, {
     active: "stands",
     user: user
@@ -2251,14 +2359,14 @@ const StandEditor = ({
     value: form.correo,
     onChange: e => update("correo", e.target.value),
     maxLength: 254
+  })), React.createElement(CampoNumerico, {
+    id: "st-tel",
+    etiqueta: "Tel\xE9fono",
+    telefono: true,
+    maxLength: 15,
+    valor: form.telefono,
+    onCambio: v => update("telefono", v)
   })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Tel\xE9fono"), React.createElement("input", {
-    value: form.telefono,
-    onChange: e => update("telefono", e.target.value),
-    maxLength: 32,
-    inputMode: "tel"
-  }))), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Descripci\xF3n corta"), React.createElement("textarea", {
     value: form.descripcion,
@@ -2277,25 +2385,22 @@ const StandEditor = ({
     onChange: e => update("propietario", e.target.value),
     maxLength: 120,
     placeholder: "Nombre completo"
+  })), React.createElement(CampoNumerico, {
+    id: "st-doc",
+    etiqueta: "Documento del propietario",
+    valor: form.propietario_documento,
+    onCambio: v => update("propietario_documento", v)
   })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Documento del propietario"), React.createElement("input", {
-    value: form.propietario_documento,
-    onChange: e => update("propietario_documento", e.target.value),
-    maxLength: 32,
-    inputMode: "numeric"
-  }))), React.createElement("div", {
     className: "grid-2",
     style: {
       gap: 20
     }
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "NIT o RUT"), React.createElement("input", {
-    value: form.nit,
-    onChange: e => update("nit", e.target.value),
-    maxLength: 32
-  })), React.createElement("div", {
+  }, React.createElement(CampoNumerico, {
+    id: "st-nit",
+    etiqueta: "NIT o RUT",
+    valor: form.nit,
+    onCambio: v => update("nit", v)
+  }), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Sitio web o red social"), React.createElement("input", {
     type: "url",
@@ -2310,20 +2415,9 @@ const StandEditor = ({
     ruta: form.logo,
     almacen: almacen && almacen.dir,
     onSubir: subirLogo
-  }), almacen && React.createElement("div", {
-    className: "ruta",
-    style: {
-      marginTop: -8
-    }
-  }, "Las im\xE1genes se guardan en ", React.createElement("strong", null, almacen.dir), " · ", "se sirven desde ", React.createElement("strong", null, almacen.url_base), !almacen.escribible && React.createElement("span", {
-    style: {
-      color: "var(--bad)"
-    }
-  }, React.createElement("br", null), "Esa carpeta NO tiene permiso de escritura: las subidas fallar\xE1n."), !almacen.protegida && React.createElement("span", {
-    style: {
-      color: "var(--meh)"
-    }
-  }, React.createElement("br", null), "Falta el .htaccess que impide ejecutar c\xF3digo ah\xED; se crear\xE1 con la pr\xF3xima subida.")), React.createElement("div", null, React.createElement("div", {
+  }), React.createElement(EstadoAlmacen, {
+    compacto: true
+  }), React.createElement("div", null, React.createElement("div", {
     className: "mono",
     style: {
       marginBottom: 8
@@ -3187,6 +3281,7 @@ const VoteForm = ({
     return () => window.removeEventListener("lmt:festival", refrescar);
   }, []);
   const [submitError, setSubmitError] = React.useState("");
+  const [yaVoto, setYaVoto] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const emailRef = React.useRef(null);
   const update = (k, v) => setData(d => ({
@@ -3200,6 +3295,7 @@ const VoteForm = ({
   }, [needEmail]);
   const submitVote = async (emojiId, correo) => {
     setSubmitError("");
+    setYaVoto(false);
     setSubmitting(true);
     try {
       const payload = {
@@ -3223,7 +3319,10 @@ const VoteForm = ({
       onComplete(data);
     } catch (e) {
       const code = String(e && (e.code || e.message) || e);
-      if (code.includes("ya_votaste")) setSubmitError("Ya registraste un voto para este stand con ese correo.");else if (code.includes("rate_limited")) setSubmitError("Demasiados votos seguidos. Espera un momento e intenta de nuevo.");else if (code.includes("correo_invalido")) setSubmitError("El correo no es válido.");else if (code.includes("emoji_invalido")) setSubmitError("Selecciona una calificación.");else if (code.includes("stand_no_existe")) setSubmitError("Este stand ya no está disponible.");else if (code.includes("csrf")) setSubmitError("Sesión expirada. Recarga la página y vuelve a intentar.");else setSubmitError("No fue posible registrar tu voto. Intenta de nuevo.");
+      if (code.includes("ya_votaste")) {
+        setSubmitError("Ya registraste un voto para este stand con ese correo.");
+        setYaVoto(true);
+      } else if (code.includes("rate_limited")) setSubmitError("Demasiados votos seguidos. Espera un momento e intenta de nuevo.");else if (code.includes("correo_invalido")) setSubmitError("El correo no es válido.");else if (code.includes("emoji_invalido")) setSubmitError("Selecciona una calificación.");else if (code.includes("stand_no_existe")) setSubmitError("Este stand ya no está disponible.");else if (code.includes("csrf")) setSubmitError("Sesión expirada. Recarga la página y vuelve a intentar.");else setSubmitError("No fue posible registrar tu voto. Intenta de nuevo.");
       setSubmitting(false);
     }
   };
@@ -3386,6 +3485,11 @@ const VoteForm = ({
   }), React.createElement("span", {
     className: "ayuda"
   }, "En pesos. Sirve para el informe de ventas del festival."))), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 10
+    }
+  }, "\xBFC\xF3mo te pareci\xF3 nuestro espacio?"), React.createElement("div", {
     style: {
       display: "flex",
       gap: 10
@@ -3524,7 +3628,30 @@ const VoteForm = ({
       borderRadius: "var(--r-sm)",
       fontSize: 13
     }
-  }, submitError), React.createElement("p", {
+  }, submitError), yaVoto && React.createElement("div", {
+    style: {
+      marginTop: 14,
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, React.createElement("a", {
+    href: "/recorrido",
+    "data-route": true,
+    className: "btn btn-primary",
+    style: {
+      justifyContent: "center",
+      padding: 14
+    }
+  }, "Regresar a ver mi recorrido \u2192"), React.createElement("a", {
+    href: "/pasaporte",
+    "data-route": true,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      padding: 14
+    }
+  }, "Ver mi pasaporte")), React.createElement("p", {
     className: "mono",
     style: {
       textAlign: "center",
@@ -3540,6 +3667,7 @@ const VoteConfirm = ({
   onGoDashboard
 }) => {
   const [stamped, setStamped] = React.useState(false);
+  const volverAlRecorrido = React.useMemo(() => !!(window.LMTPerfil && window.LMTPerfil.correoConocido()), []);
   React.useEffect(() => {
     const t = setTimeout(() => setStamped(true), 250);
     return () => clearTimeout(t);
@@ -3612,14 +3740,23 @@ const VoteConfirm = ({
       flexDirection: "column",
       gap: 10
     }
-  }, React.createElement("button", {
+  }, React.createElement("a", {
+    href: volverAlRecorrido ? "/recorrido" : "/pasaporte",
+    "data-route": true,
     className: "btn btn-primary",
-    onClick: onGoPassport,
     style: {
       justifyContent: "center",
       padding: 14
     }
-  }, "Ver mi pasaporte \u2192"), React.createElement("button", {
+  }, volverAlRecorrido ? "Regresar a ver mi recorrido →" : "Ver mi pasaporte →"), React.createElement("a", {
+    href: volverAlRecorrido ? "/pasaporte" : "/recorrido",
+    "data-route": true,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center",
+      padding: 14
+    }
+  }, volverAlRecorrido ? "Ver mi pasaporte" : "Ver mi recorrido"), React.createElement("button", {
     className: "btn btn-ghost",
     onClick: onGoDashboard,
     style: {
@@ -5260,12 +5397,11 @@ const PublicDashboard = ({
       background: "var(--paper)"
     }
   }, React.createElement(PublicHeader, null), React.createElement(InvitacionCorreo, null), React.createElement("section", {
-    className: "lmt-three-wrap",
+    className: "lmt-three-wrap seccion",
+    "data-three-bg": true,
     ref: el => {
       if (el && window.LMTThree && !el.dataset.threeMounted) window.LMTThree.mount(el);
     },
-    "data-three-bg": true,
-    className: "seccion",
     style: {
       paddingTop: 48,
       paddingBottom: 32,
@@ -5587,7 +5723,7 @@ const PublicDashboard = ({
       marginTop: 2
     }
   }, (s.descripcion || "").slice(0, 80), s.descripcion && s.descripcion.length > 80 ? "…" : "")), React.createElement("div", {
-    className: "rank-meta",
+    className: "rank-meta rank-municipio",
     style: {
       fontSize: 13
     }
@@ -5599,7 +5735,7 @@ const PublicDashboard = ({
       fontSize: 24
     }
   }, calcScore(s.votos).toFixed(0)), React.createElement("div", {
-    className: "rank-meta",
+    className: "rank-meta rank-votos",
     style: {
       fontSize: 13,
       color: "var(--ink-2)"
@@ -5682,7 +5818,7 @@ const MapaNarino = ({
     style: {
       color: "var(--ink-3)"
     }
-  }, stands.length, " stands ubicados")), React.createElement("div", {
+  }, stands.length, " establecimientos / fincas")), React.createElement("div", {
     style: {
       aspectRatio: `${vw} / ${vh}`,
       position: "relative",
@@ -5790,9 +5926,55 @@ const PublicDetail = ({
   onBack,
   onVote
 }) => {
-  const commentsForStand = comentarios.filter(c => c.stand === stand.id);
+  const commentsForStand = comentarios.filter(c => c.stand === stand.id && (c.texto || "").trim());
   const rank = [...allStands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos)).findIndex(x => x.id === stand.id) + 1;
   const totalv = totalVotos(stand.votos) || 0;
+  const titulos = window.titulosEstrellas();
+  const [mio, setMio] = React.useState(null);
+  React.useEffect(() => {
+    const correo = window.LMTPerfil && window.LMTPerfil.correoConocido() || "";
+    if (!correo) return;
+    let vivo = true;
+    const intentar = async () => {
+      if (!vivo || !window.LMTApi || !window.LMTApi.enabled) return;
+      try {
+        const t = window.LMTPerfil && window.LMTPerfil.testigoDe(correo) || "";
+        const p = await window.LMTApi.getPasaporte(correo, t);
+        if (!vivo) return;
+        setMio({
+          visitado: (p.visitados || []).indexOf(stand.id) >= 0,
+          estrellas: (p.estrellas_mias || {})[stand.id] || null,
+          emoji: (p.valoraciones || {})[stand.id] || "",
+          cuando: (p.sellado_en || {})[stand.id] || ""
+        });
+      } catch (_) {}
+    };
+    intentar();
+    window.addEventListener("lmt:auth", intentar);
+    return () => {
+      vivo = false;
+      window.removeEventListener("lmt:auth", intentar);
+    };
+  }, [stand.id]);
+  const contacto = [stand.direccion && {
+    k: "Dirección",
+    v: stand.direccion
+  }, (stand.municipio || stand.region) && {
+    k: "Dónde",
+    v: [stand.municipio, stand.region].filter(Boolean).join(" · ")
+  }, stand.correo && {
+    k: "Correo",
+    v: stand.correo,
+    href: "mailto:" + stand.correo
+  }, stand.telefono && {
+    k: "Teléfono",
+    v: stand.telefono,
+    href: "tel:" + stand.telefono
+  }, stand.sitio_web && {
+    k: "Sitio web",
+    v: stand.sitio_web,
+    href: stand.sitio_web
+  }].filter(Boolean);
   return React.createElement("div", {
     style: {
       minHeight: "100dvh",
@@ -5841,7 +6023,7 @@ const PublicDetail = ({
     style: {
       marginTop: 24,
       display: "grid",
-      gridTemplateColumns: "repeat(3, 1fr)",
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))",
       gap: 14
     }
   }, [{
@@ -5879,6 +6061,81 @@ const PublicDetail = ({
       color: "var(--ink-3)"
     }
   }, m.sub)))), React.createElement("div", {
+    style: {
+      marginTop: 24,
+      padding: 18,
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 10
+    }
+  }, "Votaci\xF3n del festival"), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+      maxWidth: 340
+    }
+  }, ESTRELLA_CAMPOS.map(campo => React.createElement(EstrellasLectura, {
+    key: campo,
+    etiqueta: titulos[campo],
+    tam: 16,
+    valor: (stand.estrellas || {})[ESTRELLA_CLAVES[campo]]
+  }))), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 10,
+      color: "var(--ink-3)"
+    }
+  }, stand.estrellas && stand.estrellas.n || 0, " personas puntuaron con estrellas")), mio && mio.visitado && React.createElement("div", {
+    style: {
+      marginTop: 16,
+      padding: 18,
+      border: "1px solid var(--cafeto)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper-2)"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 10,
+      color: "var(--cafeto)"
+    }
+  }, "\u2713 Mi votaci\xF3n"), mio.estrellas ? React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+      maxWidth: 340
+    }
+  }, ESTRELLA_CAMPOS.map(campo => React.createElement(EstrellasLectura, {
+    key: campo,
+    etiqueta: titulos[campo],
+    tam: 16,
+    valor: mio.estrellas[ESTRELLA_CLAVES[campo]]
+  }))) : React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "var(--ink-2)"
+    }
+  }, "Votaste con un toque, sin estrellas."), mio.emoji && React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "var(--ink-2)",
+      marginTop: 8
+    }
+  }, "Tu calificaci\xF3n: ", React.createElement("strong", {
+    style: {
+      fontWeight: 500
+    }
+  }, {
+    bueno: "Excelente",
+    regular: "Regular",
+    malo: "Mejorable"
+  }[mio.emoji] || mio.emoji))), React.createElement("div", {
     style: {
       marginTop: 24,
       padding: 18,
@@ -5948,7 +6205,7 @@ const PublicDetail = ({
     }, pct.toFixed(0), "% \xB7 ", r.v));
   }))), React.createElement("aside", null, React.createElement("div", {
     style: {
-      aspectRatio: "1/1.3",
+      minHeight: 260,
       background: stand.color,
       borderRadius: "var(--r-md)",
       padding: 28,
@@ -5956,6 +6213,7 @@ const PublicDetail = ({
       display: "flex",
       flexDirection: "column",
       justifyContent: "space-between",
+      gap: 24,
       position: "relative",
       overflow: "hidden"
     }
@@ -5984,18 +6242,71 @@ const PublicDetail = ({
       marginTop: 4,
       opacity: 0.85
     }
-  }, stand.correo)), React.createElement("a", {
-    href: "/s/" + stand.id,
-    "data-route": true,
-    className: "btn",
+  }, stand.correo)), React.createElement("div", {
     style: {
-      background: "var(--paper)",
-      color: "var(--ink)",
-      justifyContent: "center",
-      padding: 14,
-      textDecoration: "none"
+      background: "rgba(255,255,255,0.15)",
+      borderRadius: "var(--r-sm)",
+      padding: "12px 14px",
+      fontSize: 13,
+      lineHeight: 1.55
     }
-  }, "Votar este stand \u2192")), React.createElement("div", {
+  }, mio && mio.visitado ? "Ya sellaste este stand en tu pasaporte." : "Para votar, escanea el código QR que está en el puesto. Así el sello dice que estuviste ahí.")), contacto.length > 0 && React.createElement("div", {
+    style: {
+      marginTop: 20,
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: 18
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 10
+    }
+  }, "Contacto"), contacto.map(c => React.createElement("div", {
+    key: c.k,
+    style: {
+      display: "flex",
+      gap: 10,
+      padding: "5px 0",
+      fontSize: 13,
+      alignItems: "baseline"
+    }
+  }, React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      flex: "0 0 80px"
+    }
+  }, c.k), React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      wordBreak: "break-word"
+    }
+  }, c.href ? React.createElement("a", {
+    href: c.href,
+    target: c.href.startsWith("http") ? "_blank" : undefined,
+    rel: "noopener",
+    style: {
+      color: "var(--cafeto)"
+    }
+  }, c.v) : c.v)))), typeof stand.lat === "number" && typeof stand.lng === "number" && React.createElement("div", {
+    style: {
+      marginTop: 20
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 10
+    }
+  }, "D\xF3nde queda"), React.createElement(SelectorUbicacion, {
+    lat: stand.lat,
+    lng: stand.lng,
+    municipio: stand.municipio,
+    alto: 260,
+    soloLectura: true,
+    onCambio: () => {}
+  })), React.createElement("div", {
     style: {
       marginTop: 20
     }
@@ -6548,6 +6859,10 @@ const PromotorRegistroPage = () => {
       setError("Indica el municipio de tu stand.");
       return;
     }
+    if (!logo) {
+      setError(ERRORES.logo_requerido);
+      return;
+    }
     if (!acepta) {
       setError(ERRORES.debe_aceptar_tratamiento_datos);
       return;
@@ -6696,30 +7011,21 @@ const PromotorRegistroPage = () => {
     autoComplete: "name"
   })), React.createElement("div", {
     className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", {
-    htmlFor: "in-doc"
-  }, "Documento de identidad"), React.createElement("input", {
+  }, React.createElement(CampoNumerico, {
     id: "in-doc",
-    value: form.documento,
-    onChange: e => set("documento", e.target.value),
-    maxLength: 32,
-    inputMode: "numeric"
-  }), React.createElement("span", {
-    className: "ayuda"
-  }, "C\xE9dula del propietario, sin puntos.")), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", {
-    htmlFor: "in-tel"
-  }, "Tel\xE9fono"), React.createElement("input", {
+    etiqueta: "Documento de identidad",
+    valor: form.documento,
+    onCambio: v => set("documento", v),
+    ayuda: "C\xE9dula del propietario, s\xF3lo n\xFAmeros."
+  }), React.createElement(CampoNumerico, {
     id: "in-tel",
-    value: form.telefono,
-    onChange: e => set("telefono", e.target.value),
-    maxLength: 32,
-    inputMode: "tel",
-    autoComplete: "tel"
-  }))), React.createElement("div", {
+    etiqueta: "Tel\xE9fono",
+    telefono: true,
+    maxLength: 15,
+    valor: form.telefono,
+    onCambio: v => set("telefono", v),
+    ayuda: "S\xF3lo n\xFAmeros, sin espacios ni guiones."
+  })), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "in-email"
@@ -6787,18 +7093,13 @@ const PromotorRegistroPage = () => {
     placeholder: "Vereda El Ingenio"
   })), React.createElement("div", {
     className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", {
-    htmlFor: "in-nit"
-  }, "NIT o RUT"), React.createElement("input", {
+  }, React.createElement(CampoNumerico, {
     id: "in-nit",
-    value: form.stand_nit,
-    onChange: e => set("stand_nit", e.target.value),
-    maxLength: 32
-  }), React.createElement("span", {
-    className: "ayuda"
-  }, "Si est\xE1s constituido como empresa.")), React.createElement("div", {
+    etiqueta: "NIT o RUT",
+    valor: form.stand_nit,
+    onCambio: v => set("stand_nit", v),
+    ayuda: "Si est\xE1s constituido como empresa. S\xF3lo n\xFAmeros, con el d\xEDgito de verificaci\xF3n al final."
+  }), React.createElement("div", {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "in-web"
@@ -6830,11 +7131,16 @@ const PromotorRegistroPage = () => {
     className: "ayuda"
   }, "Se muestra en la ficha p\xFAblica de tu stand.")), React.createElement(SubirImagen, {
     actual: logo ? urlImagen(logo) : "",
-    etiqueta: "Logo de tu producto",
+    etiqueta: "Logo de tu producto *",
     cuadrada: true,
     ruta: logo,
     onSubir: subirLogo
-  })), React.createElement(BloqueForm, {
+  }), !logo && React.createElement("span", {
+    className: "ayuda",
+    style: {
+      color: "var(--meh)"
+    }
+  }, "Hace falta para terminar la inscripci\xF3n: con \xE9l se te reconoce en el pasaporte de los visitantes y en la lista del festival.")), React.createElement(BloqueForm, {
     titulo: "\xBFD\xF3nde est\xE1s?",
     nota: "Toca el mapa de Nari\xF1o donde queda tu finca o tu negocio. Al marcarlo se completa solo el municipio. Es opcional, pero ayuda a los visitantes a encontrarte y al festival a saber de qu\xE9 zonas viene el caf\xE9."
   }, React.createElement(SelectorUbicacion, {
@@ -7650,13 +7956,12 @@ const EmpresaEditor = ({
     required: true
   })), React.createElement("div", {
     className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "NIT"), React.createElement("input", {
-    value: form.nit || "",
-    onChange: e => set("nit", e.target.value),
-    maxLength: 32
-  })), React.createElement(SelectorMunicipio, {
+  }, React.createElement(CampoNumerico, {
+    id: "emp-nit",
+    etiqueta: "NIT",
+    valor: form.nit || "",
+    onCambio: v => set("nit", v)
+  }), React.createElement(SelectorMunicipio, {
     id: "emp-mun",
     valor: form.municipio || "",
     requerido: true,
@@ -7669,14 +7974,14 @@ const EmpresaEditor = ({
     maxLength: 255
   })), React.createElement("div", {
     className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Tel\xE9fono"), React.createElement("input", {
-    value: form.telefono || "",
-    onChange: e => set("telefono", e.target.value),
-    maxLength: 32,
-    inputMode: "tel"
-  })), React.createElement("div", {
+  }, React.createElement(CampoNumerico, {
+    id: "emp-tel",
+    etiqueta: "Tel\xE9fono",
+    telefono: true,
+    maxLength: 15,
+    valor: form.telefono || "",
+    onCambio: v => set("telefono", v)
+  }), React.createElement("div", {
     className: "field"
   }, React.createElement("label", null, "Sitio web"), React.createElement("input", {
     value: form.sitio_web || "",
@@ -7787,21 +8092,19 @@ const PerfilEditor = ({
     required: true
   })), React.createElement("div", {
     className: "grid-2"
-  }, React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Tel\xE9fono"), React.createElement("input", {
-    value: form.telefono,
-    onChange: e => set("telefono", e.target.value),
-    maxLength: 32,
-    inputMode: "tel"
-  })), React.createElement("div", {
-    className: "field"
-  }, React.createElement("label", null, "Documento"), React.createElement("input", {
-    value: form.documento,
-    onChange: e => set("documento", e.target.value),
-    maxLength: 32,
-    inputMode: "numeric"
-  }))), React.createElement(SelectorMunicipio, {
+  }, React.createElement(CampoNumerico, {
+    id: "pr-tel",
+    etiqueta: "Tel\xE9fono",
+    telefono: true,
+    maxLength: 15,
+    valor: form.telefono,
+    onCambio: v => set("telefono", v)
+  }), React.createElement(CampoNumerico, {
+    id: "pr-doc",
+    etiqueta: "Documento",
+    valor: form.documento,
+    onCambio: v => set("documento", v)
+  })), React.createElement(SelectorMunicipio, {
     id: "pr-mun",
     valor: form.municipio,
     requerido: true,
@@ -7858,6 +8161,180 @@ const PromotorPage = () => {
     onSalir: salir
   });
 };
+const RevisionInscripcion = ({
+  id,
+  onAprobar,
+  onCerrar,
+  ocupado
+}) => {
+  const [datos, setDatos] = React.useState(null);
+  const [error, setError] = React.useState("");
+  React.useEffect(() => {
+    let vivo = true;
+    window.LMTApi.verPromotor(id).then(d => {
+      if (vivo) setDatos(d);
+    }).catch(e => {
+      if (vivo) setError(mensajeError(e, "No fue posible cargar la inscripción."));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [id]);
+  if (error) return React.createElement(Aviso, null, error);
+  if (!datos) return React.createElement("div", {
+    className: "splash"
+  }, "Cargando la ficha\u2026");
+  const p = datos.promotor || {};
+  const b = datos.stand_borrador || {};
+  const g = datos.gestion || {};
+  const fila = (k, v) => v ? React.createElement("div", {
+    key: k,
+    style: {
+      display: "flex",
+      gap: 12,
+      padding: "6px 0",
+      borderBottom: "1px solid var(--line)",
+      fontSize: 13
+    }
+  }, React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      flex: "0 0 150px"
+    }
+  }, k), React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      wordBreak: "break-word"
+    }
+  }, v)) : null;
+  return React.createElement("div", {
+    style: {
+      border: "2px solid var(--ink)",
+      borderRadius: "var(--r-md)",
+      padding: 22,
+      margin: "18px 0",
+      background: "var(--paper)"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 4
+    }
+  }, "Revisar antes de aprobar"), React.createElement("h2", {
+    className: "titulo-xl",
+    style: {
+      margin: "0 0 4px"
+    }
+  }, b.nombre || p.nombre), React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: "var(--ink-2)",
+      lineHeight: 1.6,
+      margin: "0 0 18px",
+      maxWidth: 620
+    }
+  }, "Al aprobar, esto se convierte en el stand del festival tal cual est\xE1: el nombre y la descripci\xF3n los ver\xE1 el p\xFAblico, y el logo saldr\xE1 en el pasaporte de cada visitante. Si algo est\xE1 mal, es mejor rechazarlo con el motivo y que lo vuelva a enviar."), React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+      gap: 24
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "La persona"), fila("Nombre", p.nombre), fila("Documento", p.documento), fila("Correo", p.email), fila("Teléfono", p.telefono), fila("Cómo entrará", ACCESO_FRASE[g.acceso_metodo] || "la contraseña que le enviemos"), fila("Se inscribió", g.created_at), g.mensaje && React.createElement("p", {
+    style: {
+      fontSize: 13,
+      marginTop: 10,
+      fontStyle: "italic",
+      fontFamily: "var(--font-display)",
+      color: "var(--ink-2)"
+    }
+  }, "\u201C", g.mensaje, "\u201D")), React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "El stand que se crear\xE1"), fila("Nombre", b.nombre), fila("Municipio", b.municipio), fila("Región", b.region), fila("Dirección", b.direccion), fila("NIT", b.nit), fila("Sitio web", b.sitio_web), fila("Ubicación", b.lat != null ? b.lat.toFixed(5) + ", " + b.lng.toFixed(5) : "sin marcar en el mapa"), b.descripcion && React.createElement("p", {
+    style: {
+      fontSize: 13,
+      marginTop: 10,
+      color: "var(--ink-2)",
+      lineHeight: 1.6
+    }
+  }, b.descripcion)), React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "Logo"), b.logo ? React.createElement("a", {
+    href: urlImagen(b.logo),
+    target: "_blank",
+    rel: "noopener"
+  }, React.createElement("img", {
+    src: urlImagen(b.logo),
+    alt: "Logo del stand",
+    style: {
+      width: 150,
+      height: 150,
+      objectFit: "cover",
+      borderRadius: "var(--r-md)",
+      border: "1px solid var(--line)"
+    }
+  })) : React.createElement(Placeholder, {
+    width: 150,
+    height: 150,
+    label: "sin logo"
+  }), !b.logo && React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: "var(--meh)",
+      marginTop: 8,
+      lineHeight: 1.5
+    }
+  }, "Se inscribi\xF3 antes de que el logo fuera obligatorio. Su tarjeta y su hoja del pasaporte saldr\xE1n con la inicial."))), b.lat != null && React.createElement("div", {
+    style: {
+      marginTop: 20
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "D\xF3nde queda"), React.createElement(SelectorUbicacion, {
+    lat: b.lat,
+    lng: b.lng,
+    municipio: b.municipio,
+    alto: 260,
+    soloLectura: true,
+    onCambio: () => {}
+  })), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 22,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("button", {
+    className: "btn btn-primary",
+    disabled: ocupado,
+    onClick: onAprobar,
+    style: {
+      justifyContent: "center"
+    }
+  }, ocupado ? "Aprobando…" : "✓ Aprobar y crear el stand"), React.createElement("button", {
+    className: "btn btn-ghost",
+    disabled: ocupado,
+    onClick: onCerrar,
+    style: {
+      justifyContent: "center"
+    }
+  }, "Cerrar sin aprobar")));
+};
 const AdminPromotores = ({
   stands
 }) => {
@@ -7868,6 +8345,7 @@ const AdminPromotores = ({
   const [aviso, setAviso] = React.useState(null);
   const [ocupado, setOcupado] = React.useState(0);
   const [qr, setQr] = React.useState(null);
+  const [revisando, setRevisando] = React.useState(null);
   const cargar = React.useCallback(async estado => {
     setCargando(true);
     try {
@@ -7898,12 +8376,21 @@ const AdminPromotores = ({
       setOcupado(0);
     }
   };
-  const verificar = p => accion(p.id, () => window.LMTApi.verificarPromotor(p.id), res => res.correo_enviado ? {
-    tipo: "ok",
-    texto: `Verificado. La contraseña temporal salió hacia ${p.email}.`
-  } : {
-    tipo: "error",
-    texto: `Verificado, pero el correo NO pudo enviarse. Entrega esta clave a ${p.email} por un canal seguro: ${res.clave_temporal}`
+  const verificar = p => accion(p.id, () => window.LMTApi.verificarPromotor(p.id), res => {
+    setRevisando(null);
+    if (res.acceso_propio) {
+      return {
+        tipo: res.correo_enviado ? "ok" : "error",
+        texto: res.correo_enviado ? `Aprobado. El stand ya existe y ${p.email} entra con ${ACCESO_FRASE[res.acceso_propio] || "su acceso"}.` : res.aviso || "Aprobado, pero el correo no pudo enviarse."
+      };
+    }
+    return res.correo_enviado ? {
+      tipo: "ok",
+      texto: `Aprobado. El stand ya existe y la contraseña temporal salió hacia ${p.email}.`
+    } : {
+      tipo: "error",
+      texto: `Aprobado, pero el correo NO pudo enviarse. Entrega esta clave a ${p.email} por un canal seguro: ${res.clave_temporal}`
+    };
   });
   const reenviar = p => accion(p.id, () => window.LMTApi.reenviarClave(p.id), res => res.correo_enviado ? {
     tipo: "ok",
@@ -7937,10 +8424,6 @@ const AdminPromotores = ({
   const suspender = p => accion(p.id, () => window.LMTApi.cambiarEstadoPromotor(p.id, p.estado === "suspendido" ? "activo" : "suspendido"), () => ({
     tipo: "ok",
     texto: p.estado === "suspendido" ? "Cuenta reactivada." : "Cuenta suspendida."
-  }));
-  const vincular = (p, standId) => accion(p.id, () => window.LMTApi.vincularStand(p.id, standId), () => ({
-    tipo: "ok",
-    texto: standId ? "Promotor vinculado al stand." : "Vínculo con el stand eliminado."
   }));
   const filtros = [{
     id: "",
@@ -8022,7 +8505,15 @@ const AdminPromotores = ({
       justifyContent: "center",
       width: "100%"
     }
-  }, "Ya lo entregu\xE9, cerrar"))), cargando ? React.createElement("div", {
+  }, "Ya lo entregu\xE9, cerrar"))), revisando && React.createElement(RevisionInscripcion, {
+    id: revisando,
+    ocupado: ocupado === revisando,
+    onCerrar: () => setRevisando(null),
+    onAprobar: () => {
+      const p = lista.find(x => x.id === revisando);
+      if (p) verificar(p);
+    }
+  }), cargando ? React.createElement("div", {
     className: "splash"
   }, "Cargando\u2026") : lista.length === 0 ? React.createElement("div", {
     style: {
@@ -8133,12 +8624,12 @@ const AdminPromotores = ({
   }, p.estado === "pendiente" && React.createElement("button", {
     className: "btn btn-primary",
     disabled: ocupado === p.id,
-    onClick: () => verificar(p),
+    onClick: () => setRevisando(revisando === p.id ? null : p.id),
     style: {
       justifyContent: "center",
       opacity: ocupado === p.id ? 0.6 : 1
     }
-  }, ocupado === p.id ? "Enviando…" : "✓ Verificar y enviar clave"), (p.estado === "verificado" || p.estado === "activo") && React.createElement("button", {
+  }, revisando === p.id ? "Cerrar la ficha" : "Revisar la inscripción →"), (p.estado === "verificado" || p.estado === "activo") && React.createElement("button", {
     className: "btn btn-ghost",
     disabled: ocupado === p.id,
     onClick: () => reenviar(p),
@@ -8168,29 +8659,17 @@ const AdminPromotores = ({
     style: {
       justifyContent: "center"
     }
-  }, p.estado === "suspendido" ? "Reactivar" : "Suspender"), React.createElement("label", {
-    className: "field",
+  }, p.estado === "suspendido" ? "Reactivar" : "Suspender"), p.stand_id && React.createElement("a", {
+    href: "/admin/stands/" + p.stand_id + "/edit",
+    "data-route": true,
+    className: "mono",
     style: {
-      marginTop: 4
+      marginTop: 4,
+      color: "var(--ink-3)",
+      textDecoration: "underline",
+      textAlign: "center"
     }
-  }, React.createElement("span", {
-    className: "mono"
-  }, "Stand vinculado"), React.createElement("select", {
-    value: p.stand_id || "",
-    disabled: ocupado === p.id,
-    onChange: e => vincular(p, e.target.value),
-    style: {
-      border: "1px solid var(--line-2)",
-      borderRadius: "var(--r-sm)",
-      padding: "7px 8px",
-      background: "var(--paper)"
-    }
-  }, React.createElement("option", {
-    value: ""
-  }, "\u2014 sin vincular \u2014"), (stands || []).map(s => React.createElement("option", {
-    key: s.id,
-    value: s.id
-  }, s.nombre))))))))));
+  }, "Su stand: ", p.stand_id, " \xB7 editar")))))));
 };
 const AdminCorreos = () => {
   const [lista, setLista] = React.useState([]);
@@ -8264,6 +8743,7 @@ Object.assign(window, {
   PromotorPortalPage,
   PromotorPage,
   AdminPromotores,
+  RevisionInscripcion,
   AdminCorreos,
   EstadoPill,
   TarjetaQrAcceso
@@ -10194,6 +10674,66 @@ Object.assign(window, {
 
 /* components/Festival.jsx */
 (function () {
+const Miniatura = ({
+  url,
+  alto = 130,
+  vacio = "Diseño del sistema"
+}) => {
+  const [estado, setEstado] = React.useState("cargando");
+  React.useEffect(() => {
+    setEstado(url ? "cargando" : "vacio");
+  }, [url]);
+  return React.createElement("div", null, React.createElement("div", {
+    style: {
+      height: alto,
+      borderRadius: "var(--r-sm)",
+      overflow: "hidden",
+      border: "1px dashed var(--line-2)",
+      background: estado === "error" ? "color-mix(in oklch, var(--bad) 8%, var(--paper))" : "var(--paper-2)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, url ? React.createElement("img", {
+    src: url,
+    alt: "",
+    onLoad: () => setEstado("ok"),
+    onError: () => setEstado("error"),
+    style: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+      display: estado === "ok" ? "block" : "none"
+    }
+  }) : React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      textAlign: "center",
+      padding: 10
+    }
+  }, vacio), url && estado === "cargando" && React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)"
+    }
+  }, "Cargando\u2026"), url && estado === "error" && React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--bad)",
+      textAlign: "center",
+      padding: 10,
+      lineHeight: 1.5
+    }
+  }, "Subida, pero el servidor no la entrega")), estado === "error" && React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: "var(--bad)",
+      lineHeight: 1.5,
+      marginTop: 6
+    }
+  }, "El archivo est\xE1 guardado pero el navegador recibe un error al pedirlo. Suele ser permisos: usa \xABCorregir permisos de las im\xE1genes\xBB aqu\xED abajo."));
+};
 const FondoRanura = ({
   titulo,
   ayuda,
@@ -10214,32 +10754,11 @@ const FondoRanura = ({
   }
 }, titulo), React.createElement("div", {
   style: {
-    height: 130,
-    borderRadius: "var(--r-sm)",
-    overflow: "hidden",
-    marginBottom: 10,
-    border: "1px dashed var(--line-2)",
-    background: "var(--paper-2)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center"
+    marginBottom: 10
   }
-}, url ? React.createElement("img", {
-  src: url,
-  alt: "",
-  style: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover"
-  }
-}) : React.createElement("span", {
-  className: "mono",
-  style: {
-    color: "var(--ink-3)",
-    textAlign: "center",
-    padding: 10
-  }
-}, "Dise\xF1o del sistema")), ayuda && React.createElement("p", {
+}, React.createElement(Miniatura, {
+  url: url
+})), ayuda && React.createElement("p", {
   className: "mono",
   style: {
     color: "var(--ink-3)",
@@ -10281,6 +10800,7 @@ const FestivalPage = () => {
   const [error, setError] = React.useState("");
   const [ok, setOk] = React.useState("");
   const [subiendo, setSubiendo] = React.useState("");
+  const [aplicando, setAplicando] = React.useState(false);
   React.useEffect(() => {
     let cancelado = false;
     const cargar = async () => {
@@ -10345,6 +10865,22 @@ const FestivalPage = () => {
       if (window.LMTFestival) await window.LMTFestival.cargar();
     } catch (e) {
       setError(mensajeError(e));
+    }
+  };
+  const aplicar = async () => {
+    setError("");
+    setOk("");
+    setAplicando(true);
+    try {
+      const d = await window.LMTApi.festivalAjustes();
+      setAj(d);
+      if (window.LMTFestival) await window.LMTFestival.cargar();
+      const n = (d.pasaporte && d.pasaporte.hojas || []).length;
+      setOk(`Aplicado. El pasaporte usa ${n === 0 ? "el papel del sistema" : n + (n === 1 ? " imagen" : " imágenes") + " en las hojas internas"}${d.pasaporte && d.pasaporte.portada ? ", con portada propia" : ""}.`);
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setAplicando(false);
     }
   };
   const hojas = aj.pasaporte && aj.pasaporte.hojas || [];
@@ -10491,15 +11027,10 @@ const FestivalPage = () => {
       borderRadius: "var(--r-sm)",
       overflow: "hidden"
     }
-  }, React.createElement("img", {
-    src: urlImagen(h),
-    alt: "",
-    style: {
-      width: "100%",
-      height: 96,
-      objectFit: "cover",
-      display: "block"
-    }
+  }, React.createElement(Miniatura, {
+    url: urlImagen(h),
+    alto: 96,
+    vacio: "sin imagen"
   }), React.createElement("div", {
     style: {
       display: "flex",
@@ -10544,10 +11075,264 @@ const FestivalPage = () => {
       e.target.value = "";
       if (f) subirFondo("hojas", f);
     }
-  }))));
+  }))), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap",
+      alignItems: "center",
+      marginTop: 22
+    }
+  }, React.createElement("button", {
+    className: "btn btn-primary",
+    disabled: aplicando,
+    onClick: aplicar,
+    style: {
+      justifyContent: "center"
+    }
+  }, aplicando ? "Aplicando…" : "Guardar y aplicar al pasaporte"), React.createElement("a", {
+    href: "/pasaporte",
+    "data-route": true,
+    className: "btn btn-ghost",
+    style: {
+      justifyContent: "center"
+    }
+  }, "Ver el pasaporte \u2192")), React.createElement(EstadoAlmacen, null));
 };
 Object.assign(window, {
-  FestivalPage
+  FestivalPage,
+  Miniatura,
+  FondoRanura
+});
+})();
+
+/* components/Sistema.jsx */
+(function () {
+const AMBITOS = [{
+  id: "votos",
+  titulo: "Votos y pasaportes",
+  nota: "Todos los votos, los pasaportes que crearon y los contadores de cada stand. Los stands se quedan."
+}, {
+  id: "visitantes",
+  titulo: "Visitantes",
+  nota: "La caracterización voluntaria del público, sus fotos y sus claves de perfil."
+}, {
+  id: "promotores",
+  titulo: "Promotores",
+  nota: "Las inscripciones, sus empresas y sus productos. Los stands que ya se crearon NO se borran aquí."
+}, {
+  id: "stands",
+  titulo: "Stands",
+  nota: "El catálogo entero. Arrastra los votos y los pasaportes, porque quedarían apuntando a puestos que ya no existen.",
+  peligro: true
+}, {
+  id: "correos",
+  titulo: "Bitácora de correos",
+  nota: "El registro de los mensajes enviados. No afecta a nadie, sólo limpia el historial de las pruebas."
+}];
+const SistemaPage = () => {
+  const [info, setInfo] = React.useState(null);
+  const [sel, setSel] = React.useState({});
+  const [frase, setFrase] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [hecho, setHecho] = React.useState(null);
+  const cargar = React.useCallback(() => {
+    window.LMTApi.inventarioSistema().then(setInfo).catch(e => setError(mensajeError(e, "No fue posible leer el estado del sistema.")));
+  }, []);
+  React.useEffect(cargar, [cargar]);
+  const elegidos = AMBITOS.filter(a => sel[a.id]).map(a => a.id);
+  const fraseOk = info && frase === info.frase;
+  const reiniciar = async () => {
+    setError("");
+    setHecho(null);
+    setBusy(true);
+    try {
+      const r = await window.LMTApi.reiniciarSistema(elegidos, frase);
+      setHecho(r);
+      setInfo(v => v ? {
+        ...v,
+        inventario: r.inventario
+      } : v);
+      setSel({});
+      setFrase("");
+    } catch (e) {
+      setError(mensajeError(e, "No fue posible poner el sistema a cero."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const inv = info && info.inventario || {};
+  const cuenta = k => inv[k] === undefined ? "—" : inv[k].toLocaleString();
+  return React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement("div", {
+    style: {
+      marginBottom: 24
+    }
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Sistema \xB7 Puesta a cero"), React.createElement("h1", {
+    className: "titulo-xl"
+  }, "Empezar de cero"), React.createElement("p", {
+    style: {
+      color: "var(--ink-2)",
+      fontSize: 14,
+      lineHeight: 1.6,
+      marginTop: 10,
+      maxWidth: 640
+    }
+  }, "Borra los datos de ejemplo y de las pruebas para dejar el festival listo antes de abrir al p\xFAblico. ", React.createElement("strong", null, "Las cuentas de administraci\xF3n nunca se tocan"), ": si se borraran, nadie podr\xEDa volver a entrar a arreglarlo.")), React.createElement(Aviso, null, error), hecho && React.createElement(Aviso, {
+    tipo: "ok"
+  }, "Listo. ", Object.entries(hecho.borrado || {}).filter(([, n]) => n > 0).map(([k, n]) => `${k}: ${n}`).join(" · ") || "no había nada que borrar", "."), React.createElement("div", {
+    style: {
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-md)",
+      padding: 20,
+      marginTop: 18
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 12
+    }
+  }, "Qu\xE9 hay ahora en la base"), React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+      gap: 14
+    }
+  }, [["Stands", "stands"], ["Votos", "votos"], ["Pasaportes", "pasaportes"], ["Promotores", "promotores"], ["Empresas", "empresas"], ["Productos", "productos"], ["Visitantes", "visitantes"], ["Correos", "correos"], ["Administradores", "admins"]].map(([label, k]) => React.createElement("div", {
+    key: k
+  }, React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 28,
+      lineHeight: 1
+    }
+  }, cuenta(k)), React.createElement("div", {
+    className: "mono",
+    style: {
+      marginTop: 4,
+      color: k === "admins" ? "var(--good)" : "var(--ink-3)"
+    }
+  }, label, k === "admins" ? " · intactos" : ""))))), React.createElement("div", {
+    style: {
+      marginTop: 24
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 12
+    }
+  }, "Qu\xE9 quieres borrar"), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, AMBITOS.map(a => React.createElement("label", {
+    key: a.id,
+    style: {
+      display: "flex",
+      gap: 12,
+      alignItems: "flex-start",
+      padding: "14px 16px",
+      border: "1px solid " + (sel[a.id] ? "var(--bad)" : "var(--line-2)"),
+      borderRadius: "var(--r-md)",
+      cursor: "pointer",
+      background: sel[a.id] ? "color-mix(in oklch, var(--bad) 5%, var(--paper))" : "var(--paper)"
+    }
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: !!sel[a.id],
+    style: {
+      marginTop: 3
+    },
+    onChange: e => setSel(v => ({
+      ...v,
+      [a.id]: e.target.checked
+    }))
+  }), React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, React.createElement("span", {
+    style: {
+      fontWeight: 500,
+      display: "block"
+    }
+  }, a.titulo, a.peligro && React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--bad)",
+      marginLeft: 8
+    }
+  }, "arrastra m\xE1s cosas")), React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: "var(--ink-2)",
+      lineHeight: 1.5,
+      display: "block",
+      marginTop: 3
+    }
+  }, a.nota)))))), elegidos.length > 0 && React.createElement("div", {
+    style: {
+      marginTop: 24,
+      padding: 20,
+      border: "2px solid var(--bad)",
+      borderRadius: "var(--r-md)"
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      color: "var(--bad)",
+      marginBottom: 10
+    }
+  }, "Esto no se puede deshacer"), React.createElement("p", {
+    style: {
+      fontSize: 14,
+      lineHeight: 1.6,
+      color: "var(--ink-2)",
+      margin: "0 0 14px"
+    }
+  }, "No hay papelera ni \xABdeshacer\xBB. Si quieres poder volver atr\xE1s, haz antes una copia de la base de datos desde el panel de tu hosting."), React.createElement("div", {
+    className: "field",
+    style: {
+      maxWidth: 320
+    }
+  }, React.createElement("label", {
+    htmlFor: "sis-frase"
+  }, "Escribe ", React.createElement("strong", null, info && info.frase), " para confirmar"), React.createElement("input", {
+    id: "sis-frase",
+    value: frase,
+    onChange: e => setFrase(e.target.value),
+    autoComplete: "off",
+    spellCheck: false,
+    placeholder: info && info.frase
+  })), React.createElement("button", {
+    className: "btn btn-primary",
+    disabled: !fraseOk || busy,
+    onClick: reiniciar,
+    style: {
+      marginTop: 16,
+      justifyContent: "center",
+      background: fraseOk ? "var(--bad)" : "var(--line-2)",
+      borderColor: fraseOk ? "var(--bad)" : "var(--line-2)",
+      opacity: busy ? 0.6 : 1
+    }
+  }, busy ? "Borrando…" : `Borrar ${elegidos.length} ${elegidos.length === 1 ? "conjunto" : "conjuntos"} de datos`)), React.createElement("p", {
+    className: "ruta",
+    style: {
+      marginTop: 26,
+      lineHeight: 1.7
+    }
+  }, "Despu\xE9s de una puesta a cero conviene volver a generar los c\xF3digos QR de los stands nuevos desde ", React.createElement("strong", null, "C\xF3digos QR"), ", y comprobar el env\xEDo de correo desde ", React.createElement("strong", null, "Correo"), "."));
+};
+Object.assign(window, {
+  SistemaPage
 });
 })();
 
@@ -11363,6 +12148,16 @@ const App = () => {
   if (route.path === "/admin/caracterizacion") {
     return React.createElement(AdminPage, {
       section: "caracterizacion",
+      user: user,
+      stands: stands
+    });
+  }
+  if (route.path === "/admin/sistema") {
+    if (user.rol !== "propietario") return React.createElement(NotFound, {
+      back: "/admin"
+    });
+    return React.createElement(AdminPage, {
+      section: "sistema",
       user: user,
       stands: stands
     });

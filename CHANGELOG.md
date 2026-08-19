@@ -7,6 +7,98 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.5.0 — Los datos entran bien y el festival se camina
+
+**Punto de reversión (v2.4.0):** `8c84b92`
+
+### Las imágenes que se subían y no se veían
+
+Los logos se guardaban con permisos `0640` y las carpetas con `0750`. En un
+hosting compartido —Plesk, cPanel— **PHP escribe con un usuario y Apache sirve
+los archivos estáticos con otro**, así que la subida terminaba bien y el
+navegador recibía un 403: la previsualización salía rota y no había forma de
+distinguirlo de «no se subió». Ahora van a `0644` y `0755`, que es lo que
+corresponde a imágenes públicas a las que se llega por su URL.
+
+Eso arregla las subidas nuevas. Para las que ya estaban, el panel gana
+**«Corregir permisos de las imágenes»**, que las repasa todas y dice cuántas
+no pudo cambiar. Y las previsualizaciones ahora distinguen los tres casos: sin
+imagen, cargando, y **subida pero el servidor no la entrega**.
+
+### El voto sólo se hace en el stand
+
+La ficha de un stand (`/festival/{id}`) tenía un botón «Votar este stand». Con
+él, el pasaporte se llenaba entero desde el sofá y el festival dejaba de ser un
+recorrido. Ese botón ya no está: **se vota escaneando el QR pegado en el
+puesto**, y la ficha lo explica en vez de esconderlo.
+
+A cambio, la ficha enseña lo que sí tiene sentido mirar desde casa: contacto,
+dónde queda en el mapa, la votación de todo el festival y —si esta persona ya
+votó ahí— la suya, cada una con su título.
+
+### El formulario de inscripción
+
+- **Documento, teléfono y NIT sólo aceptan números**, y se guardan sólo
+  dígitos. Se filtra al escribir, no al enviar: un aviso al final obliga a
+  volver arriba, y en un formulario largo rellenado en el móvil eso es media
+  inscripción perdida. Un campo mal escrito ya no se guarda como vacío sin
+  decir nada.
+- **El logo pasa a ser obligatorio.** Es lo que identifica al stand en «Mi
+  recorrido» y bajo el sello del pasaporte; pedirlo después, cuando el
+  caficultor ya se fue, no lo consigue nadie.
+
+### Aprobar una inscripción
+
+Aprobar crea el stand tal cual, y hasta ahora eso se veía después, ya
+publicado. Ahora hay un paso intermedio: **«Revisar la inscripción»** enseña la
+ficha completa —la persona, el stand que va a nacer, el logo y el punto en el
+mapa— y desde ahí se aprueba.
+
+Y **desaparece «Stand vinculado»**, el desplegable que dejaba enganchar un
+promotor a cualquier stand de la lista. Partía de una idea equivocada: un
+promotor y su stand no son dos cosas que emparejar, son la misma. El vínculo lo
+crea la aprobación; poder cambiarlo a mano sólo servía para dejar dos
+promotores en el mismo puesto.
+
+### Empezar de cero
+
+Nueva sección del panel (`/admin/sistema`), sólo para el **propietario**: borra
+los datos de ejemplo y de las pruebas para dejar el festival limpio antes de
+abrir. Se elige qué se va —votos, visitantes, promotores, stands, bitácora—,
+se ve cuánto hay de cada cosa antes de decidir y **hay que escribir
+`BORRAR TODO`**: un botón detrás de un «¿estás seguro?» se pulsa sin leer.
+
+**Las cuentas de administración no se tocan nunca.** Si se borraran, nadie
+podría volver a entrar a arreglarlo.
+
+### Y lo pequeño
+
+- El voto pregunta **«¿Cómo te pareció nuestro espacio?»** justo encima de los
+  emoji, que es lo que envía el voto.
+- Tras votar —y también cuando ya se había votado ahí— aparece **«Regresar a
+  ver mi recorrido»**. El mensaje de «ya votaste» dejaba a la persona parada en
+  una pantalla sin salida.
+- En el ranking del teléfono, **el municipio y el número de votos ya no se
+  pisan**: compartían la misma celda de la rejilla y se dibujaban uno encima
+  del otro.
+- El mapa dice **«establecimientos / fincas»** en vez de «stands ubicados».
+- La personalización del pasaporte gana **«Guardar y aplicar al pasaporte»**,
+  que confirma qué fondos quedaron puestos, y un enlace para ir a mirarlo.
+- Arreglado un `className` duplicado en el tablero que hacía que la clase del
+  fondo animado no llegara nunca al DOM.
+
+### Base de datos
+
+Ninguna columna nueva. Endpoints nuevos: `POST /api/admin/uploads/permisos`,
+`GET /api/admin/sistema/inventario` y `POST /api/admin/sistema/reiniciar` (los
+dos últimos, sólo propietario). Retirado `PUT /api/admin/promotores/:id/stand`.
+
+Para revertir a la v2.4.0: `git checkout 8c84b92 -- .`. La base no se toca. Los
+permisos corregidos se quedan como están, que es lo correcto en cualquier
+versión.
+
+---
+
 ## v2.4.0 — El pasaporte, hoja por hoja
 
 **Punto de reversión (v2.3.0):** `6860ffb`

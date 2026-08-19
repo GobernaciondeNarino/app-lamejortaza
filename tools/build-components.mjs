@@ -39,6 +39,7 @@ const ARCHIVOS = [
   'components/Caracterizacion.jsx',
   'components/Economia.jsx',
   'components/Festival.jsx',
+  'components/Sistema.jsx',
   'components/Correo.jsx',
   'components/App.jsx',
 ];
