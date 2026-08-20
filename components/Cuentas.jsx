@@ -8,7 +8,7 @@
 
 const ROL_ETIQUETA = {
   propietario: { texto: "Propietario", color: "var(--galeras)", ayuda: "Administra el festival y las cuentas de acceso." },
-  organizador: { texto: "Organizador", color: "var(--cafeto)", ayuda: "Administra el festival: stands, votos, pasaportes y promotores." },
+  organizador: { texto: "Organizador", color: "var(--cafeto)", ayuda: "Administra el festival: espacios, votos, pasaportes y promotores." },
 };
 
 const RolPill = ({ rol }) => {

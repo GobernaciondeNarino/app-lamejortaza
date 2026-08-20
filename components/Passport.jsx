@@ -44,7 +44,7 @@ const PassportPage = ({ stands }) => {
       setAskingEmail(false);
     } catch (e) {
       const code = String((e && (e.code || e.message)) || e);
-      if (code.includes("not_found")) setError("Aún no hay pasaporte para ese correo. Vota en cualquier stand para crearlo.");
+      if (code.includes("not_found")) setError("Aún no hay pasaporte para ese correo. Vota en cualquier espacio para crearlo.");
       else if (code.includes("bad_email")) setError("El correo no es válido.");
       else setError("No fue posible cargar tu pasaporte.");
       setData(null);
@@ -95,7 +95,7 @@ const PassportPage = ({ stands }) => {
     return (
       <PuertaCorreo
         titulo="Tu pasaporte del festival."
-        nota="Escribe el correo con el que votas en los stands. No hace falta contraseña."
+        nota="Escribe el correo con el que votas en los espacios. No hace falta contraseña."
         volverA="/festival" volverTexto="← Volver al ranking"
         onListo={(correo) => { setEmail(correo); setAskingEmail(false); }}/>
     );
@@ -794,7 +794,7 @@ const PaginaTravesia = ({ passport, visitados, totalStands }) => {
         Tu travesía.
       </h2>
       <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5, margin: "0 0 14px" }}>
-        {filas.length === 1 ? "El stand que sellaste" : `Los ${filas.length} stands que sellaste`}
+        {filas.length === 1 ? "El espacio que sellaste" : `Los ${filas.length} stands que sellaste`}
         {passport.valoraciones && Object.keys(passport.valoraciones).length ? ", con tu calificación." : "."}
       </p>
 

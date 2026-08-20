@@ -224,7 +224,7 @@ const EnlacePorCorreo = () => {
 const PerfilSinAcceso = ({ onListo }) => (
   <PuertaCorreo
     titulo="Tu perfil del festival."
-    nota="Escribe el correo con el que votas en los stands. No hace falta contraseña: si quieres una, la pones después desde aquí dentro."
+    nota="Escribe el correo con el que votas en los espacios. No hace falta contraseña: si quieres una, la pones después desde aquí dentro."
     onListo={onListo}>
     <EnlacePorCorreo/>
   </PuertaCorreo>

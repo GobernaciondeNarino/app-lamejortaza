@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.5.0.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.6.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -41,6 +41,17 @@ desplegada se consulta en `/api/health` con sesión de administrador.
 
 ## 1. Funcionalidades
 
+### Una palabra sobre «espacio» y «stand»
+
+De cara al público y al organizador, un puesto del festival se llama
+**espacio**. Por dentro sigue llamándose `stand`: las rutas (`/admin/stands`,
+`/s/{standId}`), las tablas (`stands`, `votos.stand_id`), los identificadores
+del código y el CSV que se exporta. Renombrarlo por dentro habría obligado a
+migrar la base y a **reimprimir todos los códigos QR ya pegados**, y no cambia
+ni una palabra de lo que ve nadie. Cuando en este documento aparece `stand` en
+`código`, es el nombre técnico; cuando aparece «espacio» en prosa, es lo que se
+lee en pantalla.
+
 ### Rutas reales (no mockup)
 
 | URL                                  | Audiencia | Qué hace                                                  |
@@ -50,17 +61,17 @@ desplegada se consulta en `/api/health` con sesión de administrador.
 | `/s/{standId}`                       | Móvil     | **Página real de votación** que abre el QR del stand.     |
 | `/pasaporte`                         | Móvil     | Libreta del usuario con sus sellos reales, como libro 3D. |
 | `/recorrido`                         | Público   | **Mi recorrido**: todos los stands, los visitados a color. |
-| `/inscripcion`                       | Público   | **Inscripción de promotores de stand** (solicitud).       |
+| `/inscripcion`                       | Público   | **Inscripción de promotores de espacio** (solicitud).     |
 | `/promotor`                          | Promotor  | Portal: acceso, cambio de clave, empresa y productos.     |
 | `/admin/login`                       | Admin     | Login del organizador.                                    |
-| `/admin` · `/admin/stands`           | Admin     | Lista y métricas (gating real).                           |
-| `/admin/stands/new`                  | Admin     | Crear stand (POST `/api/stands`).                         |
+| `/admin` · `/admin/stands`           | Admin     | Lista y métricas de espacios (gating real).               |
+| `/admin/stands/new`                  | Admin     | Crear espacio (POST `/api/stands`).                       |
 | `/admin/stands/{id}/edit`            | Admin     | Editar / borrar (PUT/DELETE `/api/stands/{id}`).          |
-| `/admin/qr`                          | Admin     | Carteles A5 imprimibles con el QR del stand.              |
+| `/admin/qr`                          | Admin     | Carteles A5 imprimibles con el QR del espacio.            |
 | `/admin/live`                        | Admin     | Actividad y ranking en tiempo real.                       |
 | `/admin/promotores`                  | Admin     | **Verificar inscripciones** y enviar la clave por correo. |
 | `/admin/economia`                    | Admin     | **Actividad económica**: compras del evento y por stand.  |
-| `/admin/festival`                    | Admin     | **Personalización**: títulos, columnas y fondos.          |
+| `/admin/festival`                    | Admin     | **Personalización**: marca, textos, columnas y fondos.    |
 | `/admin/correos`                     | Admin     | Bitácora de correo saliente (¿salió la clave?).           |
 | `/admin/sistema`                     | Propietario | **Empezar de cero**: borrar los datos de prueba.        |
 | `/install.php`                       | One-shot  | Asistente de instalación (auto-bloquea al terminar).      |
@@ -199,19 +210,20 @@ stand ya no vuelve a pedir el correo.
 
 ---
 
-## 1.bis. Promotores de stands
+## 1.bis. Promotores de espacios
 
 Módulo completo de inscripción para quienes exhiben en el festival.
 
 **Flujo:**
 
-1. El caficultor entra a `/inscripcion` y envía **todos los datos de su stand**
-   —él y su stand son la misma cosa—: nombre y documento del propietario,
-   teléfono, empresa, nombre del stand, municipio, región, dirección, NIT,
-   sitio web, descripción, el **logo de su producto** (obligatorio, cuadrado,
-   máx. 1600×1600 px y 3 MB) y la **ubicación marcada en el mapa de Nariño**.
-   Queda `pendiente`. Recibe un acuse por correo; los administradores reciben
-   un aviso.
+1. El caficultor entra a `/inscripcion` y envía **todos los datos de su
+   espacio** —él y su espacio son la misma cosa—: nombre y documento del
+   propietario, teléfono, empresa, nombre del espacio, municipio, región,
+   **dirección**, **tipo de organización**, **actividad o vínculo con la cadena
+   de valor del café**, NIT, sitio web, descripción, el **logo de su producto**
+   (obligatorio, cuadrado, máx. 1600×1600 px y 3 MB) y la **ubicación en el
+   mapa de Nariño**. Queda `pendiente`. Recibe un acuse por correo; los
+   administradores reciben un aviso.
 
    **El logo es obligatorio** desde la v2.5.0: es lo que identifica al stand en
    la tarjeta de «Mi recorrido» y bajo el sello del pasaporte, y pedirlo
@@ -224,8 +236,12 @@ Módulo completo de inscripción para quienes exhiben en el festival.
    **rechaza lo que esté mal escrito en vez de guardarlo como vacío**, que era
    lo que hacía desaparecer una cédula sin decir nada.
 
+   **La dirección es obligatoria** desde la v2.6.0. El mapa marca una zona; la
+   dirección es lo que lleva a la puerta, y una chincheta en mitad de un cerro
+   no lleva a nadie a ningún sitio.
+
    El formulario público y el alta interna (`/admin/stands/new`) piden **los
-   mismos trece datos**; sólo el identificador del stand, el color de su sello y
+   mismos datos**; sólo el identificador del espacio, el color de su sello y
    su posición dentro del recinto son internos, porque el promotor no puede
    saberlos. Hay una prueba que lo comprueba en los dos sentidos abriendo ambos
    formularios en un navegador.
@@ -257,11 +273,39 @@ Módulo completo de inscripción para quienes exhiben en el festival.
    (para el servidor). **Los dos se versionan** —el hosting compartido no ejecuta
    build— y el generador se niega a escribir si el cruce entre los 64 municipios
    y las 13 subregiones oficiales no es perfecto en los dos sentidos.
+
+   **Las coordenadas también se pueden escribir a mano.** Bajo el mapa hay dos
+   campos, latitud y longitud, y la chincheta se mueve **mientras se teclea**:
+   quien pega unas coordenadas de un GPS o de una aplicación de mapas quiere ver
+   ahí mismo si cayeron donde debían, y esperar a salir del campo convierte una
+   comprobación inmediata en una adivinanza. El municipio se deduce del punto
+   igual que al tocar el mapa, y un par que caiga fuera del rectángulo de Nariño
+   se avisa en vez de guardarse.
+
+   **Quién eres, del catálogo.** Dos desplegables cerrados —tipo de
+   organización (13 opciones) y actividad o vínculo con la cadena de valor del
+   café (9)— con una salida «Otro» que abre un campo de texto y lo exige: «otro»
+   a secas no caracteriza a nadie. Se guarda **la clave, no la frase**
+   (`sas`, `barista`): si se guardara el texto, corregir una tilde crearía un
+   tipo de organización nuevo y el conteo por tipo dejaría de valer, que es
+   exactamente lo que pasó con los municipios. Las claves viven en
+   `api/lib/Catalogos.php` (que decide qué entra en la base) y las frases en
+   `components/Shared.jsx` (que decide qué se lee); una prueba comprueba que las
+   dos listas coincidan.
+
+   **El logo se encuadra al subirlo.** Aparece un recuadro con el círculo del
+   sello dibujado encima: se arrastra para centrarlo y una barra lo agranda o lo
+   reduce. Al aplicar, la imagen se rehace y se vuelve a subir. Se rehace en vez
+   de guardar el encuadre porque el logo se pinta en cinco sitios —la tarjeta
+   del recorrido, la ficha, el sello del pasaporte en CSS, el mismo sello en el
+   lienzo de Three.js y el cartel del QR— y dos de ellos no son HTML: guardar
+   «zoom 1,4 · 8 % a la izquierda» obligaría a llevar ese cálculo a los cinco, y
+   el que se olvidara enseñaría otra imagen.
 2. Un organizador la revisa en `/admin/promotores` y pulsa
    **«Verificar y enviar clave»**. En ese momento —y sólo entonces— el sistema
    genera una contraseña temporal fuerte, guarda su hash (Argon2id + pepper),
-   **crea el stand** con los datos de la inscripción y envía un correo de
-   bienvenida con el usuario, la contraseña en claro y **el QR del stand
+   **crea el espacio** con los datos de la inscripción y envía un correo de
+   bienvenida con el usuario, la contraseña en claro y **el QR del espacio
    incrustado** como imagen, listo para imprimir. El servidor no vuelve a
    conocer la contraseña.
 3. El promotor entra en `/promotor` con su correo y esa clave. El sistema le
@@ -269,8 +313,8 @@ Módulo completo de inscripción para quienes exhiben en el festival.
    La clave temporal caduca a las 72 horas.
 4. Ya dentro, completa su perfil, los datos de su **empresa** y sus
    **productos**, con logo y fotos.
-5. El administrador puede vincularlo a un stand, suspenderlo, rechazarlo o
-   reenviarle una clave nueva (que invalida la anterior).
+5. El administrador puede suspenderlo, rechazarlo o reenviarle una clave nueva
+   (que invalida la anterior).
 
 **Estados:** `pendiente → verificado → activo`, y `rechazado` / `suspendido`.
 
@@ -278,7 +322,7 @@ Módulo completo de inscripción para quienes exhiben en el festival.
 
 El acceso dependía de un correo, y eso falla: buzones que casi no se abren,
 direcciones mal escritas, mensajes que acaban en spam. El caficultor se quedaba
-fuera de su propio stand el día del evento. Por eso, al inscribirse, elige con
+fuera de su propio espacio el día del evento. Por eso, al inscribirse, elige con
 qué va a entrar:
 
 | Método | Fuerza | Para quién |
@@ -611,9 +655,22 @@ convierte el informe en un disparate.
 
 `/admin/festival` — lo que el organizador cambia sin tocar código.
 
+- **Nombre de la edición**: el renglón que va bajo «La Mejor Taza» —de fábrica
+  «Festival · Nariño 2026»— en toda la aplicación y en la cabecera de los
+  correos. Se configura porque el año cambia y la muestra puede llamarse de otra
+  forma en la siguiente edición, y eso no debería costar un despliegue. Hay una
+  vista previa del logotipo al lado, que es donde se ve el espacio de más antes
+  de guardarlo.
 - **Títulos de las tres valoraciones.** Cambiar el nombre no toca lo ya votado:
   las claves son las columnas de la base y siguen siendo la misma valoración.
 - **Columnas de «Mi recorrido»**, por separado en computador (1-6) y móvil (1-3).
+- **Política de tratamiento de datos**: el texto del aviso que lee quien se
+  inscribe y el enlace a la política publicada por la Gobernación. Quien tiene
+  que poder cambiar un aviso de habeas data es el área jurídica, no quien
+  despliega: la finalidad y el responsable cambian de una vigencia a otra, y un
+  texto desactualizado ahí no es un detalle de redacción. El enlace se valida
+  —sólo `http(s)`— para que un `javascript:` no acabe en un enlace que pulsa el
+  público, y hay un botón para ver cómo queda el aviso antes de guardarlo.
 - **Fondos del pasaporte**: portada, contraportada y hojas internas.
 
 Las hojas internas se reparten **en orden** y se **repiten** cuando se acaban: con
@@ -921,19 +978,26 @@ php -r "echo bin2hex(random_bytes(32)) . PHP_EOL;"   # ejecuta dos veces
 | Tabla         | Función                                                   |
 | ------------- | --------------------------------------------------------- |
 | `admins`      | Cuentas de organizadores (Argon2id + pepper) y su perfil (`propietario` / `organizador`). |
-| `stands`      | Stands del festival, datos del propietario y agregados de votos por emoji. |
-| `votos`       | Un voto por (stand, correo). FK a stands. Índice único.   |
-| `pasaportes`  | Stands visitados por correo. JSON de ids.                 |
-| `promotores`  | Inscripciones, credenciales y borrador de los datos del stand. |
+| `stands`      | Espacios del festival, datos del propietario, su caracterización y agregados de votos por emoji. |
+| `votos`       | Un voto por (espacio, correo). FK a `stands`. Índice único. |
+| `pasaportes`  | Espacios visitados por correo. JSON de ids.               |
+| `promotores`  | Inscripciones, credenciales y borrador de los datos del espacio. |
 | `empresas`    | Empresa de cada promotor.                                  |
 | `productos`   | Cafés que expone cada promotor.                            |
 | `visitantes`  | Caracterización voluntaria del público (Ley 1581/2012) y su clave opcional (`acceso_hash`). |
 | `emails_log`  | Bitácora de correos salientes.                             |
-| `ajustes`     | Configuración editable desde el panel (correo). Pisa a `api/config.php`. |
+| `ajustes`     | Configuración editable desde el panel (correo, marca, política de datos, pasaporte). Pisa a `api/config.php`. |
 | `rate_limits` | Ventanas fijas por (bucket, hash) para limitar requests.  |
 
 Esquema completo en [`db/schema.mysql.sql`](db/schema.mysql.sql) y
 [`db/schema.sqlite.sql`](db/schema.sqlite.sql).
+
+**Nota sobre `tipo_organizacion` y `actividad_cafe`** (en `stands` y en
+`promotores`): guardan la **clave** del catálogo, no la frase —`sas`, no
+«Sociedades por Acciones Simplificadas S.A.S.»—. La lista cerrada está en
+[`api/lib/Catalogos.php`](api/lib/Catalogos.php); las frases, en
+`components/Shared.jsx`. La columna `_otro` que acompaña a cada una sólo se
+llena cuando la clave es `otro`, y en ese caso es obligatoria.
 
 ### 6.1.bis. Actualizar una instalación existente
 
@@ -1087,7 +1151,7 @@ Todas las respuestas usan `application/json` y la forma:
 | `POST`  | `/api/promotores/password`    | promotor     | Cambio obligatorio de la clave temporal. |
 | `GET/PUT` | `/api/promotores/perfil`, `/empresa`, `/productos` | promotor | |
 | `GET`   | `/api/admin/promotores`       | admin        | Listado y detalle de inscripciones. |
-| `POST`  | `/api/admin/promotores/:id/verificar` | admin | Crea el stand y envía clave + QR. |
+| `POST`  | `/api/admin/promotores/:id/verificar` | admin | Crea el espacio y envía clave + QR. |
 | `POST`  | `/api/admin/promotores/:id/qr` | admin       | Reemite el QR de acceso (el anterior deja de valer). |
 | **Cuentas** | | | |
 | `GET/POST` | `/api/admin/administradores` | propietario | Listar y crear cuentas.           |
@@ -1108,6 +1172,10 @@ Todas las respuestas usan `application/json` y la forma:
 | `POST`  | `/api/admin/correo/prueba`    | admin        | Envía una prueba y devuelve el diálogo SMTP. |
 | `GET`   | `/api/admin/uploads`          | admin        | Dónde se guardan las imágenes, si la carpeta es escribible y cuántas están ilegibles. |
 | `POST`  | `/api/admin/uploads/permisos` | admin        | Repara los permisos (`0755`/`0644`) de lo ya subido. |
+| **Personalización** | | | |
+| `GET`   | `/api/festival/ajustes`       | público      | Marca, títulos, columnas, política de datos y fondos. |
+| `PUT`   | `/api/admin/festival/ajustes` | admin        | Guarda los textos y los números. |
+| `POST/DELETE` | `/api/admin/festival/fondo` | admin  | Sube o quita un fondo del pasaporte. |
 | **Sistema** | | | |
 | `GET`   | `/api/admin/sistema/inventario` | propietario | Qué hay en la base y la frase de confirmación. |
 | `POST`  | `/api/admin/sistema/reiniciar` | propietario | Borra los conjuntos elegidos. Exige la frase exacta. |
@@ -1259,7 +1327,8 @@ la-mejor-taza/
 ├── router.php                 # router para `php -S` en desarrollo
 ├── .htaccess                  # cabeceras globales + rewrites
 ├── components/                # JSX precompilado a js/components.build.js
-│   ├── Shared.jsx             # Logo, sello, QR, avisos, SubirImagen, CampoNumerico, EstadoAlmacen
+│   ├── Shared.jsx             # Logo, sello, QR, avisos, SubirImagen, EncuadreImagen,
+│   │                          #   CampoNumerico, SelectorCatalogo, AvisoDatos, EstadoAlmacen
 │   ├── Admin.jsx              # login + AdminShell + StandsList + StandEditor
 │   ├── QRPrint.jsx            # cartel A5 + hojas de impresión + actividad
 │   ├── VoteFlow.jsx           # MobileVotePage real (full-screen)
@@ -1267,7 +1336,7 @@ la-mejor-taza/
 │   ├── Dashboard.jsx          # PublicDashboard + MapaNarino + PublicDetail
 │   ├── Recorrido.jsx          # «Mi recorrido»: catálogo con los sellos a color
 │   ├── Promotores.jsx         # inscripción, portal del promotor, revisión
-│   ├── Mapa.jsx               # selector de ubicación sobre el mapa de Nariño
+│   ├── Mapa.jsx               # mapa de Nariño + coordenadas a mano + municipio/subregión
 │   ├── Cuentas.jsx            # cuentas de administración + cambio de clave
 │   ├── Correo.jsx             # configuración, diagnóstico y prueba de envío
 │   ├── Economia.jsx           # actividad económica declarada al votar
@@ -1301,6 +1370,7 @@ la-mejor-taza/
 │   │   ├── Uploads.php        # imágenes: valida, recodifica y guarda
 │   │   ├── Ajustes.php        # config editable desde el panel, con secretos cifrados
 │   │   ├── Territorio.php     # GENERADO: los 64 municipios y sus 13 subregiones
+│   │   ├── Catalogos.php      # tipo de organización y actividad cafetera (claves)
 │   │   └── Router.php
 │   └── routes/
 │       ├── auth.php
@@ -1314,7 +1384,7 @@ la-mejor-taza/
 │       ├── administradores.php
 │       ├── visitantes.php
 │       ├── correo.php
-│       ├── festival.php        # ajustes de personalización
+│       ├── festival.php        # ajustes: marca, política de datos, pasaporte
 │       ├── sistema.php         # inventario y puesta a cero (propietario)
 │       └── health.php
 ├── db/
@@ -1356,8 +1426,9 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 ### Antes de abrir al público
 
 - [ ] `php db/migrate.php` ejecutado. Añade las columnas nuevas de la versión
-      (la 2.3.0 trae `visitantes.acceso_hash`) sin tocar nada de lo que ya había,
-      y da su emblema a los stands de ejemplo que aún no tengan logo.
+      (la 2.6.0 trae la caracterización: `tipo_organizacion` y `actividad_cafe`
+      en `stands` y en `promotores`) sin tocar nada de lo que ya había, y da su
+      emblema a los espacios de ejemplo que aún no tengan logo.
 - [ ] `assets/logos/` subido: son los emblemas de los stands del prototipo y se
       versionan. Se regeneran con `php tools/logos-ejemplo.php`.
 - [ ] `node tools/build-components.mjs` ejecutado y `js/components.build.js` subido.
@@ -1378,6 +1449,13 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
       almacenamiento y pulsa «Corregir permisos de las imágenes». Con los
       permisos viejos (`0640`) el navegador recibe un `403` y los logos salen
       rotos aunque estén subidos.
+- [ ] **Política de tratamiento de datos revisada.** En *Panel →
+      Personalización* está el texto que autoriza quien se inscribe y el enlace
+      a la política de la Gobernación. El sistema trae uno de fábrica; que lo
+      apruebe el área jurídica antes de abrir las inscripciones.
+- [ ] **Nombre de la edición.** También en *Personalización*: el renglón bajo el
+      logotipo y en la cabecera de los correos. Si el año o el nombre de la
+      muestra cambiaron, se ajusta aquí.
 - [ ] **Sistema en cero.** Desde *Panel → Empezar de cero* (`/admin/sistema`,
       sólo propietario) borra los stands de ejemplo, las inscripciones de prueba,
       los votos y los visitantes de las pruebas. Haz antes una copia de la base

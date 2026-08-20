@@ -73,6 +73,7 @@ const FestivalPage = () => {
   const [ok, setOk] = React.useState("");
   const [subiendo, setSubiendo] = React.useState("");
   const [aplicando, setAplicando] = React.useState(false);
+  const [verAviso, setVerAviso] = React.useState(false);
 
   React.useEffect(() => {
     let cancelado = false;
@@ -153,6 +154,34 @@ const FestivalPage = () => {
       <Aviso>{error}</Aviso>
       <Aviso tipo="ok">{ok}</Aviso>
 
+      <BloqueForm titulo="Nombre de la edición">
+        <p className="mono" style={{ color: "var(--ink-3)", lineHeight: 1.5 }}>
+          El renglón que va bajo «La Mejor Taza» en toda la aplicación y en la
+          cabecera de los correos que salen del sistema.
+        </p>
+        <div className="field" style={{ maxWidth: 340 }}>
+          <label htmlFor="fm-pie">Texto bajo el logotipo</label>
+          <input id="fm-pie" maxLength={60} value={(aj.marca && aj.marca.pie) || ""}
+            placeholder={PIE_MARCA}
+            onChange={(e) => setAj({ ...aj, marca: { ...(aj.marca || {}), pie: e.target.value } })}/>
+          <span className="ayuda">Si lo dejas vacío vuelve a «{PIE_MARCA}».</span>
+        </div>
+        {/* Verlo tal cual va a quedar evita el clásico «Festival ·  Nariño»
+            con dos espacios, que en la cabecera del correo no se corrige. */}
+        <div style={{ border: "1px dashed var(--line-2)", borderRadius: "var(--r-sm)", padding: 16, background: "var(--paper-2)" }}>
+          <div className="mono" style={{ color: "var(--ink-3)", marginBottom: 10 }}>Así se verá</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <LogoTaza size={28}/>
+            <div style={{ lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontStyle: "italic" }}>La Mejor Taza</div>
+              <div className="mono" style={{ fontSize: 9, marginTop: 2 }}>
+                {((aj.marca && aj.marca.pie) || "").trim() || PIE_MARCA}
+              </div>
+            </div>
+          </div>
+        </div>
+      </BloqueForm>
+
       <BloqueForm titulo="Las tres valoraciones del voto">
         <p className="mono" style={{ color: "var(--ink-3)", lineHeight: 1.5 }}>
           Cómo se llaman las tres estrellas que puntúa el visitante. Cambiar el
@@ -185,8 +214,50 @@ const FestivalPage = () => {
         </div>
       </BloqueForm>
 
+      {/* El texto legal se edita aquí porque quien lo tiene que poder cambiar
+          es el área jurídica, no quien despliega. Un aviso de habeas data
+          desactualizado no es un detalle de redacción. */}
+      <BloqueForm titulo="Política de tratamiento de datos">
+        <p className="mono" style={{ color: "var(--ink-3)", lineHeight: 1.5 }}>
+          Es lo que lee quien se inscribe al pulsar «Leer la política de tratamiento
+          de datos», junto a la casilla de autorización. Deja una línea en blanco
+          entre párrafos.
+        </p>
+        <div className="field">
+          <label htmlFor="fd-texto">Texto del aviso</label>
+          <textarea id="fd-texto" rows={12} maxLength={8000}
+            value={(aj.datos && aj.datos.texto) || ""}
+            onChange={(e) => setAj({ ...aj, datos: { ...(aj.datos || {}), texto: e.target.value } })}
+            style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12, lineHeight: 1.6, resize: "vertical" }}/>
+          <span className="ayuda">
+            {(((aj.datos && aj.datos.texto) || "").length).toLocaleString()} de 8.000 caracteres.
+            Vacío = vuelve al texto que trae el sistema.
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="fd-enlace">Enlace a la política completa</label>
+          <input id="fd-enlace" type="url" inputMode="url" maxLength={400}
+            value={(aj.datos && aj.datos.enlace) || ""}
+            placeholder="https://www.narino.gov.co/…"
+            onChange={(e) => setAj({ ...aj, datos: { ...(aj.datos || {}), enlace: e.target.value } })}/>
+          <span className="ayuda">
+            Sale al final del aviso como «Política de Tratamiento de Datos Personales de la
+            Gobernación de Nariño». Déjalo vacío para no mostrar ningún enlace.
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <button type="button" className="btn btn-ghost" onClick={() => setVerAviso(true)}>
+            Ver cómo queda el aviso
+          </button>
+        </div>
+      </BloqueForm>
+
+      {/* Con el borrador, no con lo guardado: se está mirando para decidir si
+          se guarda. */}
+      <AvisoDatos abierto={verAviso} onCerrar={() => setVerAviso(false)} datos={aj.datos}/>
+
       <button className="btn btn-primary" onClick={() => guardar(aj)} style={{ marginBottom: 28 }}>
-        Guardar títulos y columnas
+        Guardar textos y columnas
       </button>
 
       <div className="mono" style={{ margin: "8px 0 12px" }}>Fondos del pasaporte</div>

@@ -69,7 +69,7 @@ const EconomiaPage = () => {
           nota="entre las que declararon importe"/>
       </div>
 
-      <div className="mono" style={{ margin: "28px 0 12px" }}>Por stand</div>
+      <div className="mono" style={{ margin: "28px 0 12px" }}>Por espacio</div>
       {!conCompras.length && (
         <p style={{ color: "var(--ink-2)" }}>Todavía no hay compras registradas.</p>
       )}
@@ -78,7 +78,7 @@ const EconomiaPage = () => {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
-                {["Stand", "Compras", "Valor declarado", "Compra media", "Conversión"].map((h, i) => (
+                {["Espacio", "Compras", "Valor declarado", "Compra media", "Conversión"].map((h, i) => (
                   <th key={h} className="mono" style={{ textAlign: i === 0 ? "left" : "right", padding: "8px 10px", fontWeight: 400 }}>{h}</th>
                 ))}
               </tr>

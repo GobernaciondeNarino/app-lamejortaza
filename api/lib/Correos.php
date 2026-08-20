@@ -31,9 +31,27 @@ final class Correos
         return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
+    /**
+     * El pie de la marca, el mismo que se ve bajo el logotipo en la web.
+     *
+     * Se lee de los ajustes en vez de dejarlo escrito aquí para que cambiar el
+     * año no obligue a tocar dos sitios y acabar con un correo que anuncia una
+     * edición distinta de la que se está celebrando. Se lee de `Ajustes`
+     * directamente y no de `festival_ajustes()` porque los correos también
+     * salen desde el instalador y desde la línea de comandos, donde las rutas
+     * HTTP no están cargadas.
+     */
+    private static function pieMarca(): string
+    {
+        $marca = Ajustes::grupo('festival', ['marca' => ['pie' => 'Festival · Nariño 2026']])['marca'] ?? [];
+        $pie = trim((string) ($marca['pie'] ?? ''));
+        return $pie !== '' ? $pie : 'Festival · Nariño 2026';
+    }
+
     private static function envoltura(string $titulo, string $contenidoHtml): string
     {
-        $t = self::h($titulo);
+        $t   = self::h($titulo);
+        $pie = self::h(self::pieMarca());
         return <<<HTML
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>{$t}</title></head>
@@ -42,7 +60,7 @@ final class Correos
 <tr><td align="center">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fbf7ef;border:1px solid #e0d6c2;border-radius:10px;overflow:hidden;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#2c2620;">
     <tr><td style="background:#2c2620;padding:22px 28px;color:#f2ece0;">
-      <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#c9b99a;">Festival · Nariño 2026</div>
+      <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#c9b99a;">{$pie}</div>
       <div style="font-size:26px;font-style:italic;font-family:Georgia,serif;margin-top:4px;">La Mejor Taza</div>
     </td></tr>
     <tr><td style="padding:28px;">{$contenidoHtml}</td></tr>
@@ -77,25 +95,25 @@ HTML;
     <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Tu código de acceso</div>
     <img src="cid:qracceso" alt="Código QR de acceso" width="200" height="200" style="display:block;margin:12px auto 8px;width:200px;height:200px;"/>
     <div style="font-size:13px;color:#6d6154;line-height:1.6;">
-      Guarda esta imagen. Escanéala para entrar al portal cuando tu stand quede aprobado.
+      Guarda esta imagen. Escanéala para entrar al portal cuando tu espacio quede aprobado.
     </div>
   </td></tr>
 </table>
 HTML;
             $textoQr = "Tu codigo de acceso viaja como imagen adjunta en este mismo correo (qr-acceso.png).\n"
-                . "Guardala: al escanearla entraras al portal cuando tu stand quede aprobado.\n\n";
+                . "Guardala: al escanearla entraras al portal cuando tu espacio quede aprobado.\n\n";
         }
 
         $cierre = $conQrAcceso
             ? 'Cuando quede aprobada te avisaremos por este mismo correo y te enviaremos el '
-              . '<strong>código QR de tu stand</strong>, listo para imprimir.'
+              . '<strong>código QR de tu espacio</strong>, listo para imprimir.'
             : 'Cuando quede aprobada te enviaremos a este mismo correo tu <strong>contraseña de acceso</strong> '
               . 'para que completes el perfil de tu empresa y cargues tus productos.';
 
         $html = self::envoltura('Solicitud recibida', <<<HTML
 <p style="font-size:16px;margin:0 0 14px;">Hola {$n},</p>
 <p style="font-size:15px;line-height:1.65;margin:0 0 14px;">
-  Recibimos tu solicitud para inscribirte como <strong>promotor de stand</strong> del festival.
+  Recibimos tu solicitud para inscribirte como <strong>promotor de espacio</strong> del festival.
   Un administrador la revisará en los próximos días hábiles.
 </p>
 {$bloqueQr}
@@ -107,10 +125,10 @@ HTML;
 </p>
 HTML);
         $textoCierre = $conQrAcceso
-            ? "Cuando quede aprobada te avisaremos por este mismo correo y te enviaremos el codigo QR\nde tu stand, listo para imprimir.\n\n"
+            ? "Cuando quede aprobada te avisaremos por este mismo correo y te enviaremos el codigo QR\nde tu espacio, listo para imprimir.\n\n"
             : "Cuando quede aprobada te enviaremos a este mismo correo tu contraseña de acceso para que\ncompletes el perfil de tu empresa y cargues tus productos.\n\n";
         $texto = "Hola {$nombre},\n\n"
-            . "Recibimos tu solicitud para inscribirte como promotor de stand del festival La Mejor Taza.\n"
+            . "Recibimos tu solicitud para inscribirte como promotor de espacio del festival La Mejor Taza.\n"
             . "Un administrador la revisará en los próximos días hábiles.\n\n"
             . $textoQr
             . $textoCierre
@@ -151,21 +169,21 @@ HTML);
             $bloqueStand = <<<HTML
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e0d6c2;border-radius:8px;margin:0 0 18px;">
   <tr><td style="padding:18px;" align="center">
-    <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Tu stand · {$sid}</div>
+    <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7c68;">Tu espacio · {$sid}</div>
     <div style="font-size:19px;font-family:Georgia,serif;font-style:italic;margin:4px 0 2px;">{$sn}</div>
     <div style="font-size:13px;color:#6d6154;margin-bottom:14px;">{$sm}</div>
-    <img src="cid:qrstand" alt="Código QR del stand {$sn}" width="200" height="200" style="display:block;margin:0 auto;border:8px solid #fff;background:#fff;border-radius:6px;">
+    <img src="cid:qrstand" alt="Código QR del espacio {$sn}" width="200" height="200" style="display:block;margin:0 auto;border:8px solid #fff;background:#fff;border-radius:6px;">
     <div style="font-size:12px;color:#6d6154;margin-top:12px;line-height:1.6;">
-      Imprime este código y pégalo en tu stand.<br>
+      Imprime este código y pégalo en tu espacio.<br>
       Cada visitante que lo escanee podrá calificarte y sellar su pasaporte.
     </div>
     <div style="font-size:11px;color:#8a7c68;margin-top:8px;word-break:break-all;">{$su}</div>
   </td></tr>
 </table>
 HTML;
-            $textoStand = "\nTU STAND: {$stand['nombre']} ({$stand['id']})\n"
+            $textoStand = "\nTU ESPACIO: {$stand['nombre']} ({$stand['id']})\n"
                 . "Enlace para el QR: " . self::baseUrl() . '/s/' . $stand['id'] . "\n"
-                . "El código QR va adjunto a este correo: imprímelo y pégalo en tu stand.\n";
+                . "El código QR va adjunto a este correo: imprímelo y pégalo en tu espacio.\n";
         }
 
         // Dos correos distintos según de dónde salga su acceso.
@@ -193,7 +211,7 @@ HTML;
 <p style="font-size:14px;line-height:1.65;color:#6d6154;margin:0 0 8px;">
   <strong>Importante:</strong> esta contraseña caduca en {$horasVigencia} horas y el sistema te
   pedirá cambiarla la primera vez que entres. No la compartas con nadie: quien la tenga puede
-  modificar la información de tu stand.
+  modificar la información de tu espacio.
 </p>
 HTML;
             $textoClave = "Contraseña temporal: {$clave}\n";
@@ -205,7 +223,7 @@ HTML;
 <p style="font-size:16px;margin:0 0 14px;">Hola {$n},</p>
 <p style="font-size:15px;line-height:1.65;margin:0 0 18px;">
   <strong>Bienvenido al Festival del Café de Nariño.</strong> Tu inscripción como
-  promotor fue verificada y tu stand ya está registrado. Nos alegra tenerte en
+  promotor fue verificada y tu espacio ya está registrado. Nos alegra tenerte en
   esta edición.
 </p>
 {$bloqueStand}
@@ -226,14 +244,14 @@ HTML;
 HTML);
         $texto = "Hola {$nombre},\n\n"
             . "BIENVENIDO AL FESTIVAL DEL CAFÉ DE NARIÑO.\n"
-            . "Tu inscripción como promotor fue verificada y tu stand ya está registrado.\n"
+            . "Tu inscripción como promotor fue verificada y tu espacio ya está registrado.\n"
             . $textoStand
             . "\nUsuario: {$email}\n"
             . $textoClave
             . "\nEntra aquí: " . self::baseUrl() . "/promotor\n\n"
             . $textoAviso
             . "\nSi no solicitaste esta inscripción, avisa al equipo organizador y no uses este acceso.\n";
-        return ['asunto' => 'Bienvenido — tu acceso y el QR de tu stand', 'html' => $html, 'texto' => $texto];
+        return ['asunto' => 'Bienvenido — tu acceso y el QR de tu espacio', 'html' => $html, 'texto' => $texto];
     }
 
     public static function rechazo(string $nombre, string $motivo): array
@@ -245,7 +263,7 @@ HTML);
         $html = self::envoltura('Sobre tu solicitud', <<<HTML
 <p style="font-size:16px;margin:0 0 14px;">Hola {$n},</p>
 <p style="font-size:15px;line-height:1.65;margin:0 0 14px;">
-  Revisamos tu solicitud para participar como promotor de stand y por ahora no fue aprobada.
+  Revisamos tu solicitud para participar como promotor de espacio y por ahora no fue aprobada.
 </p>
 {$bloqueMotivo}
 <p style="font-size:15px;line-height:1.65;margin:0;">
@@ -254,7 +272,7 @@ HTML);
 </p>
 HTML);
         $texto = "Hola {$nombre},\n\n"
-            . "Revisamos tu solicitud para participar como promotor de stand del festival La Mejor Taza\n"
+            . "Revisamos tu solicitud para participar como promotor de espacio del festival La Mejor Taza\n"
             . "y por ahora no fue aprobada.\n"
             . ($motivo !== '' ? "\nMotivo: {$motivo}\n" : '')
             . "\nSi crees que se trata de un error, comunícate con el equipo organizador.\n";
@@ -276,7 +294,7 @@ HTML);
         $url = self::h(self::baseUrl() . '/admin');
         $rolTexto = $rol === 'propietario'
             ? 'Propietario — además del panel del festival, puedes crear y administrar otras cuentas.'
-            : 'Organizador — tienes acceso al panel del festival: stands, votos, pasaportes y promotores.';
+            : 'Organizador — tienes acceso al panel del festival: espacios, votos, pasaportes y promotores.';
         $rt = self::h($rolTexto);
 
         $entrada = $esNueva

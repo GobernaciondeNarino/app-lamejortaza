@@ -53,7 +53,7 @@ const QRPoster = ({ stand, variant = "vertical", paraImprimir = false }) => {
         </div>
         <div style={{ height: 1, background: "var(--line)" }}/>
         <div className="mono" style={{ marginTop: 8, display: "flex", justifyContent: "space-between" }}>
-          <span>Pega en el frente del stand</span>
+          <span>Pega en el frente del espacio</span>
           <span>· 14—20 abr · Pasto</span>
         </div>
       </div>
@@ -130,7 +130,7 @@ const QRPrintView = ({ stands }) => {
     return (
       <div className="admin-page">
         <div className="mono">Códigos QR</div>
-        <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 36, fontWeight: 400, margin: "4px 0 18px" }}>Aún no hay stands.</h1>
+        <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 36, fontWeight: 400, margin: "4px 0 18px" }}>Aún no hay espacios.</h1>
         <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar el primero</a>
       </div>
     );
@@ -146,7 +146,7 @@ const QRPrintView = ({ stands }) => {
 
       <div className="qr-layout">
         <aside>
-          <div className="mono" style={{ marginBottom: 12 }}>Seleccionar stand</div>
+          <div className="mono" style={{ marginBottom: 12 }}>Seleccionar espacio</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 460, overflow: "auto", border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
             {stands.map((s) => (
               <button key={s.id} onClick={() => setSelected(s.id)} style={{
@@ -268,7 +268,7 @@ const ActivityLive = ({ stands, comentarios }) => {
         <div className="mono" style={{ marginBottom: 10 }}>Exportar para reportes</div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <a href={window.LMTApi ? window.LMTApi.urlFor("/export/votos.csv") : "#"} className="btn btn-ghost" download>⤓ Votos (CSV)</a>
-          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/stands.csv") : "#"} className="btn btn-ghost" download>⤓ Stands (CSV)</a>
+          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/stands.csv") : "#"} className="btn btn-ghost" download>⤓ Espacios (CSV)</a>
           <a href={window.LMTApi ? window.LMTApi.urlFor("/export/pasaportes.csv") : "#"} className="btn btn-ghost" download>⤓ Pasaportes (CSV)</a>
         </div>
         <div className="nota-menor" style={{ color: "var(--ink-3)", marginTop: 8 }}>

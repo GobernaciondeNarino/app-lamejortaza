@@ -18,10 +18,42 @@ use LMT\Validate;
  * personal aquí: son etiquetas y números. La escritura es de administración.
  */
 
+/**
+ * Texto por defecto de la política de tratamiento de datos.
+ *
+ * Vive aquí y no en el componente porque quien lo tiene que poder cambiar es el
+ * área jurídica de la Gobernación, sin esperar a un despliegue: la finalidad y
+ * el responsable cambian de una vigencia a otra, y un texto de habeas data
+ * desactualizado no es un detalle de redacción.
+ */
+const FESTIVAL_POLITICA = <<<'TXT'
+La Gobernación de Nariño, a través de la Secretaría de Agricultura y Desarrollo Rural, en calidad de responsable del tratamiento de los datos personales, realizará el tratamiento de la información suministrada mediante este formulario, de conformidad con la Ley 1581 de 2012 y demás normas aplicables en materia de protección de datos personales.
+
+Los datos personales serán tratados para las finalidades relacionadas con la inscripción, selección, organización, comunicación, participación y desarrollo de la muestra comercial "La Mejor Taza Nariño 2026", así como para identificar y caracterizar a los participantes y sus emprendimientos dentro de la cadena de valor del café.
+
+De igual manera, la información podrá ser utilizada para actividades de difusión y comunicación institucional relacionadas con la muestra, incluyendo la publicación de información sobre los emprendimientos participantes y la captura, uso y divulgación de fotografías, videos y demás material audiovisual obtenido durante las actividades desarrolladas en el evento, a través de los canales institucionales de la Gobernación de Nariño y de la Secretaría de Agricultura y Desarrollo Rural y demás dependencias.
+
+El titular declara que conoce los derechos que le asisten respecto del tratamiento de sus datos personales, entre ellos, conocer, actualizar y rectificar su información y, cuando sea procedente, solicitar su supresión o revocar la autorización otorgada.
+TXT;
+
 /** Lo que trae el sistema si nadie ha configurado nada. */
 function festival_por_defecto(): array
 {
     return [
+        // Cómo se llama el evento allá donde aparece la marca: bajo el logotipo
+        // y en el pie de los correos. Se configura porque el año cambia y
+        // porque la muestra puede llamarse de otra forma en la siguiente
+        // edición, y no vale la pena tocar código para eso.
+        'marca' => [
+            'pie' => 'Festival · Nariño 2026',
+        ],
+        // Política de tratamiento de datos personales. El texto se enseña en un
+        // aviso emergente desde el formulario de inscripción; el enlace apunta
+        // a la política publicada por la Gobernación.
+        'datos' => [
+            'texto'  => FESTIVAL_POLITICA,
+            'enlace' => 'https://www.narino.gov.co/',
+        ],
         'estrellas' => [
             // Las claves NO se tocan: son las columnas de la base. Lo que el
             // organizador cambia es cómo se llaman de cara al público.
@@ -62,6 +94,32 @@ function register_routes_festival(\LMT\Router $r): void
         foreach (['innovacion', 'atencion', 'calidad'] as $k) {
             $v = Validate::texto($b['estrellas'][$k] ?? null, 40);
             if ($v !== null && $v !== '') $act['estrellas'][$k] = $v;
+        }
+
+        // El pie de la marca. Vacío = volver al que trae el sistema, en vez de
+        // dejar el logotipo huérfano de subtítulo por un borrado accidental.
+        if (isset($b['marca']['pie'])) {
+            $pie = Validate::texto($b['marca']['pie'], 60);
+            $act['marca']['pie'] = $pie !== '' ? $pie : festival_por_defecto()['marca']['pie'];
+        }
+
+        // Política de datos. El texto conserva sus párrafos —es un texto legal,
+        // no una etiqueta— y el enlace tiene que ser una URL de verdad: si se
+        // aceptara cualquier cosa, un `javascript:` acabaría en un enlace que
+        // pulsa el público.
+        if (isset($b['datos']['texto'])) {
+            $t = Validate::parrafos($b['datos']['texto'], 8000);
+            $act['datos']['texto'] = $t !== '' ? $t : festival_por_defecto()['datos']['texto'];
+        }
+        if (array_key_exists('enlace', (array) ($b['datos'] ?? []))) {
+            $enlace = trim((string) ($b['datos']['enlace'] ?? ''));
+            if ($enlace === '') {
+                $act['datos']['enlace'] = '';
+            } else {
+                $u = Validate::url($enlace, 400);
+                if ($u === null) Response::error(422, 'enlace_invalido');
+                $act['datos']['enlace'] = $u;
+            }
         }
 
         // Entre 1 y 6 columnas: por debajo no es una rejilla y por encima las

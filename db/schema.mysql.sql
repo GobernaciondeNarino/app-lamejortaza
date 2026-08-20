@@ -50,6 +50,14 @@ CREATE TABLE IF NOT EXISTS stands (
   sitio_web     VARCHAR(255) DEFAULT NULL,
   logo_path     VARCHAR(255) DEFAULT NULL,
   telefono      VARCHAR(32)  DEFAULT NULL,
+  -- Caracterización del participante. Se guarda la CLAVE del catálogo, no la
+  -- frase: ver api/lib/Catalogos.php. El campo `_otro` sólo se llena cuando la
+  -- clave es 'otro', y es lo que hace que «Otro» siga siendo un dato y no un
+  -- agujero en el informe.
+  tipo_organizacion       VARCHAR(40)  DEFAULT NULL,
+  tipo_organizacion_otro  VARCHAR(120) DEFAULT NULL,
+  actividad_cafe          VARCHAR(40)  DEFAULT NULL,
+  actividad_cafe_otro     VARCHAR(120) DEFAULT NULL,
   -- Ubicación geográfica del stand, elegida en el mapa de la inscripción.
   lat           DECIMAL(9,6) DEFAULT NULL,
   lng           DECIMAL(9,6) DEFAULT NULL,
@@ -122,6 +130,11 @@ CREATE TABLE IF NOT EXISTS promotores (
   stand_descripcion    VARCHAR(800) DEFAULT NULL,
   stand_nit            VARCHAR(32)  DEFAULT NULL,
   stand_sitio_web      VARCHAR(255) DEFAULT NULL,
+  -- Caracterización del participante. Ver api/lib/Catalogos.php.
+  tipo_organizacion       VARCHAR(40)  DEFAULT NULL,
+  tipo_organizacion_otro  VARCHAR(120) DEFAULT NULL,
+  actividad_cafe          VARCHAR(40)  DEFAULT NULL,
+  actividad_cafe_otro     VARCHAR(120) DEFAULT NULL,
   logo_path            VARCHAR(255) DEFAULT NULL,
   stand_lat            DECIMAL(9,6) DEFAULT NULL,
   stand_lng            DECIMAL(9,6) DEFAULT NULL,

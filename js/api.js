@@ -102,6 +102,14 @@
       sitio_web: s.sitio_web || "",
       telefono: s.telefono || "",
       logo: s.logo || "",
+      // Caracterización del participante. Esta función es una lista blanca: lo
+      // que no se nombre aquí no llega al cliente, y el editor del panel lo
+      // guardaría vacío en el primer «Guardar». Ya pasó con el propietario y
+      // el NIT; quien añada una columna la añade también aquí.
+      tipo_organizacion: s.tipo_organizacion || "",
+      tipo_organizacion_otro: s.tipo_organizacion_otro || "",
+      actividad_cafe: s.actividad_cafe || "",
+      actividad_cafe_otro: s.actividad_cafe_otro || "",
       lat: typeof s.lat === "number" ? s.lat : null,
       lng: typeof s.lng === "number" ? s.lng : null,
       coords: s.coords || { x: 0.5, y: 0.5 },

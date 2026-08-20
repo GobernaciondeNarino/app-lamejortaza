@@ -16,15 +16,20 @@ const LogoTaza = ({ size = 40, mono = false }) => {
   );
 };
 
-const Wordmark = ({ size = 20, onClick }) => (
-  <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, cursor: onClick ? "pointer" : "default" }}>
-    <LogoTaza size={size * 1.4}/>
-    <div style={{ lineHeight: 1 }}>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: size, fontStyle: "italic", letterSpacing: "-0.01em" }}>La Mejor Taza</div>
-      <div className="mono" style={{ fontSize: 9, marginTop: 2 }}>Festival · Nariño 2026</div>
+// El subtítulo sale de los ajustes: el año cambia y la muestra puede llamarse
+// de otra forma en la siguiente edición. Ver `pieDeMarca` más abajo.
+const Wordmark = ({ size = 20, onClick }) => {
+  const aj = usarAjustesFestival();
+  return (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, cursor: onClick ? "pointer" : "default" }}>
+      <LogoTaza size={size * 1.4}/>
+      <div style={{ lineHeight: 1 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: size, fontStyle: "italic", letterSpacing: "-0.01em" }}>La Mejor Taza</div>
+        <div className="mono" style={{ fontSize: 9, marginTop: 2 }}>{pieDeMarca(aj)}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Silueta montañas de Nariño (Galeras) — simple, no recargada
 const MontanasSilueta = ({ height = 80, opacity = 0.12 }) => (
@@ -189,11 +194,180 @@ const ayudaImagen = (cuadrada) => {
     + (cuadrada ? " Si no es cuadrada se verá recortada." : "");
 };
 
-const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, ayuda, ruta, almacen }) => {
+// ---------------------------------------------------------------------------
+// Encuadre del logo
+//
+// Un logo llega como llega: con un margen enorme alrededor, descentrado, o con
+// el texto pegado al borde. En el pasaporte y en «Mi recorrido» se dibuja
+// SIEMPRE dentro de un círculo recortando al centro, así que un logo mal
+// encuadrado sale con media palabra cortada y no hay dónde arreglarlo.
+//
+// Por qué se rehace la imagen en vez de guardar el encuadre
+// ---------------------------------------------------------
+// El logo se pinta en cinco sitios distintos —la tarjeta del recorrido, la
+// ficha, el sello del pasaporte en CSS, el mismo sello en el lienzo de
+// Three.js y el cartel del QR— y dos de ellos ni siquiera son HTML. Guardar
+// «zoom 1.4, centrado 8% a la izquierda» obligaría a llevar ese cálculo a los
+// cinco, y el que se olvidara enseñaría otra imagen. Se aplica una vez, se
+// sube el resultado, y todos los sitios reciben una imagen ya encuadrada.
+// ---------------------------------------------------------------------------
+
+/** Lado del PNG que se sube. El servidor lo reduce si su tope es menor. */
+const ENCUADRE_LADO = 800;
+
+/**
+ * Dónde cae la imagen dentro del cuadro, en píxeles.
+ *
+ * Es la misma cuenta para la vista previa (en CSS) y para el lienzo que se
+ * sube. Tenerla en un solo sitio es lo que garantiza que lo que se ve sea lo
+ * que se guarda; con dos copias, una acaba desfasada y el encuadre miente.
+ */
+const encuadreCaja = (lado, iw, ih, zoom, dx, dy) => {
+  const base = Math.max(lado / iw, lado / ih);   // «cover»
+  const escala = base * zoom;
+  const w = iw * escala, h = ih * escala;
+  return { w, h, x: (lado - w) / 2 + dx * lado, y: (lado - h) / 2 + dy * lado };
+};
+
+const EncuadreImagen = ({ src, tipo, onAplicar, onCancelar }) => {
+  const [img, setImg] = React.useState(null);
+  const [zoom, setZoom] = React.useState(1);
+  const [pos, setPos] = React.useState({ x: 0, y: 0 });
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const arrastre = React.useRef(null);
+  const LADO = 240;
+
+  React.useEffect(() => {
+    let vivo = true;
+    const i = new Image();
+    // Mismo origen, pero el lienzo se contamina sin esto en cuanto la app vive
+    // detrás de un CDN y las imágenes salen por otro host.
+    i.crossOrigin = "anonymous";
+    i.onload = () => { if (vivo) setImg(i); };
+    i.onerror = () => { if (vivo) setError("No fue posible abrir la imagen para encuadrarla."); };
+    i.src = src;
+    return () => { vivo = false; };
+  }, [src]);
+
+  const caja = img ? encuadreCaja(LADO, img.naturalWidth, img.naturalHeight, zoom, pos.x, pos.y) : null;
+
+  /**
+   * Arrastrar. El desplazamiento se guarda como FRACCIÓN del cuadro y se
+   * recalcula desde donde empezó el gesto, no sumando cada movimiento: así
+   * vale igual en la vista previa de 240 px que en el PNG de 800, y no se va
+   * acumulando error a lo largo del arrastre.
+   */
+  const arrastrar = (e) => {
+    if (!arrastre.current) return;
+    const t = (e.touches && e.touches[0]) || e;
+    const a = arrastre.current;
+    const lim = 0.6;
+    setPos({
+      x: Math.max(-lim, Math.min(lim, a.x + (t.clientX - a.cx) / LADO)),
+      y: Math.max(-lim, Math.min(lim, a.y + (t.clientY - a.cy) / LADO)),
+    });
+  };
+
+  const iniciar = (e) => {
+    const t = (e.touches && e.touches[0]) || e;
+    arrastre.current = { x: pos.x, y: pos.y, cx: t.clientX, cy: t.clientY };
+  };
+  const soltar = () => { arrastre.current = null; };
+
+  const aplicar = async () => {
+    if (!img) return;
+    setError(""); setBusy(true);
+    try {
+      const lienzo = document.createElement("canvas");
+      lienzo.width = ENCUADRE_LADO; lienzo.height = ENCUADRE_LADO;
+      const ctx = lienzo.getContext("2d");
+      // PNG conserva la transparencia del logo; para todo lo demás se rellena
+      // de blanco, porque al reducir la imagen queda cuadro a la vista y un
+      // JPEG sin fondo lo pinta de negro.
+      const png = tipo === "image/png" || tipo === "image/webp";
+      if (!png) { ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, ENCUADRE_LADO, ENCUADRE_LADO); }
+      ctx.imageSmoothingQuality = "high";
+      const c = encuadreCaja(ENCUADRE_LADO, img.naturalWidth, img.naturalHeight, zoom, pos.x, pos.y);
+      ctx.drawImage(img, c.x, c.y, c.w, c.h);
+
+      const blob = await new Promise((res) => lienzo.toBlob(res, png ? "image/png" : "image/jpeg", 0.92));
+      if (!blob) throw new Error("sin_blob");
+      await onAplicar(new File([blob], png ? "logo.png" : "logo.jpg", { type: blob.type }));
+    } catch (e) {
+      setError(mensajeError(e, "No fue posible guardar el encuadre."));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 16, marginTop: 12, background: "var(--paper)" }}>
+      <div className="mono" style={{ marginBottom: 4 }}>Encuadrar el logo</div>
+      <p style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, margin: "0 0 12px", maxWidth: 460 }}>
+        Así se verá dentro del círculo del pasaporte. Arrastra para centrarlo y usa
+        la barra para agrandarlo o reducirlo.
+      </p>
+
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div
+          onMouseDown={iniciar} onMouseMove={arrastrar} onMouseUp={soltar} onMouseLeave={soltar}
+          onTouchStart={iniciar} onTouchMove={arrastrar} onTouchEnd={soltar}
+          style={{
+            width: LADO, height: LADO, flex: "0 0 auto", position: "relative", overflow: "hidden",
+            borderRadius: "var(--r-sm)", background: "var(--paper-2)",
+            border: "1px solid var(--line)", cursor: arrastre.current ? "grabbing" : "grab",
+            touchAction: "none", userSelect: "none",
+          }}>
+          {img && caja && (
+            <img src={src} alt="" draggable={false} style={{
+              position: "absolute", left: caja.x, top: caja.y, width: caja.w, height: caja.h,
+              maxWidth: "none", pointerEvents: "none",
+            }}/>
+          )}
+          {/* El círculo del sello, encima: es el recorte real que va a sufrir
+              la imagen, y verlo evita tener que imaginárselo. */}
+          <div style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            boxShadow: "0 0 0 9999px color-mix(in oklch, var(--paper) 62%, transparent) inset",
+            borderRadius: "50%",
+          }}/>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <label htmlFor="enc-zoom" className="mono" style={{ display: "block", marginBottom: 6 }}>
+            Tamaño · {Math.round(zoom * 100)}%
+          </label>
+          <input id="enc-zoom" type="range" min="0.4" max="3" step="0.02" value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))} style={{ width: "100%" }}/>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            <button type="button" className="btn btn-ghost" style={{ fontSize: 13, padding: "6px 12px" }}
+              onClick={() => { setZoom(1); setPos({ x: 0, y: 0 }); }}>
+              Centrar
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
+            <button type="button" className="btn btn-primary" disabled={!img || busy} onClick={aplicar}>
+              {busy ? "Guardando…" : "Aplicar encuadre"}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={onCancelar} disabled={busy}>
+              Dejarlo como está
+            </button>
+          </div>
+          <Aviso>{error}</Aviso>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, ayuda, ruta, almacen, encuadrable = false }) => {
   const ref = React.useRef(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [nota, setNota] = React.useState("");
+  // Encuadre: se abre solo justo después de subir, que es cuando la persona
+  // acaba de ver el resultado y todavía tiene el logo en la cabeza. Guarda el
+  // tipo del archivo original para decidir si el recorte sale en PNG o en JPEG.
+  const [encuadrando, setEncuadrando] = React.useState(null);
 
   const elegir = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -227,12 +401,19 @@ const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, 
     setBusy(true);
     try {
       await onSubir(file);
+      if (encuadrable) setEncuadrando(file.type || "image/jpeg");
     } catch (err) {
       setError(mensajeError(err, "No fue posible subir la imagen."));
     } finally {
       setBusy(false);
       if (ref.current) ref.current.value = "";
     }
+  };
+
+  /** El recorte se sube por el mismo camino que el original y lo reemplaza. */
+  const aplicarEncuadre = async (archivo) => {
+    await onSubir(archivo);
+    setEncuadrando(null);
   };
 
   return (
@@ -255,9 +436,17 @@ const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, 
           )
           : <Placeholder width={alto} height={alto} label="sin imagen"/>}
         <div style={{ flex: 1, minWidth: 180 }}>
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => ref.current && ref.current.click()}>
-            {busy ? "Subiendo…" : (actual ? "Cambiar imagen" : "Subir imagen")}
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => ref.current && ref.current.click()}>
+              {busy ? "Subiendo…" : (actual ? "Cambiar imagen" : "Subir imagen")}
+            </button>
+            {encuadrable && actual && !encuadrando && (
+              <button type="button" className="btn btn-ghost" disabled={busy}
+                onClick={() => setEncuadrando("image/png")}>
+                Encuadrar
+              </button>
+            )}
+          </div>
           <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5, color: "var(--ink-3)" }}>
             {ayuda || ayudaImagen(cuadrada)}
           </div>
@@ -270,6 +459,10 @@ const SubirImagen = ({ actual, onSubir, etiqueta, alto = 120, cuadrada = false, 
           <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" onChange={elegir} style={{ display: "none" }}/>
         </div>
       </div>
+      {encuadrando && actual && (
+        <EncuadreImagen src={actual} tipo={encuadrando}
+          onAplicar={aplicarEncuadre} onCancelar={() => setEncuadrando(null)}/>
+      )}
       {nota && <Aviso tipo="info">{nota}</Aviso>}
       <Aviso>{error}</Aviso>
     </div>
@@ -318,7 +511,7 @@ const ERRORES = {
   not_found: "No encontrado.",
   ya_verificado: "Este promotor ya estaba verificado.",
   sin_credenciales: "Ese promotor no tiene contraseña: verifícalo primero.",
-  stand_no_existe: "Ese stand no existe.",
+  stand_no_existe: "Ese espacio no existe.",
   estado_invalido: "Ese cambio de estado no es válido.",
   estado_no_permite_clave: "No se puede enviar una clave a una cuenta rechazada o suspendida.",
   bad_id: "El identificador no es válido. Recarga la página.",
@@ -327,6 +520,11 @@ const ERRORES = {
   municipio_invalido: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_municipio: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_json: "Los datos enviados no son válidos. Recarga la página.",
+  enlace_invalido: "El enlace debe empezar por https:// y ser una dirección válida.",
+  direccion_requerida: "La dirección es obligatoria.",
+  tipo_organizacion_invalido: "Elige un tipo de organización de la lista.",
+  actividad_cafe_invalida: "Elige tu actividad o vínculo con la cadena del café.",
+  detalle_requerido: "Escribiste «Otro»: cuéntanos cuál en el campo de al lado.",
   password_invalida: "La contraseña no es válida.",
   payload_too_large: "El contenido es demasiado grande.",
   // Cuentas de administración
@@ -508,7 +706,7 @@ const PuertaCorreo = ({ titulo, nota, onListo, volverA = "/festival", volverText
           {titulo || "Identifícate con tu correo."}
         </h1>
         <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.65, marginBottom: 22 }}>
-          {nota || "Es el mismo correo con el que votas en los stands. No hace falta contraseña."}
+          {nota || "Es el mismo correo con el que votas en los espacios. No hace falta contraseña."}
         </p>
 
         <form onSubmit={p.entrar}>
@@ -779,6 +977,227 @@ const EstrellasLectura = ({ valor, tam = 14, etiqueta }) => {
   );
 };
 
+// ---------------------------------------------------------------------------
+// Catálogos de la inscripción
+//
+// Las CLAVES viven en api/lib/Catalogos.php, que es quien decide qué entra en
+// la base; aquí están las frases, que es lo que se lee. Están separadas porque
+// guardar la frase convertiría cualquier corrección de una tilde en un tipo de
+// organización nuevo, y el conteo por tipo dejaría de valer.
+//
+// Una prueba comprueba que las dos listas tengan las mismas claves: separar
+// presentación de validación sólo funciona si algo avisa cuando se separan de
+// más.
+// ---------------------------------------------------------------------------
+
+const ORGANIZACIONES = [
+  ["persona_natural", "Persona Natural"],
+  ["sas", "Sociedades por Acciones Simplificadas S.A.S."],
+  ["limitada", "Sociedad Limitada"],
+  ["civil", "Las demás organizaciones civiles, corporaciones, fundaciones"],
+  ["unipersonal", "Empresas unipersonales"],
+  ["comunidades_indigenas", "Corporaciones, asociación y fundaciones creadas para adelantar actividades en comunidades indígenas"],
+  ["anonima", "Sociedad Anónima"],
+  ["utilidad_comun", "Asociaciones, corporaciones, fundaciones e instituciones de utilidad común (gremiales, de beneficencia; profesionales, juveniles, sociales, democráticas y participativas, cívicas y comunitarias, de egresados, de rehabilitación social y ayuda a indigentes y clubes sociales)"],
+  ["fundacion", "Fundaciones"],
+  ["comandita_simple", "Sociedad en Comandita Simple"],
+  ["corporacion", "Corporaciones"],
+  ["no_formalizada", "Organización no formalizada"],
+  ["otro", "Otro"],
+];
+
+const ACTIVIDADES_CAFE = [
+  ["tostado_marca_propia", "Productor de café tostado con marca propia"],
+  ["transformador", "Transformador de productos derivados del café"],
+  ["distribuidor", "Distribuidor de productos de café"],
+  ["barista", "Barista / establecimiento especializado en café"],
+  ["proveedor", "Proveedor de equipos, maquinaria o insumos para café"],
+  ["artesanias", "Artesanías / productos con identidad cafetera"],
+  ["servicios", "Servicios relacionados con el café"],
+  ["organizacion", "Organización o asociación cafetera"],
+  ["otro", "Otro"],
+];
+
+/** La frase de una clave, o la clave misma si el catálogo cambió bajo los pies. */
+const etiquetaCatalogo = (catalogo, clave, otro) => {
+  if (!clave) return "";
+  if (clave === "otro") return (otro || "").trim() || "Otro";
+  const f = catalogo.find(([k]) => k === clave);
+  return f ? f[1] : clave;
+};
+
+/**
+ * Desplegable de catálogo con su «Otro: ____».
+ *
+ * El campo abierto sólo aparece al elegir «Otro», y entonces es obligatorio:
+ * «Otro» a secas no caracteriza a nadie, y un informe lleno de «Otro» sin
+ * detalle no se puede leer.
+ */
+const SelectorCatalogo = ({
+  id, etiqueta, catalogo, valor, otro, onCambio, onOtro,
+  requerido = false, ayuda, etiquetaOtro = "¿Cuál?",
+}) => (
+  <>
+    <div className="field">
+      <label htmlFor={id}>{etiqueta}{requerido ? " *" : ""}</label>
+      <select id={id} value={valor || ""} required={requerido}
+        onChange={(e) => onCambio(e.target.value)}>
+        <option value="">Selecciona una opción…</option>
+        {catalogo.map(([k, texto]) => (
+          <option key={k} value={k}>{texto}</option>
+        ))}
+      </select>
+      {ayuda && <span className="ayuda">{ayuda}</span>}
+    </div>
+    {valor === "otro" && (
+      <div className="field">
+        <label htmlFor={id + "-otro"}>{etiquetaOtro} *</label>
+        <input id={id + "-otro"} value={otro || ""} maxLength={120} required
+          onChange={(e) => onOtro(e.target.value)}
+          placeholder="Escríbelo en pocas palabras"/>
+      </div>
+    )}
+  </>
+);
+
+// ---------------------------------------------------------------------------
+// Ajustes del festival en el cliente
+//
+// Llegan una sola vez al arrancar y avisan por el evento `lmt:festival`. Todo
+// lo que los pinta necesita el mismo par —leer ahora, volver a leer cuando
+// lleguen—, así que aquí está una vez en lugar de repetido en cada componente.
+// ---------------------------------------------------------------------------
+
+/** Los ajustes actuales, re-renderizando cuando el servidor los entrega. */
+const usarAjustesFestival = () => {
+  const leer = () => (window.LMTFestival && window.LMTFestival.ajustes()) || {};
+  const [aj, setAj] = React.useState(leer);
+  React.useEffect(() => {
+    const refrescar = () => setAj(leer());
+    window.addEventListener("lmt:festival", refrescar);
+    // Si los ajustes llegaron entre el primer render y este efecto, nadie
+    // dispararía el evento otra vez y el texto se quedaría con el de fábrica.
+    refrescar();
+    return () => window.removeEventListener("lmt:festival", refrescar);
+  }, []);
+  return aj;
+};
+
+/** El pie de la marca: lo que va bajo «La Mejor Taza». */
+const PIE_MARCA = "Festival · Nariño 2026";
+const pieDeMarca = (aj) => {
+  const a = aj || (window.LMTFestival && window.LMTFestival.ajustes()) || {};
+  return ((a.marca || {}).pie || "").trim() || PIE_MARCA;
+};
+
+/**
+ * Aviso de tratamiento de datos personales.
+ *
+ * Va en una ventana y no en un enlace externo porque la autorización se da en
+ * este formulario: quien la firma tiene que poder leer lo que autoriza sin
+ * salir de la página y perder lo que lleva escrito. El enlace a la política
+ * completa de la Gobernación queda al final, para quien quiera el documento.
+ *
+ * `datos` permite pasar un borrador sin guardar: es lo que usa el panel de
+ * Personalización para enseñar cómo va a quedar el texto que se está
+ * escribiendo, que es justo el momento en que hace falta verlo.
+ */
+const AvisoDatos = ({ abierto, onCerrar, datos: borrador }) => {
+  const aj = usarAjustesFestival();
+  const datos = borrador || aj.datos || {};
+  const texto = (datos.texto || "").trim();
+  const enlace = (datos.enlace || "").trim();
+  const cierre = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!abierto) return undefined;
+    const escapar = (e) => { if (e.key === "Escape") onCerrar(); };
+    document.addEventListener("keydown", escapar);
+    // El foco entra en el diálogo: si se queda detrás, quien navega con
+    // teclado sigue tabulando por el formulario que hay debajo.
+    if (cierre.current) cierre.current.focus();
+    return () => document.removeEventListener("keydown", escapar);
+  }, [abierto, onCerrar]);
+
+  if (!abierto) return null;
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Política de tratamiento de datos personales"
+      onClick={onCerrar}
+      style={{
+        position: "fixed", inset: 0, zIndex: 90, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: 16,
+        background: "color-mix(in oklch, var(--ink) 55%, transparent)",
+      }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "var(--paper)", border: "1px solid var(--line)",
+        borderRadius: "var(--r-md)", maxWidth: 640, width: "100%",
+        maxHeight: "86dvh", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ padding: "18px 22px 12px", borderBottom: "1px solid var(--line)" }}>
+          <div className="mono">Ley 1581 de 2012</div>
+          <h2 style={{
+            fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 400,
+            fontSize: 26, margin: "4px 0 0", lineHeight: 1.15,
+          }}>
+            Tratamiento de datos personales
+          </h2>
+        </div>
+
+        <div style={{ padding: "16px 22px", overflowY: "auto", fontSize: 14, lineHeight: 1.7, color: "var(--ink-2)" }}>
+          {texto.split(/\n{2,}/).map((p, i) => (
+            <p key={i} style={{ margin: i === 0 ? "0 0 12px" : "0 0 12px" }}>{p}</p>
+          ))}
+          {enlace && (
+            <p style={{ margin: "18px 0 0" }}>
+              <a href={enlace} target="_blank" rel="noopener noreferrer" style={{ color: "var(--grano)" }}>
+                Política de Tratamiento de Datos Personales de la Gobernación de Nariño ↗
+              </a>
+            </p>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 22px 18px", borderTop: "1px solid var(--line)" }}>
+          <button ref={cierre} type="button" className="btn btn-ghost" onClick={onCerrar}
+            style={{ justifyContent: "center", width: "100%" }}>
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * La casilla de autorización, con su enlace al aviso.
+ *
+ * Está aquí y no dentro de cada formulario porque el texto que se firma tiene
+ * que ser el mismo en la inscripción pública y en la que llena un organizador:
+ * si se separan, tarde o temprano dicen cosas distintas.
+ */
+const CasillaDatos = ({ valor, onCambio, id = "acepta-datos" }) => {
+  const [ver, setVer] = React.useState(false);
+  return (
+    <>
+      <label htmlFor={id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
+        <input id={id} type="checkbox" checked={!!valor} onChange={(e) => onCambio(e.target.checked)} style={{ marginTop: 3 }}/>
+        <span>
+          Autorizo a la Gobernación de Nariño a tratar mis datos personales con la finalidad de
+          gestionar mi participación en el festival, conforme a la Ley 1581 de 2012. *{" "}
+          <button type="button" onClick={(e) => { e.preventDefault(); setVer(true); }}
+            style={{
+              background: "none", border: 0, padding: 0, font: "inherit",
+              color: "var(--grano)", textDecoration: "underline", cursor: "pointer",
+            }}>
+            Leer la política de tratamiento de datos
+          </button>
+        </span>
+      </label>
+      <AvisoDatos abierto={ver} onCerrar={() => setVer(false)}/>
+    </>
+  );
+};
+
 /** Los títulos que el organizador haya puesto, o los de fábrica. */
 const titulosEstrellas = () => {
   const a = (window.LMTFestival && window.LMTFestival.ajustes()) || {};
@@ -801,9 +1220,11 @@ Object.assign(window, {
   LogoTaza, Wordmark, MontanasSilueta, SelloCircular, Placeholder, QRCode,
   BarraVotos, calcScore, totalVotos, standUrl,
   ERRORES, mensajeError, Aviso,
-  SubirImagen, ayudaImagen, urlImagen, BloqueForm,
+  SubirImagen, ayudaImagen, urlImagen, BloqueForm, EncuadreImagen, encuadreCaja,
   Estrella, EstrellasEntrada, EstrellasLectura,
   ESTRELLA_CAMPOS, ESTRELLA_CLAVES, titulosEstrellas, pesos,
   MenuPublico, MENU_PUBLICO,
   usarPuerta, PuertaCorreo, InvitacionCorreo, EstadoAlmacen, CampoNumerico,
+  usarAjustesFestival, pieDeMarca, PIE_MARCA, AvisoDatos, CasillaDatos,
+  ORGANIZACIONES, ACTIVIDADES_CAFE, SelectorCatalogo, etiquetaCatalogo,
 });
