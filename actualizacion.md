@@ -28,7 +28,7 @@
 •	Otro:   ____ (Respuesta abierta corta)
 
 ## Formulario de inscripción de Espacios(Stand)/promotores externo e interno actualizar: 
-1. Link de la política de tratamiento de datos personales datos (popup) con el siguiente texto personalizable desde el admin
+1. Link de la política de tratamiento de datos personales datos (popup) con el siguiente texto personalizable desde el admin (modulo Personalizacion)
 "La Gobernación de Nariño, a través de la Secretaría de Agricultura y Desarrollo Rural, en calidad de responsable del tratamiento de los datos personales, realizará el tratamiento de la información suministrada mediante este formulario, de conformidad con la Ley 1581 de 2012 y demás normas aplicables en materia de protección de datos personales.
 Los datos personales serán tratados para las finalidades relacionadas con la inscripción, selección, organización, comunicación, participación y desarrollo de la muestra comercial “La Mejor Taza Nariño 2026”, así como para identificar y caracterizar a los participantes y sus emprendimientos dentro de la cadena de valor del café.
 De igual manera, la información podrá ser utilizada para actividades de difusión y comunicación institucional relacionadas con la muestra, incluyendo la publicación de información sobre los emprendimientos participantes y la captura, uso y divulgación de fotografías, videos y demás material audiovisual obtenido durante las actividades desarrolladas en el evento, a través de los canales institucionales de la Gobernación de Nariño y de la Secretaría de Agricultura y Desarrollo Rural y demás dependencias.
