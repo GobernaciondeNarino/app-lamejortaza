@@ -7,6 +7,108 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.6.0 — Espacios, y quién los ocupa
+
+**Punto de reversión (v2.5.0):** `fbb95ae`
+
+### «Stand» pasa a llamarse «Espacio»
+
+Sólo en lo que se lee. Las rutas (`/admin/stands`), las columnas de la base
+(`stands`, `stand_id`), los identificadores del código y el CSV exportado se
+quedan exactamente como están: renombrarlos habría obligado a migrar la base y
+a reimprimir los QR, y no cambia nada de lo que ve nadie. Lo que cambia es el
+panel, los formularios, los correos, el instalador y el contador del pasaporte.
+
+### El formulario de inscripción pregunta quién eres
+
+Tres campos nuevos, los tres obligatorios:
+
+- **Dirección.** Antes era opcional. El mapa marca una zona; la dirección es lo
+  que lleva a la puerta, y sin ella una chincheta en un cerro no sirve de nada.
+- **¿Qué tipo de organización eres?** Trece opciones, de «Persona Natural» a
+  «Organización no formalizada», más «Otro» con su campo abierto.
+- **¿Cuál es tu actividad o vínculo con la cadena de valor del café?** Nueve
+  opciones, de «Productor de café tostado con marca propia» a «Organización o
+  asociación cafetera», más «Otro».
+
+Los dos desplegables **guardan una clave, no la frase** (`sas`, `barista`). Si
+se guardara el texto, corregir una tilde crearía un tipo de organización nuevo
+y cualquier conteo por tipo dejaría de valer — que es exactamente lo que ya
+pasó con los municipios antes de cerrarlos contra el catálogo del DANE. Elegir
+«Otro» sin decir cuál no se acepta: «otro» a secas no caracteriza a nadie.
+
+Los mismos campos están en el alta interna del panel, ahí opcionales, para que
+un espacio creado antes de que existieran se pueda seguir editando. Todo viaja
+de la inscripción al espacio al aprobar, y la ficha de revisión lo enseña
+antes de decidir.
+
+### Política de tratamiento de datos, editable
+
+Junto a la casilla de autorización hay ahora un enlace que abre el aviso
+completo en una ventana. Va en una ventana y no fuera porque la autorización se
+firma en ese formulario: salir a leerla significaba perder lo escrito.
+
+El texto y el enlace a la política de la Gobernación **se editan desde *Panel →
+Personalización***. Quien tiene que poder cambiar un aviso de habeas data es el
+área jurídica, no quien despliega, y un texto desactualizado ahí no es un
+detalle de redacción. El enlace se valida: sólo `http(s)`, para que un
+`javascript:` no acabe en un enlace que pulsa el público.
+
+### Coordenadas escritas a mano
+
+El selector de ubicación gana dos campos, latitud y longitud, en los dos
+formularios. **La chincheta se mueve mientras se teclea**, no al salir del
+campo: quien pega unas coordenadas de un GPS quiere ver ahí mismo si cayeron
+donde debían. El municipio se deduce del punto, igual que al tocar el mapa, y
+si el par cae fuera de Nariño se avisa en vez de guardarlo.
+
+### El logo se encuadra al subirlo
+
+Después de subirlo se abre un recuadro con el círculo del sello dibujado
+encima: se arrastra para centrarlo y hay una barra para agrandarlo o
+reducirlo. Al aplicar, **la imagen se rehace y se vuelve a subir**.
+
+Se rehace en lugar de guardar «zoom 1,4 · 8 % a la izquierda» porque el logo se
+pinta en cinco sitios —la tarjeta del recorrido, la ficha, el sello del
+pasaporte en CSS, el mismo sello en el lienzo de Three.js y el cartel del QR— y
+dos de ellos no son HTML. Guardar el encuadre obligaría a llevar ese cálculo a
+los cinco, y el que se olvidara enseñaría otra imagen.
+
+### El nombre de la edición se configura
+
+«Festival · Nariño 2026», el renglón bajo el logotipo, sale ahora de los
+ajustes: se cambia desde *Personalización* y afecta a toda la aplicación y a la
+cabecera de los correos que salen del sistema, que antes lo tenían escrito
+aparte.
+
+### Un fallo que la prueba pilló
+
+`mapStand()` en `js/api.js` es una lista blanca: lo que no se nombre ahí no
+llega al cliente. Los campos nuevos no estaban, así que el editor del panel los
+abría vacíos y el primer «Guardar» los borraba de la base. Es la tercera vez
+que pasa lo mismo con esa función (ya ocurrió con el propietario y con el NIT);
+queda anotado en el propio código.
+
+### Migración
+
+`php db/migrate.php` añade ocho columnas —cuatro a `stands` y cuatro a
+`promotores`— sin tocar nada de lo que ya había. Los espacios y las
+inscripciones anteriores se quedan sin caracterización, que es lo correcto: no
+hay dato que inventarles.
+
+### Cómo volver atrás
+
+```bash
+git revert --no-commit fbb95ae..HEAD && git commit -m "Volver a v2.5.0"
+```
+
+Las ocho columnas nuevas se quedan en la base y no molestan: la v2.5.0 no las
+lee. Los ajustes de marca y de política viven en la tabla `ajustes` bajo la
+clave `festival`; al revertir se ignoran y todo vuelve a los textos de fábrica.
+Los logos ya encuadrados se quedan encuadrados — son archivos normales.
+
+---
+
 ## v2.5.0 — Los datos entran bien y el festival se camina
 
 **Punto de reversión (v2.4.0):** `8c84b92`

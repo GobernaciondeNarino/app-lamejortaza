@@ -67,11 +67,43 @@ const municipioEnPunto = (svg, mapa, x, y) => {
   return mejor;
 };
 
+/** Rectángulo que envuelve a Nariño, con margen. El servidor usa el mismo. */
+const NARINO_CAJA = { latMin: 0.2, latMax: 2.9, lngMin: -79.3, lngMax: -76.5 };
+
+const dentroDeNarino = (la, lo) =>
+  la >= NARINO_CAJA.latMin && la <= NARINO_CAJA.latMax &&
+  lo >= NARINO_CAJA.lngMin && lo <= NARINO_CAJA.lngMax;
+
+/** El número que hay escrito, o null si todavía no es un número. */
+const aNumero = (texto) => {
+  const t = String(texto ?? "").trim().replace(",", ".");
+  if (t === "" || t === "-" || t === "." || t === "-.") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+
 const SelectorUbicacion = ({ lat, lng, municipio, onCambio, alto = 380, soloLectura = false }) => {
   const mapa = MAPA_NARINO();
   const svgRef = React.useRef(null);
   const [aviso, setAviso] = React.useState("");
   const [buscando, setBuscando] = React.useState(false);
+
+  // Lo que hay ESCRITO en las dos cajas, que no siempre es un número: mientras
+  // se teclea «-77.» no hay coordenada válida, y guardar el valor convertido en
+  // cada pulsación borraba el signo menos en cuanto se escribía.
+  const [texto, setTexto] = React.useState({ lat: "", lng: "" });
+  const tecleando = React.useRef(false);
+
+  // Cuando el punto cambia desde fuera —un toque en el mapa, «usar mi
+  // ubicación», cargar un espacio existente— las cajas se ponen al día. Salvo
+  // si el foco está dentro: ahí manda quien escribe.
+  React.useEffect(() => {
+    if (tecleando.current) return;
+    setTexto({
+      lat: typeof lat === "number" && !isNaN(lat) ? String(lat) : "",
+      lng: typeof lng === "number" && !isNaN(lng) ? String(lng) : "",
+    });
+  }, [lat, lng]);
 
   if (!mapa || !mapa.bounds) {
     return (
@@ -110,6 +142,60 @@ const SelectorUbicacion = ({ lat, lng, municipio, onCambio, alto = 380, soloLect
   const alTocar = (e) => {
     const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
     if (t) marcar(t.clientX, t.clientY);
+  };
+
+  /**
+   * Coordenadas escritas a mano.
+   *
+   * El mapa se mueve mientras se teclea, no al salir del campo: quien pega unas
+   * coordenadas de un GPS quiere ver ahí mismo si cayó donde debía, y esperar
+   * al blur convierte una comprobación inmediata en una adivinanza. Sólo se
+   * avisa cuando el par ya está completo y cae fuera de Nariño; a medio
+   * escribir, «-7» está fuera del departamento y no es un error de nadie.
+   */
+  const escribirCoordenada = (campo, valor) => {
+    if (soloLectura) return;
+    const limpio = valor.replace(/[^0-9.,\-]/g, "").slice(0, 14);
+    const siguiente = { ...texto, [campo]: limpio };
+    setTexto(siguiente);
+
+    const la = aNumero(siguiente.lat), lo = aNumero(siguiente.lng);
+    if (la === null || lo === null) { setAviso(""); return; }
+    if (!dentroDeNarino(la, lo)) {
+      setAviso("Ese punto queda fuera de Nariño. Revisa la latitud y la longitud.");
+      return;
+    }
+    setAviso("");
+    const p = geoAPunto(mapa, la, lo);
+    const muni = municipioEnPunto(svgRef.current, mapa, p.x, p.y);
+    onCambio({
+      lat: Math.round(la * 1e6) / 1e6,
+      lng: Math.round(lo * 1e6) / 1e6,
+      municipio: muni ? muni.nombre : "",
+    });
+  };
+
+  /**
+   * Al salir del campo se redondea lo escrito, y nada más.
+   *
+   * Lo que NO se hace aquí es borrar lo tecleado por estar a medias: pasar de
+   * la latitud a la longitud es un blur, y con la longitud todavía vacía el par
+   * está incompleto por definición. Vaciar la caja en ese momento borraba la
+   * latitud recién escrita justo al ir a escribir la otra mitad.
+   */
+  const salirDeCoordenada = () => {
+    tecleando.current = false;
+    const la = aNumero(texto.lat), lo = aNumero(texto.lng);
+    if (la !== null && lo !== null && dentroDeNarino(la, lo)) {
+      setTexto({ lat: String(Math.round(la * 1e6) / 1e6), lng: String(Math.round(lo * 1e6) / 1e6) });
+      setAviso("");
+      return;
+    }
+    const vacias = texto.lat.trim() === "" && texto.lng.trim() === "";
+    if (vacias) { setAviso(""); return; }
+    if (la === null || lo === null) {
+      setAviso("Escribe la latitud y la longitud completas, con punto decimal.");
+    }
   };
 
   /** Ubicación del propio teléfono: es lo cómodo si estás en la finca. */
@@ -155,7 +241,7 @@ const SelectorUbicacion = ({ lat, lng, municipio, onCambio, alto = 380, soloLect
           viewBox={mapa.viewBox}
           preserveAspectRatio="xMidYMid meet"
           role={soloLectura ? "img" : "application"}
-          aria-label={soloLectura ? "Ubicación del stand en Nariño" : "Mapa de Nariño: toca para marcar la ubicación"}
+          aria-label={soloLectura ? "Ubicación del espacio en Nariño" : "Mapa de Nariño: toca para marcar la ubicación"}
           onClick={(e) => marcar(e.clientX, e.clientY)}
           onTouchEnd={alTocar}
           style={{
@@ -189,15 +275,48 @@ const SelectorUbicacion = ({ lat, lng, municipio, onCambio, alto = 380, soloLect
           </button>
         )}
         {tienePunto && !soloLectura && (
-          <button type="button" className="btn btn-ghost" onClick={() => onCambio({ lat: null, lng: null, municipio })}
+          <button type="button" className="btn btn-ghost"
+            onClick={() => { setTexto({ lat: "", lng: "" }); setAviso(""); onCambio({ lat: null, lng: null, municipio }); }}
             style={{ fontSize: 13, padding: "8px 14px" }}>
             Quitar el punto
           </button>
         )}
-        <span className="mono" style={{ color: "var(--ink-3)" }}>
-          {tienePunto ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "sin ubicación marcada"}
-        </span>
+        {soloLectura && (
+          <span className="mono" style={{ color: "var(--ink-3)" }}>
+            {tienePunto ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "sin ubicación marcada"}
+          </span>
+        )}
       </div>
+
+      {/* Escribir las coordenadas a mano. Tocar el mapa da la zona; quien viene
+          con un GPS, con Google Maps o con las coordenadas de la finca ya
+          apuntadas necesita poder pegarlas y ver dónde caen. */}
+      {!soloLectura && (
+        <div style={{ marginTop: 12 }}>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="ubi-lat">Latitud</label>
+              <input id="ubi-lat" value={texto.lat} inputMode="decimal" autoComplete="off"
+                placeholder="1.21361"
+                onFocus={() => { tecleando.current = true; }}
+                onBlur={salirDeCoordenada}
+                onChange={(e) => escribirCoordenada("lat", e.target.value)}/>
+            </div>
+            <div className="field">
+              <label htmlFor="ubi-lng">Longitud</label>
+              <input id="ubi-lng" value={texto.lng} inputMode="decimal" autoComplete="off"
+                placeholder="-77.28111"
+                onFocus={() => { tecleando.current = true; }}
+                onBlur={salirDeCoordenada}
+                onChange={(e) => escribirCoordenada("lng", e.target.value)}/>
+            </div>
+          </div>
+          <span className="ayuda">
+            En grados decimales, con punto. En Nariño la latitud va entre 0,2 y 2,9 y la
+            longitud es negativa (entre −79,3 y −76,5). La chincheta se mueve mientras escribes.
+          </span>
+        </div>
+      )}
       {aviso && <Aviso tipo="info">{aviso}</Aviso>}
     </div>
   );

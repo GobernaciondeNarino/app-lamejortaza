@@ -6,7 +6,7 @@ const AdminShell = ({ active, user, children }) => {
   // además de que el backend lo rechace: enseñar una sección que siempre
   // responde 403 es una trampa, no una medida de seguridad.
   const items = [
-    { id: "stands",     label: "Stands",       sub: "Registro",     path: "/admin/stands" },
+    { id: "stands",     label: "Espacios",     sub: "Registro",     path: "/admin/stands" },
     { id: "promotores", label: "Promotores",   sub: "Inscripciones", path: "/admin/promotores" },
     { id: "qr",         label: "Códigos QR",   sub: "Impresión",    path: "/admin/qr" },
     { id: "live",       label: "Actividad",    sub: "En vivo",      path: "/admin/live" },
@@ -124,7 +124,7 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-          <span className="mono" style={{ color: "var(--paper-3)" }}>¿Tienes un stand en el festival?</span>
+          <span className="mono" style={{ color: "var(--paper-3)" }}>¿Tienes un espacio en el festival?</span>
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <a href="/inscripcion" data-route style={{ color: "var(--paper)", fontSize: 14, textDecoration: "underline" }}>
               Inscribirme como promotor
@@ -147,7 +147,7 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
         </h2>
         <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 22 }}>
           No necesitas cuenta ni contraseña: entra, mira el ranking en vivo y
-          vota en los stands que visites.
+          vota en los espacios que visites.
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -195,7 +195,7 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
               </button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <a href="/promotor" data-route className="mono" style={{ color: "var(--ink-3)" }}>
-                  Soy promotor de un stand →
+                  Soy promotor de un espacio →
                 </a>
                 <span className="mono" style={{ color: "var(--ink-3)" }}>
                   {window.LMTApi && window.LMTApi.enabled ? "API conectada" : "API no disponible"}
@@ -230,15 +230,15 @@ const StandsList = ({ stands }) => {
     <div className="admin-page">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 32, gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div className="mono">Registro · {stands.length} stands</div>
-          <h1 className="titulo-xl">Stands del festival</h1>
+          <div className="mono">Registro · {stands.length} espacios</div>
+          <h1 className="titulo-xl">Espacios del festival</h1>
         </div>
-        <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar stand</a>
+        <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar espacio</a>
       </div>
 
       <div className="grid-4" style={{ marginBottom: 32 }}>
         {[
-          { k: "Stands", v: stands.length, sub: "registrados" },
+          { k: "Espacios", v: stands.length, sub: "registrados" },
           { k: "Votos", v: stands.reduce((a, s) => a + totalVotos(s.votos), 0), sub: "totales" },
           { k: "Aprobación", v: (window.LMTApi && window.LMTApi.metricas ? window.LMTApi.metricas.aprobacion + "%" : "—"), sub: "promedio" },
           { k: "Pasaportes", v: (window.LMTApi && window.LMTApi.metricas ? window.LMTApi.metricas.pasaportes : "—"), sub: "activos" },
@@ -253,15 +253,15 @@ const StandsList = ({ stands }) => {
 
       {stands.length === 0 ? (
         <div style={{ padding: 60, border: "1px dashed var(--line-2)", borderRadius: "var(--r-md)", textAlign: "center", color: "var(--ink-3)" }}>
-          <div className="mono">Sin stands</div>
+          <div className="mono">Sin espacios</div>
           <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 28, color: "var(--ink)", margin: "8px 0 16px" }}>Registra el primero.</div>
-          <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar stand</a>
+          <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar espacio</a>
         </div>
       ) : (
         <div className="tabla-scroll" style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", background: "var(--paper)" }}>
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "60px 2fr 1fr 1fr 1.2fr 80px", padding: "12px 20px", borderBottom: "1px solid var(--line)", background: "var(--paper-2)" }}>
-            {["#", "Stand", "Municipio", "Región", "Calificación", ""].map((h, i) => (<div key={i} className="mono">{h}</div>))}
+            {["#", "Espacio", "Municipio", "Región", "Calificación", ""].map((h, i) => (<div key={i} className="mono">{h}</div>))}
           </div>
           {sorted.map((s, i) => (
             <a key={s.id} href={"/admin/stands/" + s.id + "/edit"} data-route style={{
@@ -300,6 +300,8 @@ const StandEditor = ({ stand }) => {
     nombre: "", municipio: "", region: "", direccion: "", correo: "",
     descripcion: "", propietario: "", propietario_documento: "", nit: "", sitio_web: "",
     telefono: "", lat: null, lng: null,
+    tipo_organizacion: "", tipo_organizacion_otro: "",
+    actividad_cafe: "", actividad_cafe_otro: "",
     logo: "", votos: { bueno: 0, regular: 0, malo: 0 },
     coords: { x: 0.5, y: 0.5 },
     color: "oklch(0.45 0.1 40)",
@@ -336,6 +338,10 @@ const StandEditor = ({ stand }) => {
         telefono: form.telefono,
         lat: form.lat,
         lng: form.lng,
+        tipo_organizacion: form.tipo_organizacion || "",
+        tipo_organizacion_otro: form.tipo_organizacion_otro || "",
+        actividad_cafe: form.actividad_cafe || "",
+        actividad_cafe_otro: form.actividad_cafe_otro || "",
         logo: form.logo || null,
         coords: form.coords,
         color: form.color,
@@ -349,6 +355,10 @@ const StandEditor = ({ stand }) => {
       if (code.includes("bad_id")) setError("Identificador inválido (sólo minúsculas, números y guión).");
       else if (code.includes("bad_nombre")) setError("Nombre obligatorio (máx. 80).");
       else if (code.includes("bad_municipio")) setError("Municipio obligatorio (máx. 80).");
+      else if (code.includes("direccion_requerida")) setError(ERRORES.direccion_requerida);
+      else if (code.includes("detalle_requerido")) setError(ERRORES.detalle_requerido);
+      else if (code.includes("tipo_organizacion_invalido")) setError(ERRORES.tipo_organizacion_invalido);
+      else if (code.includes("actividad_cafe_invalida")) setError(ERRORES.actividad_cafe_invalida);
       else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");
       else setError("No fue posible guardar: " + code);
     } finally { setBusy(false); }
@@ -375,22 +385,22 @@ const StandEditor = ({ stand }) => {
 
   return (
     <div className="admin-page" style={{ maxWidth: 960 }}>
-      <a href="/admin/stands" data-route style={{ color: "var(--ink-2)", fontSize: 13, marginBottom: 20, display: "inline-block" }}>← Volver a stands</a>
-      <div className="mono">{isNew ? "Nuevo registro" : "Editar stand"} · {form.id}</div>
+      <a href="/admin/stands" data-route style={{ color: "var(--ink-2)", fontSize: 13, marginBottom: 20, display: "inline-block" }}>← Volver a espacios</a>
+      <div className="mono">{isNew ? "Nuevo registro" : "Editar espacio"} · {form.id}</div>
       <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "4px 0 28px" }}>
-        {isNew ? "Registrar stand" : (form.nombre || "Sin nombre")}
+        {isNew ? "Registrar espacio" : (form.nombre || "Sin nombre")}
       </h1>
 
       <div className="editor-2col">
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {isNew && (
             <div className="field">
-              <label>ID del stand (URL del QR)</label>
+              <label>ID del espacio (URL del QR)</label>
               <input value={form.id} onChange={e => update("id", e.target.value.toLowerCase().replace(/[^a-z0-9\-]/g, ""))} maxLength={32}/>
             </div>
           )}
           <div className="field">
-            <label>Nombre del stand</label>
+            <label>Nombre del espacio</label>
             <input value={form.nombre} onChange={e => update("nombre", e.target.value)} placeholder="Ej: Finca El Tambo" maxLength={80} required/>
           </div>
           <div className="grid-2" style={{ gap: 20 }}>
@@ -402,8 +412,8 @@ const StandEditor = ({ stand }) => {
               onCambio={(v) => update("region", v)}/>
           </div>
           <div className="field">
-            <label>Dirección</label>
-            <input value={form.direccion} onChange={e => update("direccion", e.target.value)} maxLength={255}/>
+            <label>Dirección *</label>
+            <input value={form.direccion} onChange={e => update("direccion", e.target.value)} maxLength={255} required/>
           </div>
           <div className="grid-2" style={{ gap: 20 }}>
             <div className="field">
@@ -438,10 +448,29 @@ const StandEditor = ({ stand }) => {
             </div>
           </div>
 
+          {/* Los mismos catálogos que pide la inscripción pública: un espacio
+              creado a mano desde aquí tiene que quedar caracterizado igual que
+              uno que llegó por el formulario, o los informes cuentan mitades. */}
+          <SelectorCatalogo id="st-org"
+            etiqueta="¿Qué tipo de organización es?"
+            catalogo={ORGANIZACIONES}
+            valor={form.tipo_organizacion} otro={form.tipo_organizacion_otro}
+            onCambio={(v) => setForm((f) => ({ ...f, tipo_organizacion: v, tipo_organizacion_otro: v === "otro" ? f.tipo_organizacion_otro : "" }))}
+            onOtro={(v) => update("tipo_organizacion_otro", v)}
+            etiquetaOtro="¿Cuál es el tipo de organización?"/>
+          <SelectorCatalogo id="st-act"
+            etiqueta="Actividad o vínculo con la cadena de valor del café"
+            catalogo={ACTIVIDADES_CAFE}
+            valor={form.actividad_cafe} otro={form.actividad_cafe_otro}
+            onCambio={(v) => setForm((f) => ({ ...f, actividad_cafe: v, actividad_cafe_otro: v === "otro" ? f.actividad_cafe_otro : "" }))}
+            onOtro={(v) => update("actividad_cafe_otro", v)}
+            etiquetaOtro="¿Cuál es la actividad?"/>
+
           <SubirImagen
             actual={urlImagen(form.logo)}
             etiqueta="Logo del producto"
             cuadrada
+            encuadrable
             ruta={form.logo}
             almacen={almacen && almacen.dir}
             onSubir={subirLogo}/>

@@ -76,11 +76,11 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
       onComplete(data);
     } catch (e) {
       const code = String((e && (e.code || e.message)) || e);
-      if (code.includes("ya_votaste")) { setSubmitError("Ya registraste un voto para este stand con ese correo."); setYaVoto(true); }
+      if (code.includes("ya_votaste")) { setSubmitError("Ya registraste un voto para este espacio con ese correo."); setYaVoto(true); }
       else if (code.includes("rate_limited")) setSubmitError("Demasiados votos seguidos. Espera un momento e intenta de nuevo.");
       else if (code.includes("correo_invalido")) setSubmitError("El correo no es válido.");
       else if (code.includes("emoji_invalido")) setSubmitError("Selecciona una calificación.");
-      else if (code.includes("stand_no_existe")) setSubmitError("Este stand ya no está disponible.");
+      else if (code.includes("stand_no_existe")) setSubmitError("Este espacio ya no está disponible.");
       else if (code.includes("csrf")) setSubmitError("Sesión expirada. Recarga la página y vuelve a intentar.");
       else setSubmitError("No fue posible registrar tu voto. Intenta de nuevo.");
       setSubmitting(false);
@@ -255,7 +255,7 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
               <div className="field">
                 <label>Comentario (opcional, máx. 500)</label>
                 <textarea rows={3} value={data.texto} maxLength={500} onChange={e => update("texto", e.target.value)}
-                  placeholder="¿Qué destacarías del stand?"
+                  placeholder="¿Qué destacarías del espacio?"
                   style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
                 <div className="mono" style={{ alignSelf: "flex-end", color: "var(--ink-3)" }}>{data.texto.length}/500</div>
               </div>

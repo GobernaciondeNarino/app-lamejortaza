@@ -834,7 +834,7 @@
       ctx.fillText(txt, W * 0.5, H * 0.63 + 25 * u);
 
       ctx.fillStyle = pal["--ink-3"]; ctx.font = familia("mono", 12 * u);
-      textoCentradoEspaciado(ctx, (pagina.visitados | 0) + " / " + (pagina.totalStands | 0) + " STANDS", W * 0.5, H * 0.75, 1.4 * u);
+      textoCentradoEspaciado(ctx, (pagina.visitados | 0) + " / " + (pagina.totalStands | 0) + " ESPACIOS", W * 0.5, H * 0.75, 1.4 * u);
       ctx.textAlign = "left";
     } else if (tipo === "contraportada") {
       ctx.fillStyle = pal["--grano"]; ctx.fillRect(0, 0, W, H);

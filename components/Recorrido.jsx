@@ -133,7 +133,7 @@ const RecorridoPage = ({ stands }) => {
     return (
       <PuertaCorreo
         titulo="Tu recorrido por el festival."
-        nota="Escribe el correo con el que votas en los stands y verás cuáles llevas sellados. No hace falta contraseña."
+        nota="Escribe el correo con el que votas en los espacios y verás cuáles llevas sellados. No hace falta contraseña."
         volverA="/festival" volverTexto="← Volver al ranking"
         onListo={(c) => setCorreo(c)}/>
     );
@@ -150,7 +150,7 @@ const RecorridoPage = ({ stands }) => {
         <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 560 }}>
           {visitados.length
             ? <>Llevas <strong style={{ fontWeight: 500 }}>{visitados.length} de {stands.length}</strong> sellados. Los que están a color ya los visitaste.</>
-            : <>Escanea el QR de cualquier stand y vota: a partir de ahí, los que visites se van encendiendo aquí.</>}
+            : <>Escanea el QR de cualquier espacio y vota: a partir de ahí, los que visites se van encendiendo aquí.</>}
         </p>
 
         {cargando && (
@@ -173,7 +173,7 @@ const RecorridoPage = ({ stands }) => {
         </div>
 
         {!stands.length && (
-          <p style={{ marginTop: 24, color: "var(--ink-2)" }}>Todavía no hay stands registrados.</p>
+          <p style={{ marginTop: 24, color: "var(--ink-2)" }}>Todavía no hay espacios registrados.</p>
         )}
       </section>
     </div>

@@ -75,7 +75,7 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
           {[
             { k: totalVotosAll.toLocaleString(), sub: "votos totales" },
             { k: (metricas ? metricas.pasaportes : "—"), sub: "pasaportes activos" },
-            { k: stands.length, sub: "stands participan" },
+            { k: stands.length, sub: "espacios participan" },
             { k: (metricas ? metricas.aprobacion + "%" : "—"), sub: "aprobación general" },
           ].map((m, i) => (
             <div key={i} style={{ padding: 18, border: "1px solid var(--line)", borderRadius: "var(--r-md)", background: "var(--paper)" }}>
@@ -468,7 +468,7 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
               padding: "12px 14px", fontSize: 13, lineHeight: 1.55,
             }}>
               {mio && mio.visitado
-                ? "Ya sellaste este stand en tu pasaporte."
+                ? "Ya sellaste este espacio en tu pasaporte."
                 : "Para votar, escanea el código QR que está en el puesto. Así el sello dice que estuviste ahí."}
             </div>
           </div>

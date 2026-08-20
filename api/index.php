@@ -10,7 +10,7 @@ if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
 // primero que hay que mirar cuando algo falla en producción: sin ella, decidir
 // si revertir se convierte en «creo que subimos lo último». El historial y el
 // procedimiento de reversión de cada versión están en CHANGELOG.md.
-if (!defined('LMT_VERSION')) define('LMT_VERSION', '2.5.0');
+if (!defined('LMT_VERSION')) define('LMT_VERSION', '2.6.0');
 
 // Front controller — no exponer detalles de errores al cliente.
 ini_set('display_errors', '0');
@@ -23,6 +23,7 @@ require __DIR__ . '/lib/Db.php';
 require __DIR__ . '/lib/Session.php';
 require __DIR__ . '/lib/Validate.php';
 require __DIR__ . '/lib/Territorio.php';
+require __DIR__ . '/lib/Catalogos.php';
 require __DIR__ . '/lib/RateLimit.php';
 require __DIR__ . '/lib/Security.php';
 require __DIR__ . '/lib/QrCode.php';

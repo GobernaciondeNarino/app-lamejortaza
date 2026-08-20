@@ -11,7 +11,7 @@
 const AMBITOS = [
   {
     id: "votos", titulo: "Votos y pasaportes",
-    nota: "Todos los votos, los pasaportes que crearon y los contadores de cada stand. Los stands se quedan.",
+    nota: "Todos los votos, los pasaportes que crearon y los contadores de cada espacio. Los espacios se quedan.",
   },
   {
     id: "visitantes", titulo: "Visitantes",
@@ -19,10 +19,10 @@ const AMBITOS = [
   },
   {
     id: "promotores", titulo: "Promotores",
-    nota: "Las inscripciones, sus empresas y sus productos. Los stands que ya se crearon NO se borran aquí.",
+    nota: "Las inscripciones, sus empresas y sus productos. Los espacios que ya se crearon NO se borran aquí.",
   },
   {
-    id: "stands", titulo: "Stands",
+    id: "stands", titulo: "Espacios",
     nota: "El catálogo entero. Arrastra los votos y los pasaportes, porque quedarían apuntando a puestos que ya no existen.",
     peligro: true,
   },
@@ -93,7 +93,7 @@ const SistemaPage = () => {
         <div className="mono" style={{ marginBottom: 12 }}>Qué hay ahora en la base</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 14 }}>
           {[
-            ["Stands", "stands"], ["Votos", "votos"], ["Pasaportes", "pasaportes"],
+            ["Espacios", "stands"], ["Votos", "votos"], ["Pasaportes", "pasaportes"],
             ["Promotores", "promotores"], ["Empresas", "empresas"], ["Productos", "productos"],
             ["Visitantes", "visitantes"], ["Correos", "correos"], ["Administradores", "admins"],
           ].map(([label, k]) => (

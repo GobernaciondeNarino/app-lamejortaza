@@ -30,9 +30,11 @@ function register_routes_stands(\LMT\Router $r): void
         $stmt = Db::pdo()->prepare(
             'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
                                  propietario, propietario_documento, nit, sitio_web, logo_path,
-                                 telefono, lat, lng, coords_x, coords_y, color)
+                                 telefono, lat, lng, tipo_organizacion, tipo_organizacion_otro,
+                                 actividad_cafe, actividad_cafe_otro, coords_x, coords_y, color)
              VALUES (:id, :nombre, :municipio, :region, :direccion, :correo, :descripcion,
-                     :prop, :propdoc, :nit, :web, :logo, :tel, :lat, :lng, :cx, :cy, :color)'
+                     :prop, :propdoc, :nit, :web, :logo, :tel, :lat, :lng,
+                     :torg, :torgo, :act, :acto, :cx, :cy, :color)'
         );
         $stmt->execute([
             ':id'          => $stand['id'],
@@ -50,6 +52,10 @@ function register_routes_stands(\LMT\Router $r): void
             ':tel'         => $stand['telefono'],
             ':lat'         => $stand['lat'],
             ':lng'         => $stand['lng'],
+            ':torg'        => $stand['tipo_organizacion'],
+            ':torgo'       => $stand['tipo_organizacion_otro'],
+            ':act'         => $stand['actividad_cafe'],
+            ':acto'        => $stand['actividad_cafe_otro'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
@@ -72,6 +78,8 @@ function register_routes_stands(\LMT\Router $r): void
                                 propietario=:prop, propietario_documento=:propdoc,
                                 nit=:nit, sitio_web=:web, logo_path=COALESCE(:logo, logo_path),
                                 telefono=:tel, lat=:lat, lng=:lng,
+                                tipo_organizacion=:torg, tipo_organizacion_otro=:torgo,
+                                actividad_cafe=:act, actividad_cafe_otro=:acto,
                                 coords_x=:cx, coords_y=:cy, color=:color
              WHERE id=:id'
         );
@@ -90,6 +98,10 @@ function register_routes_stands(\LMT\Router $r): void
             ':tel'         => $stand['telefono'],
             ':lat'         => $stand['lat'],
             ':lng'         => $stand['lng'],
+            ':torg'        => $stand['tipo_organizacion'],
+            ':torgo'       => $stand['tipo_organizacion_otro'],
+            ':act'         => $stand['actividad_cafe'],
+            ':acto'        => $stand['actividad_cafe_otro'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
@@ -217,6 +229,13 @@ function stand_row_to_api(array $r): array
         'sitio_web'   => (string) ($r['sitio_web'] ?? ''),
         'telefono'    => $esAdmin ? (string) ($r['telefono'] ?? '') : '',
         'logo'        => stand_ruta_publica($r['logo_path'] ?? null),
+        // Caracterización del participante. Es información del emprendimiento,
+        // no de la persona, así que no se esconde: sale igual en la ficha
+        // pública, donde ayuda al visitante a saber qué va a encontrar.
+        'tipo_organizacion'      => (string) ($r['tipo_organizacion'] ?? ''),
+        'tipo_organizacion_otro' => (string) ($r['tipo_organizacion_otro'] ?? ''),
+        'actividad_cafe'         => (string) ($r['actividad_cafe'] ?? ''),
+        'actividad_cafe_otro'    => (string) ($r['actividad_cafe_otro'] ?? ''),
         // La ubicación del stand SÍ es pública: es lo que se pinta en el mapa
         // del festival y lo que un visitante necesita para llegar.
         'lat'         => isset($r['lat']) && $r['lat'] !== null ? (float) $r['lat'] : null,
@@ -264,6 +283,8 @@ function stand_select(string $tabla = 'stands'): string
     return 'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
                    propietario, propietario_documento, nit, sitio_web, logo_path,
                    telefono, lat, lng,
+                   tipo_organizacion, tipo_organizacion_otro,
+                   actividad_cafe, actividad_cafe_otro,
                    coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo'
          . stand_select_estrellas($tabla)
          . ' FROM ' . $tabla;
@@ -297,7 +318,10 @@ function stand_payload(array $b, bool $needsId): array
     $municipio = \LMT\Territorio::municipio($b['municipio'] ?? null);
     if ($municipio === null) Response::error(422, 'bad_municipio');
     $region    = (string) \LMT\Territorio::subregion($municipio);
+    // La dirección es obligatoria: el mapa marca un punto, la dirección dice a
+    // qué puerta se llega. Sin ella el visitante ve una chincheta en un cerro.
     $direccion = mb_substr(trim((string)($b['direccion'] ?? '')), 0, 255, 'UTF-8');
+    if ($direccion === '') Response::error(422, 'direccion_requerida');
     $descripcion = Validate::comment((string)($b['descripcion'] ?? ''), 800);
     $correo    = Validate::email($b['correo'] ?? null) ?? '';
 
@@ -318,6 +342,18 @@ function stand_payload(array $b, bool $needsId): array
     // null = "no toques el logo". El UPDATE lo trata con COALESCE.
     $logo_path             = stand_logo_reclamado($b['logo'] ?? null);
 
+    // Caracterización del participante. Aquí es OPCIONAL, al revés que en la
+    // inscripción: los espacios creados antes de que existieran estos campos
+    // se siguen pudiendo editar sin obligar a inventarse el dato.
+    [$tipo_organizacion, $tipo_organizacion_otro] = promotor_catalogo(
+        $b['tipo_organizacion'] ?? null, $b['tipo_organizacion_otro'] ?? null,
+        \LMT\Catalogos::ORGANIZACION, 'tipo_organizacion_invalido', false
+    );
+    [$actividad_cafe, $actividad_cafe_otro] = promotor_catalogo(
+        $b['actividad_cafe'] ?? null, $b['actividad_cafe_otro'] ?? null,
+        \LMT\Catalogos::ACTIVIDAD, 'actividad_cafe_invalida', false
+    );
+
     $color = (string)($b['color'] ?? 'oklch(0.45 0.1 40)');
     if (!preg_match('/^oklch\([^)]{1,80}\)$/i', $color) && !preg_match('/^#[0-9a-f]{3,8}$/i', $color)) {
         $color = 'oklch(0.45 0.1 40)';
@@ -331,7 +367,8 @@ function stand_payload(array $b, bool $needsId): array
     return compact(
         'id', 'nombre', 'municipio', 'region', 'direccion', 'correo', 'descripcion', 'color',
         'propietario', 'propietario_documento', 'nit', 'sitio_web', 'logo_path',
-        'telefono', 'lat', 'lng'
+        'telefono', 'lat', 'lng',
+        'tipo_organizacion', 'tipo_organizacion_otro', 'actividad_cafe', 'actividad_cafe_otro'
     ) + ['coords_x' => $cx, 'coords_y' => $cy];
 }
 

@@ -81,6 +81,29 @@ final class Validate
         return self::comment((string) $value, $max);
     }
 
+    /**
+     * Texto largo que SÍ conserva los saltos de párrafo.
+     *
+     * `texto()` aplasta todos los espacios en uno solo, que es lo correcto para
+     * un nombre o una dirección y lo peor posible para un texto legal: la
+     * política de tratamiento de datos que el organizador pega en el panel se
+     * convertiría en un ladrillo de una sola línea. Aquí se limpia lo mismo
+     * —controles, invisibles, bidi— pero las líneas se respetan.
+     */
+    public static function parrafos($value, int $max = 8000): string
+    {
+        if (!is_scalar($value)) return '';
+        $v = str_replace(["\r\n", "\r"], "\n", (string) $value);
+        // Se trocea por líneas y cada una pasa por el saneado de siempre. Así
+        // el filtro de caracteres peligrosos es exactamente el mismo, sin una
+        // segunda copia que se pueda quedar atrás.
+        $lineas = array_map(fn($l) => self::comment($l, $max), explode("\n", $v));
+        // Nunca más de dos saltos seguidos: separar párrafos, no dejar huecos.
+        $out = preg_replace("/\n{3,}/", "\n\n", implode("\n", $lineas)) ?? '';
+        $out = trim($out);
+        return mb_strlen($out, 'UTF-8') > $max ? mb_substr($out, 0, $max, 'UTF-8') : $out;
+    }
+
     /** Nombre de persona o de empresa. null si está vacío o pasa del máximo. */
     public static function nombre($value, int $max = 120): ?string
     {

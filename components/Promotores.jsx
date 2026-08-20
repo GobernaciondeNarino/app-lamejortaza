@@ -186,6 +186,8 @@ const PromotorRegistroPage = () => {
     nombre: "", email: "", telefono: "", documento: "", municipio: "", empresa: "", mensaje: "",
     stand_nombre: "", stand_region: "", stand_direccion: "", stand_descripcion: "",
     stand_nit: "", stand_sitio_web: "",
+    tipo_organizacion: "", tipo_organizacion_otro: "",
+    actividad_cafe: "", actividad_cafe_otro: "",
     // Cómo va a entrar si el correo no llega. Ver el comentario del selector.
     acceso_metodo: "password", acceso_valor: "", acceso_valor2: "",
   };
@@ -213,7 +215,12 @@ const PromotorRegistroPage = () => {
     const sec = window.LMTSecurity;
     if (!form.nombre.trim()) { setError(ERRORES.nombre_invalido); return; }
     if (!sec || !sec.isEmail(form.email.trim())) { setError(ERRORES.email_invalido); return; }
-    if (!form.municipio.trim()) { setError("Indica el municipio de tu stand."); return; }
+    if (!form.municipio.trim()) { setError("Indica el municipio de tu espacio."); return; }
+    if (!form.stand_direccion.trim()) { setError(ERRORES.direccion_requerida); return; }
+    if (!form.tipo_organizacion) { setError(ERRORES.tipo_organizacion_invalido); return; }
+    if (form.tipo_organizacion === "otro" && !form.tipo_organizacion_otro.trim()) { setError(ERRORES.detalle_requerido); return; }
+    if (!form.actividad_cafe) { setError(ERRORES.actividad_cafe_invalida); return; }
+    if (form.actividad_cafe === "otro" && !form.actividad_cafe_otro.trim()) { setError(ERRORES.detalle_requerido); return; }
     if (!logo) { setError(ERRORES.logo_requerido); return; }
     if (!acepta) { setError(ERRORES.debe_aceptar_tratamiento_datos); return; }
     // El acceso se comprueba aquí para dar el mensaje concreto; el servidor lo
@@ -264,7 +271,7 @@ const PromotorRegistroPage = () => {
           <p style={{ color: "var(--ink-2)", lineHeight: 1.65, marginBottom: 24 }}>
             El equipo organizador revisará tu inscripción. Cuando quede aprobada te llegará
             a <strong>{form.email}</strong> el aviso y el
-            <strong> código QR de tu stand</strong>, listo para imprimir y pegar en tu puesto.
+            <strong> código QR de tu espacio</strong>, listo para imprimir y pegar en tu puesto.
             {" "}Entrarás al portal con {ACCESO_FRASE[form.acceso_metodo] || "tu contraseña"}.
           </p>
 
@@ -292,15 +299,15 @@ const PromotorRegistroPage = () => {
         <a href="/" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Volver</a>
         <div className="mono" style={{ marginTop: 22 }}>Promotores · Inscripción</div>
         <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 38, fontWeight: 400, margin: "6px 0 10px", lineHeight: 1.05 }}>
-          Inscribe tu stand<br/>en el festival.
+          Inscribe tu espacio<br/>en el festival.
         </h1>
         <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.6, marginBottom: 26 }}>
-          Completa los datos de tu stand. Un organizador revisará la solicitud y te enviará por
-          correo tu acceso al portal y el código QR de tu stand, ya listo para imprimir.
+          Completa los datos de tu espacio. Un organizador revisará la solicitud y te enviará por
+          correo tu acceso al portal y el código QR de tu espacio, ya listo para imprimir.
         </p>
 
         <form onSubmit={enviar} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <BloqueForm titulo="Quién eres" nota="La persona responsable del stand.">
+          <BloqueForm titulo="Quién eres" nota="La persona responsable del espacio.">
             <div className="field">
               <label htmlFor="in-nombre">Nombre completo del propietario *</label>
               <input id="in-nombre" value={form.nombre} onChange={(e) => set("nombre", e.target.value)} maxLength={120} required autoComplete="name"/>
@@ -316,17 +323,17 @@ const PromotorRegistroPage = () => {
             <div className="field">
               <label htmlFor="in-email">Correo electrónico *</label>
               <input id="in-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} maxLength={254} required autoComplete="email"/>
-              <span className="ayuda">Aquí llegarán tu contraseña de acceso y el QR de tu stand.</span>
+              <span className="ayuda">Aquí llegarán tu contraseña de acceso y el QR de tu espacio.</span>
             </div>
           </BloqueForm>
 
-          <BloqueForm titulo="Tu stand" nota="Es lo que verán los visitantes del festival.">
+          <BloqueForm titulo="Tu espacio" nota="Es lo que verán los visitantes del festival.">
             <div className="field">
               <label htmlFor="in-empresa">Empresa, finca o marca *</label>
               <input id="in-empresa" value={form.empresa} onChange={(e) => set("empresa", e.target.value)} maxLength={120} required placeholder="Finca El Tambo"/>
             </div>
             <div className="field">
-              <label htmlFor="in-stand-nombre">Nombre del stand</label>
+              <label htmlFor="in-stand-nombre">Nombre del espacio</label>
               <input id="in-stand-nombre" value={form.stand_nombre} onChange={(e) => set("stand_nombre", e.target.value)} maxLength={80}
                 placeholder={form.empresa || "Igual al de la empresa"}/>
               <span className="ayuda">Déjalo vacío para usar el nombre de la empresa.</span>
@@ -340,9 +347,30 @@ const PromotorRegistroPage = () => {
                 onCambio={(v) => set("stand_region", v)}/>
             </div>
             <div className="field">
-              <label htmlFor="in-dir">Dirección</label>
-              <input id="in-dir" value={form.stand_direccion} onChange={(e) => set("stand_direccion", e.target.value)} maxLength={255} placeholder="Vereda El Ingenio"/>
+              <label htmlFor="in-dir">Dirección *</label>
+              <input id="in-dir" value={form.stand_direccion} onChange={(e) => set("stand_direccion", e.target.value)} maxLength={255} required placeholder="Vereda El Ingenio"/>
+              <span className="ayuda">
+                Dónde queda tu finca o tu negocio. El punto del mapa señala la zona;
+                la dirección es la que lleva a la puerta.
+              </span>
             </div>
+            {/* Caracterización del participante. Es lo que permite contar
+                cuántas asociaciones, cuántos baristas y cuántos productores
+                hay en la muestra, y eso no sale de un campo de texto libre. */}
+            <SelectorCatalogo id="in-org" requerido
+              etiqueta="¿Qué tipo de organización eres?"
+              catalogo={ORGANIZACIONES}
+              valor={form.tipo_organizacion} otro={form.tipo_organizacion_otro}
+              onCambio={(v) => setForm((f) => ({ ...f, tipo_organizacion: v, tipo_organizacion_otro: v === "otro" ? f.tipo_organizacion_otro : "" }))}
+              onOtro={(v) => set("tipo_organizacion_otro", v)}
+              etiquetaOtro="¿Cuál es tu tipo de organización?"/>
+            <SelectorCatalogo id="in-act" requerido
+              etiqueta="¿Cuál es tu actividad o vínculo con la cadena de valor del café?"
+              catalogo={ACTIVIDADES_CAFE}
+              valor={form.actividad_cafe} otro={form.actividad_cafe_otro}
+              onCambio={(v) => setForm((f) => ({ ...f, actividad_cafe: v, actividad_cafe_otro: v === "otro" ? f.actividad_cafe_otro : "" }))}
+              onOtro={(v) => set("actividad_cafe_otro", v)}
+              etiquetaOtro="¿Cuál es tu actividad?"/>
             <div className="grid-2">
               <CampoNumerico id="in-nit" etiqueta="NIT o RUT"
                 valor={form.stand_nit} onCambio={(v) => set("stand_nit", v)}
@@ -354,11 +382,11 @@ const PromotorRegistroPage = () => {
               </div>
             </div>
             <div className="field">
-              <label htmlFor="in-desc">Descripción del stand</label>
+              <label htmlFor="in-desc">Descripción del espacio</label>
               <textarea id="in-desc" rows={3} value={form.stand_descripcion} onChange={(e) => set("stand_descripcion", e.target.value)} maxLength={800}
                 placeholder="Variedad, proceso, altura, historia de la finca…"
                 style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
-              <span className="ayuda">Se muestra en la ficha pública de tu stand.</span>
+              <span className="ayuda">Se muestra en la ficha pública de tu espacio.</span>
             </div>
             {/* Obligatorio: es lo que identifica al stand en la tarjeta de
                 «Mi recorrido» y bajo el sello del pasaporte. */}
@@ -366,6 +394,7 @@ const PromotorRegistroPage = () => {
               actual={logo ? urlImagen(logo) : ""}
               etiqueta="Logo de tu producto *"
               cuadrada
+              encuadrable
               ruta={logo}
               onSubir={subirLogo}/>
             {!logo && (
@@ -409,13 +438,7 @@ const PromotorRegistroPage = () => {
               style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
           </div>
 
-          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
-            <input type="checkbox" checked={acepta} onChange={(e) => setAcepta(e.target.checked)} style={{ marginTop: 3 }}/>
-            <span>
-              Autorizo a la Gobernación de Nariño a tratar mis datos personales con la finalidad de
-              gestionar mi participación en el festival, conforme a la Ley 1581 de 2012. *
-            </span>
-          </label>
+          <CasillaDatos id="in-acepta" valor={acepta} onCambio={setAcepta}/>
 
           <Aviso>{error}</Aviso>
 
@@ -871,7 +894,7 @@ const EmpresaEditor = ({ empresa, logoUrl, onGuardar, onLogo }) => {
       </div>
 
       {empresa
-        ? <SubirImagen actual={logoUrl} etiqueta="Logo del producto o de la empresa" cuadrada
+        ? <SubirImagen actual={logoUrl} etiqueta="Logo del producto o de la empresa" cuadrada encuadrable
             ruta={empresa && empresa.logo} onSubir={onLogo}/>
         : <Aviso tipo="info">Guarda los datos y después podrás subir el logo.</Aviso>}
 
@@ -925,7 +948,7 @@ const PerfilEditor = ({ promotor, onGuardar }) => {
       </div>
       <SelectorMunicipio id="pr-mun" valor={form.municipio} requerido
         onCambio={(municipio) => set("municipio", municipio)}/>
-      <p className="ayuda">Tu municipio define la región del stand en el mapa del festival.</p>
+      <p className="ayuda">Tu municipio define la región del espacio en el mapa del festival.</p>
       <Aviso>{error}</Aviso>
       <Aviso tipo="ok">{ok}</Aviso>
       <button className="btn btn-primary" type="submit" disabled={busy} style={{ alignSelf: "flex-start", opacity: busy ? 0.6 : 1 }}>
@@ -1006,7 +1029,7 @@ const RevisionInscripcion = ({ id, onAprobar, onCerrar, ocupado }) => {
       <div className="mono" style={{ marginBottom: 4 }}>Revisar antes de aprobar</div>
       <h2 className="titulo-xl" style={{ margin: "0 0 4px" }}>{b.nombre || p.nombre}</h2>
       <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, margin: "0 0 18px", maxWidth: 620 }}>
-        Al aprobar, esto se convierte en el stand del festival tal cual está: el nombre y la
+        Al aprobar, esto se convierte en el espacio del festival tal cual está: el nombre y la
         descripción los verá el público, y el logo saldrá en el pasaporte de cada visitante.
         Si algo está mal, es mejor rechazarlo con el motivo y que lo vuelva a enviar.
       </p>
@@ -1027,11 +1050,13 @@ const RevisionInscripcion = ({ id, onAprobar, onCerrar, ocupado }) => {
           )}
         </div>
         <div>
-          <div className="mono" style={{ marginBottom: 8 }}>El stand que se creará</div>
+          <div className="mono" style={{ marginBottom: 8 }}>El espacio que se creará</div>
           {fila("Nombre", b.nombre)}
           {fila("Municipio", b.municipio)}
           {fila("Región", b.region)}
           {fila("Dirección", b.direccion)}
+          {fila("Organización", etiquetaCatalogo(ORGANIZACIONES, b.tipo_organizacion, b.tipo_organizacion_otro))}
+          {fila("Actividad", etiquetaCatalogo(ACTIVIDADES_CAFE, b.actividad_cafe, b.actividad_cafe_otro))}
           {fila("NIT", b.nit)}
           {fila("Sitio web", b.sitio_web)}
           {fila("Ubicación", b.lat != null ? b.lat.toFixed(5) + ", " + b.lng.toFixed(5) : "sin marcar en el mapa")}
@@ -1044,7 +1069,7 @@ const RevisionInscripcion = ({ id, onAprobar, onCerrar, ocupado }) => {
           {b.logo
             ? (
               <a href={urlImagen(b.logo)} target="_blank" rel="noopener">
-                <img src={urlImagen(b.logo)} alt="Logo del stand"
+                <img src={urlImagen(b.logo)} alt="Logo del espacio"
                   style={{ width: 150, height: 150, objectFit: "cover", borderRadius: "var(--r-md)", border: "1px solid var(--line)" }}/>
               </a>
             )
@@ -1067,7 +1092,7 @@ const RevisionInscripcion = ({ id, onAprobar, onCerrar, ocupado }) => {
 
       <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap" }}>
         <button className="btn btn-primary" disabled={ocupado} onClick={onAprobar} style={{ justifyContent: "center" }}>
-          {ocupado ? "Aprobando…" : "✓ Aprobar y crear el stand"}
+          {ocupado ? "Aprobando…" : "✓ Aprobar y crear el espacio"}
         </button>
         <button className="btn btn-ghost" disabled={ocupado} onClick={onCerrar} style={{ justifyContent: "center" }}>
           Cerrar sin aprobar
@@ -1119,11 +1144,11 @@ const AdminPromotores = ({ stands }) => {
     if (res.acceso_propio) {
       return { tipo: res.correo_enviado ? "ok" : "error",
         texto: res.correo_enviado
-          ? `Aprobado. El stand ya existe y ${p.email} entra con ${ACCESO_FRASE[res.acceso_propio] || "su acceso"}.`
+          ? `Aprobado. El espacio ya existe y ${p.email} entra con ${ACCESO_FRASE[res.acceso_propio] || "su acceso"}.`
           : (res.aviso || "Aprobado, pero el correo no pudo enviarse.") };
     }
     return res.correo_enviado
-      ? { tipo: "ok", texto: `Aprobado. El stand ya existe y la contraseña temporal salió hacia ${p.email}.` }
+      ? { tipo: "ok", texto: `Aprobado. El espacio ya existe y la contraseña temporal salió hacia ${p.email}.` }
       : { tipo: "error", texto: `Aprobado, pero el correo NO pudo enviarse. Entrega esta clave a ${p.email} por un canal seguro: ${res.clave_temporal}` };
   });
 
@@ -1164,7 +1189,7 @@ const AdminPromotores = ({ stands }) => {
     <div className="admin-page">
       <div style={{ marginBottom: 26 }}>
         <div className="mono">Inscripciones · {lista.length} registros{pendientes ? ` · ${pendientes} por revisar` : ""}</div>
-        <h1 className="titulo-xl">Promotores de stands</h1>
+        <h1 className="titulo-xl">Promotores de espacios</h1>
         <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.6, marginTop: 10, maxWidth: 620 }}>
           Al verificar una solicitud el sistema genera una contraseña temporal y la envía al
           correo del promotor. Sólo entonces podrá entrar a cargar su empresa y sus productos.
@@ -1293,7 +1318,7 @@ const AdminPromotores = ({ stands }) => {
                   {p.stand_id && (
                     <a href={"/admin/stands/" + p.stand_id + "/edit"} data-route className="mono"
                       style={{ marginTop: 4, color: "var(--ink-3)", textDecoration: "underline", textAlign: "center" }}>
-                      Su stand: {p.stand_id} · editar
+                      Su espacio: {p.stand_id} · editar
                     </a>
                   )}
                 </div>

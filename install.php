@@ -634,7 +634,7 @@ if ($method === 'POST') {
                     }
                     $stepLog[] = '✓ Datos de ejemplo cargados';
                 } else {
-                    $stepLog[] = '· Seed omitido (ya hay ' . $count . ' stands)';
+                    $stepLog[] = '· Seed omitido (ya hay ' . $count . ' espacios)';
                 }
             }
 
@@ -971,7 +971,7 @@ if ($step === 3) {
     })();
     ?>
     <h2>Cuenta de administrador.</h2>
-    <p>Esta cuenta podrá registrar stands, generar QR e imprimir carteles. Puedes crear más administradores luego con <code>php db/create-admin.php</code>.</p>
+    <p>Esta cuenta podrá registrar espacios, generar QR e imprimir carteles. Puedes crear más administradores luego con <code>php db/create-admin.php</code>.</p>
 
     <?php foreach ($flash as $err): ?>
       <div class="alert alert-error" style="white-space:pre-wrap;"><?= h($err) ?></div>
@@ -1004,7 +1004,7 @@ if ($step === 3) {
       <div class="field">
         <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:var(--ink);">
           <input type="checkbox" name="seed" value="1" checked>
-          Cargar 8 stands de ejemplo (recomendado para probar la app)
+          Cargar 8 espacios de ejemplo (recomendado para probar la app)
         </label>
       </div>
 
@@ -1061,7 +1061,7 @@ if ($step === 5) {
     $emailAdmin = (string) ($_SESSION['done']['email'] ?? '');
     ?>
     <h2>Configura el correo saliente.</h2>
-    <p>De aquí salen las contraseñas de los promotores y el código QR de su stand. Es la pieza que
+    <p>De aquí salen las contraseñas de los promotores y el código QR de su espacio. Es la pieza que
        más falla y la única que falla <em>en silencio</em>: conviene comprobarla ahora, no el día del festival.</p>
 
     <?php if (!empty($flash)): ?>
@@ -1229,7 +1229,7 @@ if ($step === 6) {
     <?php if ($correoEstado && (!$correoEstado['entrega'] || $correoEstado['probado'] === 0)): ?>
       <div class="alert alert-error" style="margin-top:16px;">
         <strong>El correo todavía no está confirmado.</strong>
-        De ahí salen las contraseñas de los promotores y el QR de su stand: si no funciona, nadie
+        De ahí salen las contraseñas de los promotores y el QR de su espacio: si no funciona, nadie
         puede entrar a cargar su información. Puedes arreglarlo ahora
         <a href="install.php?step=5">volviendo al paso de correo</a>, o más tarde desde
         <strong>Panel → Correo</strong>.
@@ -1245,9 +1245,9 @@ if ($step === 6) {
 
     <h3 style="font-size:15px;margin:26px 0 10px;">Por dónde empezar</h3>
     <ul class="checks">
-      <li><span>Registrar los stands o abrir las inscripciones</span><span><a href="<?= h($base) ?>/admin/stands">Panel → Stands</a></span></li>
+      <li><span>Registrar los espacios o abrir las inscripciones</span><span><a href="<?= h($base) ?>/admin/stands">Panel → Espacios</a></span></li>
       <li><span>Compartir el enlace de inscripción con los caficultores</span><span><code><?= h($urlBase) ?>/inscripcion</code></span></li>
-      <li><span>Imprimir los carteles QR para pegar en cada stand</span><span><a href="<?= h($base) ?>/admin/qr">Panel → Códigos QR</a></span></li>
+      <li><span>Imprimir los carteles QR para pegar en cada espacio</span><span><a href="<?= h($base) ?>/admin/qr">Panel → Códigos QR</a></span></li>
       <li><span>Crear cuentas para el resto del equipo</span><span><a href="<?= h($base) ?>/admin/cuentas">Panel → Administradores</a></span></li>
     </ul>
 
