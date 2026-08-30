@@ -13,7 +13,7 @@ const MobileHeader = ({ stand }) => (
       {(stand.nombre || "?")[0]}
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div className="mono" style={{ fontSize: 9 }}>#{stand.id.toUpperCase()}</div>
+      <div className="mono" style={{ fontSize: 9 }}>#{numeroDeEspacio(stand)}</div>
       <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stand.nombre}</div>
     </div>
   </div>

@@ -7,6 +7,115 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.7.0 — La ficha del participante
+
+**Punto de reversión (v2.6.0):** `55ba1df`
+
+### El formulario habla del producto, no del puesto
+
+«Nombre del espacio» pasa a **«Nombre del producto»** y «Descripción del
+espacio» a **«Descripción del producto»**, en la inscripción pública y en el
+alta interna. Es lo que se estaba escribiendo ahí desde el principio.
+
+### Quién participa
+
+Un desplegable obligatorio con **once grupos o tipos de población** —de «Urbana»
+a «Estudiante», con «Ninguna de las anteriores» y un «Otro» abierto—. Es un dato
+sensible en el sentido de la Ley 1581 de 2012 (pertenencia étnica, discapacidad,
+condición de víctima), así que sale de un catálogo cerrado, tiene salida
+explícita, se pide en el mismo formulario donde se autoriza el tratamiento y
+**no viaja a la ficha pública**: sólo lo ve el panel.
+
+### Línea productiva
+
+Selección múltiple: cafés especiales de origen, transformación agroindustrial y
+derivados, economía circular y subproductos.
+
+### Información detallada
+
+Nueve preguntas más sobre el producto y los papeles:
+
+| Pregunta | |
+| --- | --- |
+| ¿Certificaciones internacionales? | opcional |
+| ¿Es orgánico? | opcional |
+| ¿Es especial? | opcional |
+| Promedio de taza | opcional |
+| ¿Marca registrada ante la SIC? | **obligatoria** |
+| ¿Certificado de Cámara de Comercio? | **obligatoria** (+ número si la respuesta es sí) |
+| ¿Acreditación sanitaria INVIMA? | **obligatoria** (+ tipo y número si es sí) |
+| ¿Certificado de manipulación de alimentos? | **obligatoria** |
+| Presentación del producto | **obligatoria**, múltiple, con «Otros» abierto |
+
+Los cuatro obligatorios son requisitos de participación, no información de
+relleno: preguntarlos después, cuando ya se armó el recinto, no sirve de nada.
+
+Dos decisiones que importan:
+
+- **Un «sí/no» tiene tres estados.** No hay nada premarcado y `null` significa
+  «no contestó», que se guarda distinto de «no». Con «No» por defecto el
+  formulario contestaría por la persona, y publicar un café como **no** orgánico
+  porque nadie tocó la casilla es inventarse el dato.
+- **Los campos condicionales se limpian.** Quien marca «sí» al certificado de
+  Cámara de Comercio, escribe el número y luego rectifica a «no» no deja en la
+  base un certificado que el propio formulario dice que no tiene.
+
+Las selecciones múltiples se guardan como JSON y **con el orden del catálogo**,
+no como llegaron: así dos respuestas iguales se guardan igual y agrupar por
+presentación en un informe funciona.
+
+### Los errores señalan el campo que falta
+
+Las validaciones corren en el mismo orden en que están los campos en pantalla. A
+quien se deja sin marcar la marca registrada se le dice eso, y no que falta el
+INVIMA —tres preguntas más abajo—, que es lo que le pondría a buscar el error
+donde no está.
+
+### El panel edita lo mismo
+
+Los mismos campos están en el editor de espacios, ahí **todos opcionales**: los
+espacios creados antes de que existieran se tienen que poder seguir editando sin
+inventarles una respuesta. Todo viaja de la inscripción al espacio al aprobar, y
+la ficha de revisión gana un bloque **«Requisitos»** con los cuatro en verde o
+rojo, que es justo lo que hay que mirar antes de aprobar.
+
+### Número del espacio
+
+El editor gana **«Número del espacio»**: el que la organización asigna en el
+recinto («12», «A-14»). La regla es **todo o nada** — ese número manda en toda
+la plataforma sólo si lo tienen TODOS los espacios; si falta en alguno, se sigue
+enseñando el código del sistema (`#ST-01`). Con la mitad puestos, el público
+vería unos con número de feria y otros con el código interno, sin saber cuál
+buscar en el mapa impreso.
+
+El campo dice cuántos faltan, contando lo que hay escrito en ese momento: sin
+ese aviso, quien numere tres espacios y no vea ningún cambio pensaría que el
+campo no sirve.
+
+### Privacidad
+
+De los campos nuevos, **la población y los cuatro requisitos administrativos
+sólo viajan al panel**. Los rasgos del producto —orgánico, especial,
+certificaciones, presentación, línea productiva— sí son públicos: es lo que
+ayuda al visitante a decidir a qué espacio ir.
+
+### Migración
+
+`php db/migrate.php` añade **31 columnas** —quince a `stands`, quince a
+`promotores` y `stands.numero`— sin tocar nada de lo que ya había. Lo anterior
+se queda sin ficha, que es lo correcto: no hay dato que inventarle.
+
+### Cómo volver atrás
+
+```bash
+git revert --no-commit 55ba1df..HEAD && git commit -m "Volver a v2.6.0"
+```
+
+Las columnas nuevas se quedan en la base y no molestan: la v2.6.0 no las lee.
+Los números de espacio ya asignados se conservan; simplemente dejan de usarse.
+
+---
+
 ## v2.6.0 — Espacios, y quién los ocupa
 
 **Punto de reversión (v2.5.0):** `fbb95ae`

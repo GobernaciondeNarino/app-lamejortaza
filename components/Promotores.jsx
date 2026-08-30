@@ -188,11 +188,24 @@ const PromotorRegistroPage = () => {
     stand_nit: "", stand_sitio_web: "",
     tipo_organizacion: "", tipo_organizacion_otro: "",
     actividad_cafe: "", actividad_cafe_otro: "",
+    poblacion: "", poblacion_otro: "",
+    promedio_taza: "", camara_comercio_numero: "", invima_detalle: "", presentacion_otro: "",
     // Cómo va a entrar si el correo no llega. Ver el comentario del selector.
     acceso_metodo: "password", acceso_valor: "", acceso_valor2: "",
   };
   const [form, setForm] = React.useState(vacio);
   const [ubicacion, setUbicacion] = React.useState({ lat: null, lng: null });
+  // Selecciones múltiples y «sí/no». Van aparte de `form` porque no son texto:
+  // los «sí/no» tienen tres estados (sí, no, sin responder) y meterlos en el
+  // mismo objeto que las cadenas obligaba a distinguir "" de null en cada uso.
+  const [lineas, setLineas] = React.useState([]);
+  const [presentacion, setPresentacion] = React.useState([]);
+  const [sino, setSino] = React.useState({
+    cert_internacional: null, organico: null, especial: null,
+    marca_registrada: null, camara_comercio: null, invima: null,
+    manipulacion_alimentos: null,
+  });
+  const ponSino = (k, v) => setSino((s) => ({ ...s, [k]: v }));
   const [logo, setLogo] = React.useState("");        // ruta devuelta por el servidor
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -221,6 +234,17 @@ const PromotorRegistroPage = () => {
     if (form.tipo_organizacion === "otro" && !form.tipo_organizacion_otro.trim()) { setError(ERRORES.detalle_requerido); return; }
     if (!form.actividad_cafe) { setError(ERRORES.actividad_cafe_invalida); return; }
     if (form.actividad_cafe === "otro" && !form.actividad_cafe_otro.trim()) { setError(ERRORES.detalle_requerido); return; }
+    if (!form.poblacion) { setError(ERRORES.poblacion_invalida); return; }
+    if (form.poblacion === "otro" && !form.poblacion_otro.trim()) { setError(ERRORES.detalle_requerido); return; }
+    // Los cuatro requisitos administrativos, en el mismo orden en que están en
+    // el formulario: así el aviso señala el primero que falta y no uno de más
+    // abajo, que manda a buscar el error donde no está.
+    if (sino.marca_registrada === null) { setError(ERRORES.marca_registrada_requerida); return; }
+    if (sino.camara_comercio === null) { setError(ERRORES.camara_comercio_requerido); return; }
+    if (sino.invima === null) { setError(ERRORES.invima_requerido); return; }
+    if (sino.manipulacion_alimentos === null) { setError(ERRORES.manipulacion_requerida); return; }
+    if (presentacion.length === 0) { setError(ERRORES.presentacion_requerida); return; }
+    if (presentacion.includes("otros") && !form.presentacion_otro.trim()) { setError(ERRORES.detalle_requerido); return; }
     if (!logo) { setError(ERRORES.logo_requerido); return; }
     if (!acepta) { setError(ERRORES.debe_aceptar_tratamiento_datos); return; }
     // El acceso se comprueba aquí para dar el mensaje concreto; el servidor lo
@@ -248,6 +272,9 @@ const PromotorRegistroPage = () => {
         logo: logo || null,
         lat: ubicacion.lat,
         lng: ubicacion.lng,
+        linea_productiva: lineas,
+        presentacion,
+        ...sino,
         acepta_datos: true,
       });
       // El QR sólo viaja en esta respuesta: en la base queda su hash.
@@ -333,7 +360,7 @@ const PromotorRegistroPage = () => {
               <input id="in-empresa" value={form.empresa} onChange={(e) => set("empresa", e.target.value)} maxLength={120} required placeholder="Finca El Tambo"/>
             </div>
             <div className="field">
-              <label htmlFor="in-stand-nombre">Nombre del espacio</label>
+              <label htmlFor="in-stand-nombre">Nombre del producto</label>
               <input id="in-stand-nombre" value={form.stand_nombre} onChange={(e) => set("stand_nombre", e.target.value)} maxLength={80}
                 placeholder={form.empresa || "Igual al de la empresa"}/>
               <span className="ayuda">Déjalo vacío para usar el nombre de la empresa.</span>
@@ -382,7 +409,7 @@ const PromotorRegistroPage = () => {
               </div>
             </div>
             <div className="field">
-              <label htmlFor="in-desc">Descripción del espacio</label>
+              <label htmlFor="in-desc">Descripción del producto</label>
               <textarea id="in-desc" rows={3} value={form.stand_descripcion} onChange={(e) => set("stand_descripcion", e.target.value)} maxLength={800}
                 placeholder="Variedad, proceso, altura, historia de la finca…"
                 style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
@@ -420,6 +447,105 @@ const PromotorRegistroPage = () => {
                   ...f, municipio: u.municipio, stand_region: subregionDe(u.municipio) || f.stand_region,
                 }));
               }}/>
+          </BloqueForm>
+
+          {/* Caracterización de la persona. Es un dato sensible en el
+              sentido de la Ley 1581 de 2012 —pertenencia étnica, discapacidad,
+              condición de víctima—, así que va con su salida explícita
+              («Ninguna de las anteriores») y se pide en el mismo formulario
+              donde se autoriza el tratamiento, nunca antes. */}
+          <BloqueForm titulo="Quién participa"
+            nota="Sirve para saber a quién está llegando el festival. Nadie queda
+                  fuera por lo que responda aquí.">
+            <SelectorCatalogo id="in-pob" requerido
+              etiqueta="¿A cuál de los siguientes grupos o tipos de población pertenece usted principalmente?"
+              catalogo={POBLACIONES}
+              valor={form.poblacion} otro={form.poblacion_otro}
+              onCambio={(v) => setForm((f) => ({ ...f, poblacion: v, poblacion_otro: v === "otro" ? f.poblacion_otro : "" }))}
+              onOtro={(v) => set("poblacion_otro", v)}
+              ayuda="Selecciona una sola opción."
+              etiquetaOtro="¿Cuál?"/>
+          </BloqueForm>
+
+          <BloqueForm titulo="Línea productiva en la cual participa"
+            nota="Puedes marcar más de una.">
+            <SelectorMultiple id="in-linea"
+              etiqueta="Línea productiva"
+              catalogo={LINEAS_PRODUCTIVAS}
+              valores={lineas} onCambio={setLineas}/>
+          </BloqueForm>
+
+          {/* Los cuatro «sí/no» de requisitos son obligatorios: son condiciones
+              de participación en la muestra, no información de relleno, y
+              preguntarlas después —cuando ya se armó el recinto— no sirve. */}
+          <BloqueForm titulo="Información detallada"
+            nota="Detalles sobre tu emprendimiento, la presentación del producto, el
+                  origen y tu propuesta de valor. Esta información nos ayuda a conocer
+                  mejor tu papel en la cadena productiva del café.">
+            <SiNo id="in-certint" valor={sino.cert_internacional}
+              onCambio={(v) => ponSino("cert_internacional", v)}
+              etiqueta="¿Su café cuenta con certificaciones internacionales?"/>
+            <SiNo id="in-organico" valor={sino.organico}
+              onCambio={(v) => ponSino("organico", v)}
+              etiqueta="¿Su café es orgánico?"/>
+            <SiNo id="in-especial" valor={sino.especial}
+              onCambio={(v) => ponSino("especial", v)}
+              etiqueta="¿Su café es especial?"/>
+            <div className="field">
+              <label htmlFor="in-taza">¿Cuál es el promedio de taza de su café?</label>
+              <input id="in-taza" value={form.promedio_taza} maxLength={40}
+                onChange={(e) => set("promedio_taza", e.target.value)}
+                placeholder="Ej: 84,5 puntos SCA"/>
+            </div>
+
+            <SiNo id="in-marca" requerido valor={sino.marca_registrada}
+              onCambio={(v) => ponSino("marca_registrada", v)}
+              etiqueta="¿Su marca se encuentra registrada ante la Superintendencia de Industria y Comercio?"/>
+
+            <SiNo id="in-camara" requerido valor={sino.camara_comercio}
+              onCambio={(v) => ponSino("camara_comercio", v)}
+              etiqueta="¿Cuenta con Certificado de Existencia y Representación Legal (Cámara de Comercio)?"
+              nota="Para personas jurídicas, asociaciones o cooperativas, con fecha de
+                    expedición no mayor a noventa (90) días. Para pequeños productores
+                    individuales se acepta la certificación de la UMATA, la Secretaría de
+                    Agricultura Municipal o el Comité de Cafeteros."/>
+            {sino.camara_comercio === true && (
+              <div className="field">
+                <label htmlFor="in-cc-num">Número del certificado de Cámara de Comercio</label>
+                <input id="in-cc-num" value={form.camara_comercio_numero} maxLength={60}
+                  onChange={(e) => set("camara_comercio_numero", e.target.value)}/>
+              </div>
+            )}
+
+            <SiNo id="in-invima" requerido valor={sino.invima}
+              onCambio={(v) => ponSino("invima", v)}
+              etiqueta="¿Su marca cuenta con acreditación sanitaria (INVIMA)?"/>
+            {sino.invima === true && (
+              <div className="field">
+                <label htmlFor="in-invima-det">Tipo y número de la acreditación sanitaria</label>
+                <textarea id="in-invima-det" rows={3} maxLength={800}
+                  value={form.invima_detalle} onChange={(e) => set("invima_detalle", e.target.value)}
+                  placeholder="Ej: Registro sanitario RSA-0012345, vigente hasta 2027"
+                  style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}/>
+              </div>
+            )}
+
+            <SiNo id="in-manip" requerido valor={sino.manipulacion_alimentos}
+              onCambio={(v) => ponSino("manipulacion_alimentos", v)}
+              etiqueta="¿El o la expositora cuenta con certificado de manipulación de alimentos vigente?"/>
+
+            <SelectorMultiple id="in-pres" requerido
+              etiqueta="Presentación del producto"
+              catalogo={PRESENTACIONES}
+              valores={presentacion} onCambio={setPresentacion}
+              ayuda="Puedes marcar más de una."/>
+            {presentacion.includes("otros") && (
+              <div className="field">
+                <label htmlFor="in-pres-otro">¿Qué otra presentación? *</label>
+                <input id="in-pres-otro" value={form.presentacion_otro} maxLength={120} required
+                  onChange={(e) => set("presentacion_otro", e.target.value)}/>
+              </div>
+            )}
           </BloqueForm>
 
           <BloqueForm titulo="Cómo vas a entrar"
@@ -1057,12 +1183,43 @@ const RevisionInscripcion = ({ id, onAprobar, onCerrar, ocupado }) => {
           {fila("Dirección", b.direccion)}
           {fila("Organización", etiquetaCatalogo(ORGANIZACIONES, b.tipo_organizacion, b.tipo_organizacion_otro))}
           {fila("Actividad", etiquetaCatalogo(ACTIVIDADES_CAFE, b.actividad_cafe, b.actividad_cafe_otro))}
+          {fila("Población", etiquetaCatalogo(POBLACIONES, b.poblacion, b.poblacion_otro))}
+          {fila("Línea productiva", etiquetasCatalogo(LINEAS_PRODUCTIVAS, b.linea_productiva))}
           {fila("NIT", b.nit)}
           {fila("Sitio web", b.sitio_web)}
           {fila("Ubicación", b.lat != null ? b.lat.toFixed(5) + ", " + b.lng.toFixed(5) : "sin marcar en el mapa")}
           {b.descripcion && (
             <p style={{ fontSize: 13, marginTop: 10, color: "var(--ink-2)", lineHeight: 1.6 }}>{b.descripcion}</p>
           )}
+        </div>
+        <div>
+          {/* Los requisitos administrativos van juntos y con su propio bloque
+              porque son lo que de verdad se revisa aquí: aprobar es decir que
+              esta persona cumple para exponer. Un «no» se marca en rojo para
+              que no pase inadvertido entre diez filas iguales. */}
+          <div className="mono" style={{ marginBottom: 8 }}>Requisitos</div>
+          {[
+            ["Marca registrada (SIC)", b.marca_registrada],
+            ["Cámara de Comercio", b.camara_comercio],
+            ["Acreditación INVIMA", b.invima],
+            ["Manipulación de alimentos", b.manipulacion_alimentos],
+          ].map(([k, v]) => (
+            <div key={k} style={{ display: "flex", gap: 12, padding: "6px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}>
+              <span className="mono" style={{ color: "var(--ink-3)", flex: "0 0 150px" }}>{k}</span>
+              <span style={{ flex: 1, color: v === true ? "var(--good)" : (v === false ? "var(--bad)" : "var(--ink-3)"), fontWeight: 500 }}>
+                {v === true ? "Sí" : (v === false ? "No" : "sin responder")}
+              </span>
+            </div>
+          ))}
+          {fila("Nº Cámara de Comercio", b.camara_comercio_numero)}
+          {fila("Acreditación sanitaria", b.invima_detalle)}
+
+          <div className="mono" style={{ margin: "18px 0 8px" }}>El producto</div>
+          {fila("Presentación", etiquetasCatalogo(PRESENTACIONES, b.presentacion, b.presentacion_otro))}
+          {fila("Promedio de taza", b.promedio_taza)}
+          {fila("Certificaciones int.", b.cert_internacional === null ? "" : (b.cert_internacional ? "Sí" : "No"))}
+          {fila("Orgánico", b.organico === null ? "" : (b.organico ? "Sí" : "No"))}
+          {fila("Especial", b.especial === null ? "" : (b.especial ? "Sí" : "No"))}
         </div>
         <div>
           <div className="mono" style={{ marginBottom: 8 }}>Logo</div>

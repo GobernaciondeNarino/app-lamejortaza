@@ -35,14 +35,14 @@ const LMT_CLAVE_TEMPORAL_HORAS = 72;
 const LMT_LOGIN_MAX_INTENTOS   = 8;
 const LMT_LOGIN_BLOQUEO_MIN    = 15;
 
-function register_routes_promotores(\LMT\Router $r): void
+function register_routes_promotores(\LMT\Router $r):void
 {
     // ---------------------------------------------------------------------
     // Público
     // ---------------------------------------------------------------------
 
     /**
-     * Inscripción. Responde SIEMPRE lo mismo exista o no el correo: si
+     * Inscripción. Responde SIEMPRE lo mismo exista o no el correo:si
      * distinguiera, cualquiera podría averiguar qué caficultores están
      * inscritos probando correos (dato personal, Ley 1581/2012).
      */
@@ -60,7 +60,7 @@ function register_routes_promotores(\LMT\Router $r): void
         // desaparecía; ahora el formulario lo rechaza y se ve por qué.
         $telefono  = promotor_numero_opcional($b['telefono'] ?? null, 'telefono_invalido', [Validate::class, 'telefono']);
         $documento = promotor_numero_opcional($b['documento'] ?? null, 'documento_invalido', [Validate::class, 'documento']);
-        // El municipio se resuelve contra el catálogo del DANE: lo que no sea
+        // El municipio se resuelve contra el catálogo del DANE:lo que no sea
         // uno de los 64 de Nariño no entra. Antes era texto libre y en la base
         // acabaron «Pasto» y «San Juan de Pasto» como municipios distintos.
         $municipio = \LMT\Territorio::municipio($b['municipio'] ?? null);
@@ -72,10 +72,10 @@ function register_routes_promotores(\LMT\Router $r): void
         // formulario público pide ya todo lo que el stand necesita y al
         // verificar no hay que volver a escribirlo.
         $standNombre  = Validate::nombre($b['stand_nombre'] ?? null, 80) ?? $empresa;
-        // La región NO se acepta del cliente: se deduce del municipio. Es la
+        // La región NO se acepta del cliente:se deduce del municipio. Es la
         // única forma de que las dos no puedan contradecirse.
-        $standRegion  = $municipio !== null ? \LMT\Territorio::subregion($municipio) : null;
-        // La dirección pasa a ser obligatoria: es cómo se llega al espacio, y
+        $standRegion  = $municipio !== null ? \LMT\Territorio::subregion($municipio) :null;
+        // La dirección pasa a ser obligatoria:es cómo se llega al espacio, y
         // sin ella el mapa marca un punto que no lleva a ninguna puerta.
         $standDir     = Validate::texto($b['stand_direccion'] ?? null, 255);
         $standDesc    = Validate::texto($b['stand_descripcion'] ?? null, 800);
@@ -88,22 +88,31 @@ function register_routes_promotores(\LMT\Router $r): void
             $b['actividad_cafe'] ?? null, $b['actividad_cafe_otro'] ?? null,
             \LMT\Catalogos::ACTIVIDAD, 'actividad_cafe_invalida', true
         );
+        // Población, línea productiva y ficha detallada del producto. Los
+        // cuatro «sí/no» de requisitos (marca registrada, cámara de comercio,
+        // INVIMA y manipulación de alimentos) son obligatorios aquí porque son
+        // requisitos de participación, no información de relleno.
+        try {
+            $ficha = \LMT\Catalogos::ficha($b, true);
+        } catch (\RuntimeException $e) {
+            Response::error(422, $e->getMessage());
+        }
         $standNit     = promotor_numero_opcional($b['stand_nit'] ?? null, 'nit_invalido', [Validate::class, 'documento']);
         $standWeb     = Validate::url($b['stand_sitio_web'] ?? null, 255);
         $logo         = promotor_logo_reclamado($b['logo'] ?? null);
-        // Punto elegido en el mapa. Fuera de Nariño no se guarda: sólo puede
+        // Punto elegido en el mapa. Fuera de Nariño no se guarda:sólo puede
         // venir de un error, y un punto en otro continente ensucia el mapa del
         // festival sin que nadie se dé cuenta.
         [$standLat, $standLng] = promotor_coordenadas($b['lat'] ?? null, $b['lng'] ?? null);
 
         // Cómo va a entrar si el correo no llega. Ver PROMOTOR_ACCESOS.
         $accesoMetodo = in_array($b['acceso_metodo'] ?? '', PROMOTOR_ACCESOS, true)
-            ? (string) $b['acceso_metodo'] : null;
+            ? (string) $b['acceso_metodo'] :null;
         $tokenQr = null;
         $credencial = null;
         if ($accesoMetodo !== null) {
             if ($accesoMetodo === 'qr') {
-                // El token lo genera el servidor: si lo eligiera el cliente,
+                // El token lo genera el servidor:si lo eligiera el cliente,
                 // «12345678…» sería una credencial válida.
                 $tokenQr = promotor_token_qr();
                 $credencial = $tokenQr;
@@ -126,7 +135,7 @@ function register_routes_promotores(\LMT\Router $r): void
         if (!$nombre) Response::error(422, 'nombre_invalido');
         if (!$municipio) Response::error(422, 'municipio_invalido');
         if ($standDir === '') Response::error(422, 'direccion_requerida');
-        // El logo es obligatorio: es lo que identifica al stand en la tarjeta
+        // El logo es obligatorio:es lo que identifica al stand en la tarjeta
         // de «Mi recorrido» y bajo el sello del pasaporte. Sin él esas dos
         // pantallas se ven a medias, y pedirlo después —cuando el caficultor ya
         // se fue— no lo consigue nadie.
@@ -154,11 +163,13 @@ function register_routes_promotores(\LMT\Router $r): void
                                          stand_sitio_web, logo_path, stand_lat, stand_lng,
                                          tipo_organizacion, tipo_organizacion_otro,
                                          actividad_cafe, actividad_cafe_otro,
+                                         poblacion, poblacion_otro, linea_productiva, cert_internacional, organico, especial, promedio_taza, marca_registrada, camara_comercio, camara_comercio_numero, invima, invima_detalle, manipulacion_alimentos, presentacion, presentacion_otro,
                                          estado, acceso_metodo, password_hash, must_change_password,
                                          acepta_datos, ip_hash,
                                          created_at, updated_at)
                  VALUES (:e, :n, :doc, :tel, :mun, :emp, :msg, :sn, :sr, :sd, :sdesc, :snit,
                          :sweb, :logo, :slat, :slng, :torg, :torgo, :act, :acto,
+                         :poblacion, :poblacion_otro, :linea_productiva, :cert_internacional, :organico, :especial, :promedio_taza, :marca_registrada, :camara_comercio, :camara_comercio_numero, :invima, :invima_detalle, :manipulacion_alimentos, :presentacion, :presentacion_otro,
                          \'pendiente\', :am, :ph, :mcp, 1, :ip,
                          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
             );
@@ -169,11 +180,11 @@ function register_routes_promotores(\LMT\Router $r): void
                 ':tel'   => $telefono,
                 ':mun'   => $municipio,
                 ':emp'   => $empresa,
-                ':msg'   => $mensaje !== '' ? $mensaje : null,
+                ':msg'   => $mensaje !== '' ? $mensaje :null,
                 ':sn'    => $standNombre,
                 ':sr'    => $standRegion,
-                ':sd'    => $standDir !== '' ? $standDir : null,
-                ':sdesc' => $standDesc !== '' ? $standDesc : null,
+                ':sd'    => $standDir !== '' ? $standDir :null,
+                ':sdesc' => $standDesc !== '' ? $standDesc :null,
                 ':snit'  => $standNit,
                 ':sweb'  => $standWeb,
                 ':logo'  => $logo,
@@ -183,19 +194,22 @@ function register_routes_promotores(\LMT\Router $r): void
                 ':torgo' => $tipoOrgOtro,
                 ':act'   => $actividad,
                 ':acto'  => $actividadOtro,
+                // La ficha viaja tal cual la validó Catalogos::ficha():las
+                // claves del array son ya los nombres de las columnas.
+                ...array_combine(array_map(fn($k) => ':' . $k, array_keys($ficha)), $ficha),
                 ':am'    => $accesoMetodo,
                 // La credencial elegida se guarda hasheada YA, aunque la cuenta
-                // siga pendiente: el login la rechaza igual mientras no esté
+                // siga pendiente:el login la rechaza igual mientras no esté
                 // verificada, y así no hay que volver a pedírsela.
-                ':ph'    => $credencial !== null ? Security::hashPassword($credencial) : null,
-                // Fecha y teléfono sirven para entrar, no para quedarse: en
+                ':ph'    => $credencial !== null ? Security::hashPassword($credencial) :null,
+                // Fecha y teléfono sirven para entrar, no para quedarse:en
                 // cuanto entra, el sistema le obliga a poner una clave de
                 // verdad. Una contraseña que eligió él no necesita cambiarse.
                 ':mcp'   => ($accesoMetodo !== null && !in_array($accesoMetodo, PROMOTOR_ACCESOS_DEBILES, true)) ? 0 : 1,
                 ':ip'    => RateLimit::ipHash(),
             ]);
         } catch (\PDOException $e) {
-            // Carrera con otra petición sobre el mismo correo: mismo desenlace
+            // Carrera con otra petición sobre el mismo correo:mismo desenlace
             // visible que el camino "ya existe".
             if ($e->getCode() === '23000' || str_contains((string) $e->getMessage(), 'UNIQUE')) {
                 Response::ok(['recibido' => true]);
@@ -207,7 +221,7 @@ function register_routes_promotores(\LMT\Router $r): void
         // queda su hash, así que ésta es la única vez que se puede dibujar.
         $qr = $tokenQr !== null ? promotor_qr_paquete($email, $tokenQr) : [];
 
-        // Si el correo sale, el QR va dentro: quien eligió este método suele ser
+        // Si el correo sale, el QR va dentro:quien eligió este método suele ser
         // justo quien no quiere depender del correo, pero tenerlo también en el
         // buzón le da una segunda copia que no se pierde al cerrar la pestaña.
         $adjuntos = [];
@@ -263,7 +277,7 @@ function register_routes_promotores(\LMT\Router $r): void
         $email = Validate::email($b['email'] ?? null);
         $pwd   = $b['password'] ?? '';
         // Con qué dice la persona que entra. El formulario lo pregunta en vez
-        // de deducirlo del correo: consultar el método antes de autenticar
+        // de deducirlo del correo:consultar el método antes de autenticar
         // convertiría el login en un comprobador de «¿está inscrito este
         // correo?», que es justo lo que el resto del módulo evita.
         $metodo = in_array($b['acceso_metodo'] ?? '', PROMOTOR_ACCESOS, true)
@@ -294,7 +308,7 @@ function register_routes_promotores(\LMT\Router $r): void
         //
         // Se prueba también el valor SIN normalizar. Es lo que salva a las
         // cuentas anteriores a esto y a las que reciben la clave temporal por
-        // correo: su credencial es una contraseña normal y el método que venga
+        // correo:su credencial es una contraseña normal y el método que venga
         // marcado en el formulario no debería poder estropearla.
         $candidatos = [$pwd];
         $norm = promotor_credencial_normalizada($metodo, $pwd);
@@ -401,7 +415,7 @@ function register_routes_promotores(\LMT\Router $r): void
         $debil = Validate::passwordDebil($nueva, (string) $row['email'], (string) $row['nombre']);
         if ($debil !== null) Response::error(422, $debil);
 
-        // Cambiar la clave pasa la cuenta a 'activo': ya es el promotor, y no el
+        // Cambiar la clave pasa la cuenta a 'activo':ya es el promotor, y no el
         // correo, quien controla el acceso.
         $nuevoEstado = (string) $row['estado'] === 'verificado' ? 'activo' : (string) $row['estado'];
         $pdo->prepare(
@@ -435,7 +449,7 @@ function register_routes_promotores(\LMT\Router $r): void
         $nombre = Validate::nombre($b['nombre'] ?? null, 120);
         if (!$nombre) Response::error(422, 'nombre_invalido');
 
-        // Mismo catálogo que en la inscripción: el municipio sólo puede ser uno
+        // Mismo catálogo que en la inscripción:el municipio sólo puede ser uno
         // de los 64 de Nariño, escrito como lo escribe el DANE.
         $municipio = \LMT\Territorio::municipio($b['municipio'] ?? null);
         if ($municipio === null) Response::error(422, 'municipio_invalido');
@@ -470,9 +484,9 @@ function register_routes_promotores(\LMT\Router $r): void
         $datos = [
             ':n'    => $nombre,
             ':nit'  => promotor_numero_opcional($b['nit'] ?? null, 'nit_invalido', [Validate::class, 'documento']),
-            ':desc' => Validate::texto($b['descripcion'] ?? null, 1500) ?: null,
+            ':desc' => Validate::texto($b['descripcion'] ?? null, 1500) ?:null,
             ':mun'  => $municipio,
-            ':dir'  => Validate::texto($b['direccion'] ?? null, 255) ?: null,
+            ':dir'  => Validate::texto($b['direccion'] ?? null, 255) ?:null,
             ':tel'  => promotor_numero_opcional($b['telefono'] ?? null, 'telefono_invalido', [Validate::class, 'telefono']),
             ':web'  => Validate::url($b['sitio_web'] ?? null, 255),
             ':pid'  => $id,
@@ -531,7 +545,7 @@ function register_routes_promotores(\LMT\Router $r): void
 
         $p = promotor_producto_payload(Security::jsonBody());
 
-        // El WHERE lleva promotor_id: sin eso, cualquier promotor podría editar
+        // El WHERE lleva promotor_id:sin eso, cualquier promotor podría editar
         // el producto de otro con sólo cambiar el id de la URL (IDOR).
         $stmt = Db::pdo()->prepare(
             'UPDATE productos SET nombre = :n, variedad = :var, proceso = :proc, altura_msnm = :alt,
@@ -644,7 +658,7 @@ function register_routes_promotores(\LMT\Router $r): void
     });
 
     /**
-     * Verificación: el paso que el cliente pidió explícitamente. Genera la
+     * Verificación:el paso que el cliente pidió explícitamente. Genera la
      * contraseña temporal y la manda por correo.
      */
     $r->post('/admin/promotores/:id/verificar', function (array $params) {
@@ -666,7 +680,7 @@ function register_routes_promotores(\LMT\Router $r): void
     });
 
     /**
-     * Reenvío: genera una contraseña NUEVA (la anterior deja de servir) y la
+     * Reenvío:genera una contraseña NUEVA (la anterior deja de servir) y la
      * vuelve a enviar. Se usa cuando el correo no llegó o la clave caducó.
      */
     $r->post('/admin/promotores/:id/reenviar-clave', function (array $params) {
@@ -684,7 +698,7 @@ function register_routes_promotores(\LMT\Router $r): void
             Response::error(409, 'estado_no_permite_clave');
         }
 
-        // Con `true`: reenviar es justamente para cuando el promotor perdió su
+        // Con `true`:reenviar es justamente para cuando el promotor perdió su
         // acceso y lo pide. Aquí sí se genera una credencial nueva, aunque
         // hubiera elegido método propio, y la anterior deja de valer.
         Response::ok(promotor_emitir_credenciales($pdo, $row, 'clave_promotor_reenvio', true));
@@ -695,7 +709,7 @@ function register_routes_promotores(\LMT\Router $r): void
      *
      * Existe porque el QR se enseña UNA sola vez —en la base queda su hash— y
      * quien lo pierda se quedaría fuera. La otra salida, mandarle una clave por
-     * correo, es exactamente lo que este método existe para evitar: el
+     * correo, es exactamente lo que este método existe para evitar:el
      * organizador reemite el QR, lo enseña en pantalla o lo imprime, y se lo da
      * en mano en la feria.
      */
@@ -714,7 +728,7 @@ function register_routes_promotores(\LMT\Router $r): void
         }
 
         $token = promotor_token_qr();
-        // must_change_password a 0: un QR de 32 caracteres al azar ya es una
+        // must_change_password a 0:un QR de 32 caracteres al azar ya es una
         // credencial fuerte, no una llave prestada que haya que cambiar.
         $pdo->prepare(
             'UPDATE promotores SET acceso_metodo = \'qr\', password_hash = :h, must_change_password = 0,
@@ -750,7 +764,7 @@ function register_routes_promotores(\LMT\Router $r): void
                                    password_expira_at = NULL, must_change_password = 1,
                                    updated_at = CURRENT_TIMESTAMP
              WHERE id = :id'
-        )->execute([':m' => $motivo !== '' ? $motivo : null, ':id' => $id]);
+        )->execute([':m' => $motivo !== '' ? $motivo :null, ':id' => $id]);
 
         $entregado = null;
         if ($avisar) {
@@ -789,7 +803,7 @@ function register_routes_promotores(\LMT\Router $r): void
     // Aquí vivía PUT /admin/promotores/:id/stand, que permitía enganchar un
     // promotor a un stand cualquiera de la lista.
     //
-    // Se quitó porque partía de una idea equivocada: un promotor y su stand
+    // Se quitó porque partía de una idea equivocada:un promotor y su stand
     // NO son dos cosas que haya que emparejar, son la misma. El stand nace al
     // aprobar la inscripción, con los datos que esa persona escribió, y a
     // partir de ahí el vínculo no es algo que se elija. Poder cambiarlo a mano
@@ -812,7 +826,7 @@ function register_routes_promotores(\LMT\Router $r): void
     });
 
     // ---------------------------------------------------------------------
-    // Vitrina pública: empresas y productos de promotores activos
+    // Vitrina pública:empresas y productos de promotores activos
     // ---------------------------------------------------------------------
     $r->get('/vitrina', function () {
         $stmt = Db::pdo()->query(
@@ -865,35 +879,35 @@ function register_routes_promotores(\LMT\Router $r): void
  *
  * Si el correo NO sale (hosting sin MTA, SMTP mal configurado) devolvemos la
  * clave al administrador en la respuesta para que pueda entregarla por otro
- * medio. Es una decisión consciente: el administrador ya puede regenerarla
+ * medio. Es una decisión consciente:el administrador ya puede regenerarla
  * cuando quiera, así que no gana ningún privilegio nuevo, y la alternativa
  * —dejar al promotor sin acceso y sin diagnóstico— es peor en una feria.
  * Cuando el envío sí funciona, la clave nunca vuelve al cliente.
  */
-function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo, bool $forzarClave = false): array
+function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo, bool $forzarClave = false):array
 {
-    // Si el promotor eligió cómo entrar al inscribirse, se le RESPETA: generar
+    // Si el promotor eligió cómo entrar al inscribirse, se le RESPETA:generar
     // una clave temporal aquí borraría la suya y le dejaría dependiendo de un
     // correo que quizá no le llega, que es justo lo que quiso evitar. El correo
     // le confirma que ya está aprobado y le recuerda con qué entra.
     //
-    // `$forzarClave` es para el botón de reenviar clave: ahí el organizador SÍ
+    // `$forzarClave` es para el botón de reenviar clave:ahí el organizador SÍ
     // quiere una credencial nueva, normalmente porque el promotor perdió la
     // suya y lo está pidiendo por teléfono.
     $metodo = (string) ($row['acceso_metodo'] ?? '');
     $conservaSuAcceso = !$forzarClave && $metodo !== '' && !empty($row['password_hash']);
 
     $clave = $conservaSuAcceso ? null : Security::generarClaveTemporal();
-    $expira = $conservaSuAcceso ? null : date('Y-m-d H:i:s', time() + LMT_CLAVE_TEMPORAL_HORAS * 3600);
+    $expira = $conservaSuAcceso ? null :date('Y-m-d H:i:s', time() + LMT_CLAVE_TEMPORAL_HORAS * 3600);
     $admin = Session::user();
 
     // El stand se crea AQUÍ, con lo que el promotor escribió al inscribirse.
-    // Promotor y stand son la misma entidad: separarlos obligaría al
+    // Promotor y stand son la misma entidad:separarlos obligaría al
     // organizador a teclear otra vez unos datos que ya tiene delante.
     $stand = promotor_asegurar_stand($pdo, $row);
 
     if ($conservaSuAcceso) {
-        // No se toca ni la credencial ni must_change_password: los eligió él.
+        // No se toca ni la credencial ni must_change_password:los eligió él.
         $pdo->prepare(
             'UPDATE promotores SET estado = \'verificado\', intentos_fallidos = 0, bloqueado_hasta = NULL,
                                    verificado_por = :adm, verificado_at = CURRENT_TIMESTAMP,
@@ -922,7 +936,7 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo,
     }
 
     // QR del stand incrustado en el correo. Si falla la generación no se
-    // aborta el envío: la clave es lo imprescindible, el QR es una comodidad
+    // aborta el envío:la clave es lo imprescindible, el QR es una comodidad
     // y el organizador siempre lo puede reimprimir desde /admin/qr.
     $adjuntos = [];
     if (!empty($stand['id'])) {
@@ -941,7 +955,7 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo,
     $pl = Correos::credenciales(
         (string) $row['nombre'], (string) $row['email'], $clave,
         LMT_CLAVE_TEMPORAL_HORAS, $stand,
-        $conservaSuAcceso ? promotor_acceso_etiqueta($metodo) : null
+        $conservaSuAcceso ? promotor_acceso_etiqueta($metodo) :null
     );
     $enviado = Mailer::send((string) $row['email'], (string) $row['nombre'], $pl['asunto'], $pl['html'], $pl['texto'], $tipoCorreo, $adjuntos);
 
@@ -950,7 +964,7 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo,
         'correo_enviado' => $enviado,
         'expira_en'      => $expira,
         'stand_id'       => $stand['id'] ?? null,
-        'acceso_propio'  => $conservaSuAcceso ? $metodo : null,
+        'acceso_propio'  => $conservaSuAcceso ? $metodo :null,
     ];
     if (!$enviado) {
         if ($conservaSuAcceso) {
@@ -968,10 +982,10 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo,
 
 /**
  * Devuelve el stand del promotor, creándolo a partir del borrador de la
- * inscripción si todavía no existe. Idempotente: si ya está vinculado, sólo
+ * inscripción si todavía no existe. Idempotente:si ya está vinculado, sólo
  * refresca los datos que el promotor aportó.
  */
-function promotor_asegurar_stand(\PDO $pdo, array $row): array
+function promotor_asegurar_stand(\PDO $pdo, array $row):array
 {
     $promotorId = (int) $row['id'];
     $sel = $pdo->prepare(
@@ -980,6 +994,7 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
                 stand_nit, stand_sitio_web, logo_path, stand_lat, stand_lng,
                 tipo_organizacion, tipo_organizacion_otro,
                 actividad_cafe, actividad_cafe_otro,
+                poblacion, poblacion_otro, linea_productiva, cert_internacional, organico, especial, promedio_taza, marca_registrada, camara_comercio, camara_comercio_numero, invima, invima_detalle, manipulacion_alimentos, presentacion, presentacion_otro,
                 empresa_tentativa
          FROM promotores WHERE id = :id'
     );
@@ -988,34 +1003,41 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
     if (!$p) return [];
 
     $nombreStand = (string) ($p['stand_nombre'] ?: $p['empresa_tentativa'] ?: $p['nombre']);
-    // La región se vuelve a deducir aquí, no se copia: si el promotor corrige su
+    // La región se vuelve a deducir aquí, no se copia:si el promotor corrige su
     // municipio más tarde, el stand queda coherente sin tocar nada más.
     $municipio   = \LMT\Territorio::municipio($p['municipio'] ?? null) ?? (string) ($p['municipio'] ?: 'Nariño');
-    $region      = \LMT\Territorio::subregion($municipio) ?? ($p['stand_region'] ?: null);
+    $region      = \LMT\Territorio::subregion($municipio) ?? ($p['stand_region'] ?:null);
 
     $datos = [
         ':nombre' => mb_substr($nombreStand, 0, 80, 'UTF-8'),
         ':mun'    => mb_substr($municipio, 0, 80, 'UTF-8'),
         ':reg'    => $region,
-        ':dir'    => $p['stand_direccion'] ?: null,
+        ':dir'    => $p['stand_direccion'] ?:null,
         ':correo' => $p['email'],
-        ':desc'   => $p['stand_descripcion'] ?: null,
-        ':prop'   => $p['nombre'] ?: null,
-        ':propdoc'=> $p['documento'] ?: null,
-        ':nit'    => $p['stand_nit'] ?: null,
-        ':web'    => $p['stand_sitio_web'] ?: null,
+        ':desc'   => $p['stand_descripcion'] ?:null,
+        ':prop'   => $p['nombre'] ?:null,
+        ':propdoc'=> $p['documento'] ?:null,
+        ':nit'    => $p['stand_nit'] ?:null,
+        ':web'    => $p['stand_sitio_web'] ?:null,
         ':logo'   => promotor_ruta_publica($p['logo_path'] ?? null),
-        ':tel'    => $p['telefono'] ?: null,
-        ':lat'    => $p['stand_lat'] !== null ? (float) $p['stand_lat'] : null,
-        ':lng'    => $p['stand_lng'] !== null ? (float) $p['stand_lng'] : null,
-        // La caracterización viaja con el resto: si se quedara sólo en la
+        ':tel'    => $p['telefono'] ?:null,
+        ':lat'    => $p['stand_lat'] !== null ? (float) $p['stand_lat'] :null,
+        ':lng'    => $p['stand_lng'] !== null ? (float) $p['stand_lng'] :null,
+        // La caracterización viaja con el resto:si se quedara sólo en la
         // inscripción, el informe por tipo de organización se vaciaría en
         // cuanto alguien pusiera a cero las inscripciones ya aprobadas.
-        ':torg'   => $p['tipo_organizacion'] ?: null,
-        ':torgo'  => $p['tipo_organizacion_otro'] ?: null,
-        ':act'    => $p['actividad_cafe'] ?: null,
-        ':acto'   => $p['actividad_cafe_otro'] ?: null,
+        ':torg'   => $p['tipo_organizacion'] ?:null,
+        ':torgo'  => $p['tipo_organizacion_otro'] ?:null,
+        ':act'    => $p['actividad_cafe'] ?:null,
+        ':acto'   => $p['actividad_cafe_otro'] ?:null,
     ];
+
+    // La ficha se copia columna a columna, sin nombrarlas una por una:la lista
+    // vive en Catalogos y así añadir una casilla al formulario no obliga a
+    // acordarse de tocar también este INSERT.
+    foreach (\LMT\Catalogos::camposFicha() as $campo) {
+        $datos[':' . $campo] = ($p[$campo] === '' ? null : $p[$campo]);
+    }
 
     if (!empty($p['stand_id'])) {
         $pdo->prepare(
@@ -1027,7 +1049,22 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
                                tipo_organizacion=COALESCE(:torg, tipo_organizacion),
                                tipo_organizacion_otro=:torgo,
                                actividad_cafe=COALESCE(:act, actividad_cafe),
-                               actividad_cafe_otro=:acto
+                               actividad_cafe_otro=:acto,
+                               poblacion=:poblacion,
+                               poblacion_otro=:poblacion_otro,
+                               linea_productiva=:linea_productiva,
+                               cert_internacional=:cert_internacional,
+                               organico=:organico,
+                               especial=:especial,
+                               promedio_taza=:promedio_taza,
+                               marca_registrada=:marca_registrada,
+                               camara_comercio=:camara_comercio,
+                               camara_comercio_numero=:camara_comercio_numero,
+                               invima=:invima,
+                               invima_detalle=:invima_detalle,
+                               manipulacion_alimentos=:manipulacion_alimentos,
+                               presentacion=:presentacion,
+                               presentacion_otro=:presentacion_otro
              WHERE id=:id'
         )->execute($datos + [':id' => $p['stand_id']]);
         return ['id' => (string) $p['stand_id'], 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun']];
@@ -1038,16 +1075,20 @@ function promotor_asegurar_stand(\PDO $pdo, array $row): array
         'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
                              propietario, propietario_documento, nit, sitio_web, logo_path,
                              telefono, lat, lng, tipo_organizacion, tipo_organizacion_otro,
-                             actividad_cafe, actividad_cafe_otro, coords_x, coords_y, color)
+                             actividad_cafe, actividad_cafe_otro,
+                             poblacion, poblacion_otro, linea_productiva, cert_internacional, organico, especial, promedio_taza, marca_registrada, camara_comercio, camara_comercio_numero, invima, invima_detalle, manipulacion_alimentos, presentacion, presentacion_otro,
+                             coords_x, coords_y, color)
          VALUES (:id, :nombre, :mun, :reg, :dir, :correo, :desc, :prop, :propdoc, :nit, :web,
-                 :logo, :tel, :lat, :lng, :torg, :torgo, :act, :acto, 0.5, 0.5, :color)'
+                 :logo, :tel, :lat, :lng, :torg, :torgo, :act, :acto,
+                 :poblacion, :poblacion_otro, :linea_productiva, :cert_internacional, :organico, :especial, :promedio_taza, :marca_registrada, :camara_comercio, :camara_comercio_numero, :invima, :invima_detalle, :manipulacion_alimentos, :presentacion, :presentacion_otro,
+                 0.5, 0.5, :color)'
     )->execute($datos + [':id' => $id, ':color' => promotor_color_stand($id)]);
 
     return ['id' => $id, 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun']];
 }
 
 /** Identificador legible y libre para el stand, derivado del nombre. */
-function promotor_id_stand_libre(\PDO $pdo, string $nombre): string
+function promotor_id_stand_libre(\PDO $pdo, string $nombre):string
 {
     $base = Validate::plegarAscii($nombre);
     $base = preg_replace('/[^a-z0-9]+/', '-', $base) ?? '';
@@ -1065,14 +1106,14 @@ function promotor_id_stand_libre(\PDO $pdo, string $nombre): string
 }
 
 /** Color estable derivado del id, para que cada stand se distinga en el mapa. */
-function promotor_color_stand(string $id): string
+function promotor_color_stand(string $id):string
 {
     $tono = hexdec(substr(md5($id), 0, 2)) % 360;
     return 'oklch(0.48 0.1 ' . $tono . ')';
 }
 
 /** Suma un intento fallido y bloquea la cuenta si se pasa del umbral. */
-function promotores_registrar_fallo(\PDO $pdo, int $id, int $intentosPrevios): void
+function promotores_registrar_fallo(\PDO $pdo, int $id, int $intentosPrevios):void
 {
     $intentos = $intentosPrevios + 1;
     if ($intentos >= LMT_LOGIN_MAX_INTENTOS) {
@@ -1090,7 +1131,7 @@ function promotores_registrar_fallo(\PDO $pdo, int $id, int $intentosPrevios): v
 }
 
 /** Avisa por correo a los administradores de que hay solicitud pendiente. */
-function promotores_avisar_admins(string $nombre, string $email, string $municipio): void
+function promotores_avisar_admins(string $nombre, string $email, string $municipio):void
 {
     try {
         $admins = Db::pdo()->query('SELECT email FROM admins WHERE is_admin = 1 LIMIT 5')->fetchAll();
@@ -1106,19 +1147,19 @@ function promotores_avisar_admins(string $nombre, string $email, string $municip
 }
 
 /** Normaliza y valida el cuerpo de un producto. */
-function promotor_producto_payload(array $b): array
+function promotor_producto_payload(array $b):array
 {
     $nombre = Validate::nombre($b['nombre'] ?? null, 120);
     if (!$nombre) Response::error(422, 'nombre_producto_invalido');
 
     $altura = array_key_exists('altura_msnm', $b) && $b['altura_msnm'] !== '' && $b['altura_msnm'] !== null
-        ? Validate::entero($b['altura_msnm'], 0, 6000) : null;
+        ? Validate::entero($b['altura_msnm'], 0, 6000) :null;
     if (array_key_exists('altura_msnm', $b) && $b['altura_msnm'] !== '' && $b['altura_msnm'] !== null && $altura === null) {
         Response::error(422, 'altura_invalida');
     }
 
     $precio = array_key_exists('precio', $b) && $b['precio'] !== '' && $b['precio'] !== null
-        ? Validate::precio($b['precio']) : null;
+        ? Validate::precio($b['precio']) :null;
     if (array_key_exists('precio', $b) && $b['precio'] !== '' && $b['precio'] !== null && $precio === null) {
         Response::error(422, 'precio_invalido');
     }
@@ -1130,16 +1171,16 @@ function promotor_producto_payload(array $b): array
         ':var'    => Validate::nombre($b['variedad'] ?? null, 80),
         ':proc'   => Validate::nombre($b['proceso'] ?? null, 80),
         ':alt'    => $altura,
-        ':notas'  => Validate::texto($b['notas_cata'] ?? null, 500) ?: null,
+        ':notas'  => Validate::texto($b['notas_cata'] ?? null, 500) ?:null,
         ':pres'   => Validate::nombre($b['presentacion'] ?? null, 80),
         ':precio' => $precio,
-        ':desc'   => Validate::texto($b['descripcion'] ?? null, 1500) ?: null,
+        ':desc'   => Validate::texto($b['descripcion'] ?? null, 1500) ?:null,
         ':pub'    => $publicado === false ? 0 : 1,
     ];
 }
 
 /** Recibe el fichero del campo "archivo" y lo almacena ya saneado. */
-function promotor_guardar_imagen(string $sub): string
+function promotor_guardar_imagen(string $sub):string
 {
     if (empty($_FILES['archivo']) || !is_array($_FILES['archivo'])) {
         Response::error(422, 'archivo_ausente');
@@ -1155,7 +1196,7 @@ function promotor_guardar_imagen(string $sub): string
 /**
  * Valida la referencia al logo que el formulario de inscripción dice haber
  * subido. Sólo se acepta una ruta con la forma exacta que produce
- * Uploads::imagen() dentro de uploads/inscripciones/ y que además EXISTA: si no
+ * Uploads::imagen() dentro de uploads/inscripciones/ y que además EXISTA:si no
  * se comprobara, cualquiera podría apuntar a un fichero arbitrario del disco.
  */
 /**
@@ -1163,7 +1204,7 @@ function promotor_guardar_imagen(string $sub): string
  * ==============================================
  *
  * El acceso normal es la clave temporal que se envía al verificar la
- * inscripción. Falla más de lo que parece: hay caficultores que dan un correo
+ * inscripción. Falla más de lo que parece:hay caficultores que dan un correo
  * que casi no abren, que lo escriben mal, o cuyo proveedor manda el mensaje a
  * spam. Cuando eso pasa se quedan fuera de su propio stand el día del evento y
  * hay que resolverlo por teléfono, uno a uno.
@@ -1177,7 +1218,7 @@ function promotor_guardar_imagen(string $sub): string
  *
  * Sobre la fuerza de cada uno, sin adornos
  * ----------------------------------------
- * La fecha y el teléfono son credenciales DÉBILES: una fecha son unos pocos
+ * La fecha y el teléfono son credenciales DÉBILES:una fecha son unos pocos
  * miles de combinaciones y un teléfono es un dato semipúblico que además queda
  * guardado en claro en la misma ficha, porque es también un campo de contacto.
  * Se aceptan igual, porque el problema real que resuelven —quedarse fuera— es
@@ -1190,7 +1231,7 @@ function promotor_guardar_imagen(string $sub): string
  *      verdad antes de tocar nada. Son llaves para entrar, no para vivir con
  *      ellas.
  *
- * El QR no tiene ese problema: son 32 caracteres al azar, tanta entropía como
+ * El QR no tiene ese problema:son 32 caracteres al azar, tanta entropía como
  * una contraseña larga. Es la mejor opción para quien no maneja correo.
  *
  * Se guarde lo que se guarde, va HASHEADO (Argon2id + pepper) en la misma
@@ -1217,7 +1258,7 @@ function promotor_credencial_normalizada(string $metodo, $valor): ?string
         $d = preg_replace('/\D+/', '', $v) ?? '';
         // Un teléfono colombiano tiene 10 dígitos; se aceptan de 7 a 15 para no
         // dejar fuera fijos ni números con indicativo de país.
-        return (strlen($d) >= 7 && strlen($d) <= 15) ? $d : null;
+        return (strlen($d) >= 7 && strlen($d) <= 15) ? $d :null;
     }
 
     if ($metodo === 'documento') {
@@ -1233,19 +1274,19 @@ function promotor_credencial_normalizada(string $metodo, $valor): ?string
     }
 
     if ($metodo === 'password') {
-        return (mb_strlen($v, 'UTF-8') >= 8 && mb_strlen($v, 'UTF-8') <= 128) ? $v : null;
+        return (mb_strlen($v, 'UTF-8') >= 8 && mb_strlen($v, 'UTF-8') <= 128) ? $v :null;
     }
 
     if ($metodo === 'qr') {
         $t = strtolower(preg_replace('/[^A-Za-z0-9]/', '', $v) ?? '');
-        return strlen($t) === 32 ? $t : null;
+        return strlen($t) === 32 ? $t :null;
     }
 
     return null;
 }
 
 /** Token del QR: 32 caracteres hexadecimales, como una contraseña larga. */
-function promotor_token_qr(): string
+function promotor_token_qr():string
 {
     return bin2hex(random_bytes(16));
 }
@@ -1254,14 +1295,14 @@ function promotor_token_qr(): string
  * URL que codifica el QR de acceso.
  *
  * Lleva el correo además del token porque el token por sí solo no identifica a
- * nadie: en la base sólo queda su hash y no se puede buscar por él. Es el QR de
+ * nadie:en la base sólo queda su hash y no se puede buscar por él. Es el QR de
  * esa persona y lo guarda ella, así que el correo no añade exposición.
  *
- * El host sale de Security::baseUrlPublica() y no de la cabecera Host: este QR
+ * El host sale de Security::baseUrlPublica() y no de la cabecera Host:este QR
  * se guarda en el móvil y se escanea meses después; con el host manipulado
  * llevaría al sitio de otro a pedir la credencial.
  */
-function promotor_qr_url(string $email, string $token): string
+function promotor_qr_url(string $email, string $token):string
 {
     return Security::baseUrlPublica() . '/promotor?correo=' . rawurlencode($email)
          . '&acceso=' . rawurlencode($token);
@@ -1270,13 +1311,13 @@ function promotor_qr_url(string $email, string $token): string
 /**
  * PNG del QR de acceso, en bytes.
  *
- * Se genera en el SERVIDOR y no en el navegador por dos motivos: el generador
+ * Se genera en el SERVIDOR y no en el navegador por dos motivos:el generador
  * de QR vive aquí (no hay uno en JS) y el endpoint público /qr/{id}.png sólo
  * sabe de stands —darle texto libre lo convertiría en una fábrica de códigos
  * QR para cualquiera, que es media suplantación regalada—.
  *
  * Si la URL no cupiera en un QR (correos muy largos + subdirectorio hondo) se
- * codifica sólo el token: escanearlo no abre el portal solo, pero el código
+ * codifica sólo el token:escanearlo no abre el portal solo, pero el código
  * sigue leyéndose y sirve para escribirlo como contraseña.
  */
 function promotor_qr_bytes(string $email, string $token, int $escala = 6): ?string
@@ -1292,22 +1333,22 @@ function promotor_qr_bytes(string $email, string $token, int $escala = 6): ?stri
 }
 
 /**
- * El QR de acceso listo para la respuesta JSON: token, URL e imagen incrustada
+ * El QR de acceso listo para la respuesta JSON:token, URL e imagen incrustada
  * como data URI. Devuelve sólo lo que exista; si el PNG falla, el token en
  * letras basta para entrar.
  */
-function promotor_qr_paquete(string $email, string $token): array
+function promotor_qr_paquete(string $email, string $token):array
 {
     $png = promotor_qr_bytes($email, $token);
     return array_filter([
         'qr_token' => $token,
         'qr_url'   => promotor_qr_url($email, $token),
-        'qr_png'   => $png !== null ? 'data:image/png;base64,' . base64_encode($png) : null,
+        'qr_png'   => $png !== null ? 'data:image/png;base64,' . base64_encode($png) :null,
     ], fn($v) => $v !== null);
 }
 
 /** Cómo se llama cada método de cara a la persona. */
-function promotor_acceso_etiqueta(?string $metodo): string
+function promotor_acceso_etiqueta(?string $metodo):string
 {
     return [
         'password'  => 'la contraseña que elegiste',
@@ -1318,11 +1359,11 @@ function promotor_acceso_etiqueta(?string $metodo): string
 }
 
 /**
- * Campo numérico opcional: vacío pasa, mal escrito NO pasa.
+ * Campo numérico opcional:vacío pasa, mal escrito NO pasa.
  *
  * Los validadores devuelven null tanto para «no lo puso» como para «puso algo
  * que no es un número», y guardar null en los dos casos hacía desaparecer el
- * dato sin avisar. Aquí se distinguen: sólo lo que llega vacío se queda vacío.
+ * dato sin avisar. Aquí se distinguen:sólo lo que llega vacío se queda vacío.
  */
 function promotor_numero_opcional($valor, string $error, callable $validador): ?string
 {
@@ -1340,7 +1381,7 @@ function promotor_numero_opcional($valor, string $error, callable $validador): ?
  * se convierte su excepción en el 422 que espera el navegador. Lo usan la
  * inscripción y el editor de espacios del panel, con `$obligatorio` distinto.
  */
-function promotor_catalogo($clave, $detalle, array $catalogo, string $error, bool $obligatorio): array
+function promotor_catalogo($clave, $detalle, array $catalogo, string $error, bool $obligatorio):array
 {
     try {
         return \LMT\Catalogos::par($clave, $detalle, $catalogo, $error, $obligatorio);
@@ -1354,15 +1395,15 @@ function promotor_logo_reclamado($valor): ?string
     if (!is_string($valor) || $valor === '') return null;
     if (!preg_match('#^uploads/inscripciones/[0-9a-f]{32}\.(jpg|png|webp)$#', $valor)) return null;
     $abs = Uploads::raiz() . '/' . substr($valor, strlen('uploads/'));
-    return is_file($abs) ? $valor : null;
+    return is_file($abs) ? $valor :null;
 }
 
 /**
  * Coordenadas del stand. Se aceptan sólo dentro del rectángulo que envuelve a
- * Nariño (con un margen): cualquier otra cosa es un error del cliente y
+ * Nariño (con un margen):cualquier otra cosa es un error del cliente y
  * ensuciaría el mapa del festival sin que nadie lo note.
  */
-function promotor_coordenadas($lat, $lng): array
+function promotor_coordenadas($lat, $lng):array
 {
     if (!is_numeric($lat) || !is_numeric($lng)) return [null, null];
     $la = (float) $lat; $lo = (float) $lng;
@@ -1374,26 +1415,26 @@ function promotor_coordenadas($lat, $lng): array
 function promotor_ruta_publica(?string $ruta): ?string
 {
     if (!is_string($ruta) || $ruta === '') return null;
-    return preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(jpg|png|webp)$#', $ruta) ? $ruta : null;
+    return preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(jpg|png|webp)$#', $ruta) ? $ruta :null;
 }
 
-function promotor_producto_publico(array $p): array
+function promotor_producto_publico(array $p):array
 {
     return [
         'id'           => (int) $p['id'],
         'nombre'       => (string) $p['nombre'],
         'variedad'     => (string) ($p['variedad'] ?? ''),
         'proceso'      => (string) ($p['proceso'] ?? ''),
-        'altura_msnm'  => isset($p['altura_msnm']) && $p['altura_msnm'] !== null ? (int) $p['altura_msnm'] : null,
+        'altura_msnm'  => isset($p['altura_msnm']) && $p['altura_msnm'] !== null ? (int) $p['altura_msnm'] :null,
         'notas_cata'   => (string) ($p['notas_cata'] ?? ''),
         'presentacion' => (string) ($p['presentacion'] ?? ''),
-        'precio'       => isset($p['precio']) && $p['precio'] !== null ? (float) $p['precio'] : null,
+        'precio'       => isset($p['precio']) && $p['precio'] !== null ? (float) $p['precio'] :null,
         'descripcion'  => (string) ($p['descripcion'] ?? ''),
         'foto'         => promotor_ruta_publica($p['foto_path'] ?? null),
     ];
 }
 
-function promotor_productos(int $promotorId): array
+function promotor_productos(int $promotorId):array
 {
     $stmt = Db::pdo()->prepare(
         'SELECT id, nombre, variedad, proceso, altura_msnm, notas_cata, presentacion,
@@ -1420,7 +1461,8 @@ function promotor_perfil_completo(int $promotorId, bool $paraAdmin = false): ?ar
                 stand_nombre, stand_region, stand_direccion, stand_descripcion,
                 stand_nit, stand_sitio_web, logo_path, stand_lat, stand_lng,
                 tipo_organizacion, tipo_organizacion_otro,
-                actividad_cafe, actividad_cafe_otro
+                actividad_cafe, actividad_cafe_otro,
+                poblacion, poblacion_otro, linea_productiva, cert_internacional, organico, especial, promedio_taza, marca_registrada, camara_comercio, camara_comercio_numero, invima, invima_detalle, manipulacion_alimentos, presentacion, presentacion_otro
          FROM promotores WHERE id = :id'
     );
     $stmt->execute([':id' => $promotorId]);
@@ -1455,7 +1497,7 @@ function promotor_perfil_completo(int $promotorId, bool $paraAdmin = false): ?ar
             'telefono'    => (string) ($e['telefono'] ?? ''),
             'sitio_web'   => (string) ($e['sitio_web'] ?? ''),
             'logo'        => promotor_ruta_publica($e['logo_path'] ?? null),
-        ] : null,
+        ] :null,
         'productos' => promotor_productos($promotorId),
     ];
 
@@ -1469,7 +1511,7 @@ function promotor_perfil_completo(int $promotorId, bool $paraAdmin = false): ?ar
             'verificado_at'     => $p['verificado_at'] ?? null,
             'ultimo_acceso'     => $p['ultimo_acceso'] ?? null,
         ];
-        // El borrador del stand: exactamente lo que se convertirá en stand al
+        // El borrador del stand:exactamente lo que se convertirá en stand al
         // aprobar. Se enseña para revisarlo ANTES, que es cuando se puede
         // corregir; después hay que ir al editor de stands a arreglarlo.
         $salida['stand_borrador'] = [
@@ -1485,18 +1527,35 @@ function promotor_perfil_completo(int $promotorId, bool $paraAdmin = false): ?ar
             'propietario' => (string) $p['nombre'],
             'propietario_documento' => (string) ($p['documento'] ?? ''),
             'logo'        => promotor_ruta_publica($p['logo_path'] ?? null),
-            'lat'         => $p['stand_lat'] !== null ? (float) $p['stand_lat'] : null,
-            'lng'         => $p['stand_lng'] !== null ? (float) $p['stand_lng'] : null,
+            'lat'         => $p['stand_lat'] !== null ? (float) $p['stand_lat'] :null,
+            'lng'         => $p['stand_lng'] !== null ? (float) $p['stand_lng'] :null,
             'tipo_organizacion'      => (string) ($p['tipo_organizacion'] ?? ''),
             'tipo_organizacion_otro' => (string) ($p['tipo_organizacion_otro'] ?? ''),
             'actividad_cafe'         => (string) ($p['actividad_cafe'] ?? ''),
             'actividad_cafe_otro'    => (string) ($p['actividad_cafe_otro'] ?? ''),
+            // La ficha completa, para poder revisarla ANTES de aprobar:los
+            // requisitos administrativos son justo lo que hay que mirar aquí.
+            'poblacion'              => (string) ($p['poblacion'] ?? ''),
+            'poblacion_otro'         => (string) ($p['poblacion_otro'] ?? ''),
+            'linea_productiva'       => \LMT\Catalogos::listaDe($p['linea_productiva'] ?? null),
+            'presentacion'           => \LMT\Catalogos::listaDe($p['presentacion'] ?? null),
+            'presentacion_otro'      => (string) ($p['presentacion_otro'] ?? ''),
+            'promedio_taza'          => (string) ($p['promedio_taza'] ?? ''),
+            'camara_comercio_numero' => (string) ($p['camara_comercio_numero'] ?? ''),
+            'invima_detalle'         => (string) ($p['invima_detalle'] ?? ''),
+            'cert_internacional'     => stand_si_no($p['cert_internacional'] ?? null),
+            'organico'               => stand_si_no($p['organico'] ?? null),
+            'especial'               => stand_si_no($p['especial'] ?? null),
+            'marca_registrada'       => stand_si_no($p['marca_registrada'] ?? null),
+            'camara_comercio'        => stand_si_no($p['camara_comercio'] ?? null),
+            'invima'                 => stand_si_no($p['invima'] ?? null),
+            'manipulacion_alimentos' => stand_si_no($p['manipulacion_alimentos'] ?? null),
         ];
     }
     return $salida;
 }
 
-function promotor_fila_admin(array $p): array
+function promotor_fila_admin(array $p):array
 {
     return [
         'id'                => (int) $p['id'],
@@ -1512,7 +1571,7 @@ function promotor_fila_admin(array $p): array
         'estado'            => (string) $p['estado'],
         'stand_id'          => $p['stand_id'] ?? null,
         // Con qué eligió entrar. El panel lo necesita para ofrecer «reemitir
-        // el QR» sólo a quien entra con QR: a los demás no les diría nada.
+        // el QR» sólo a quien entra con QR:a los demás no les diría nada.
         'acceso_metodo'     => (string) ($p['acceso_metodo'] ?? ''),
         'productos'         => (int) ($p['productos'] ?? 0),
         'must_change'       => (bool) $p['must_change_password'],

@@ -293,6 +293,39 @@ const StandsList = ({ stands }) => {
   );
 };
 
+/**
+ * El número que la organización asigna al espacio en el recinto.
+ *
+ * La regla es todo o nada, y el aviso de aquí abajo es la mitad de la función:
+ * sin él, quien numere tres espacios y no vea ningún cambio en la plataforma
+ * pensará que el campo no sirve. Aquí se le dice cuántos faltan.
+ */
+const NumeroDelEspacio = ({ valor, onCambio, idActual }) => {
+  const todos = window.STANDS_DATA || [];
+  // El que se está editando cuenta con lo que hay escrito ahora mismo, no con
+  // lo último guardado: si no, teclear el último número que faltaba seguiría
+  // diciendo «falta 1» hasta recargar.
+  const sinNumero = todos.filter((s) =>
+    s.id === idActual ? String(valor || "").trim() === "" : String(s.numero || "").trim() === ""
+  ).length;
+  const completa = todos.length > 0 && sinNumero === 0;
+
+  return (
+    <div className="field">
+      <label htmlFor="st-numero">Número del espacio</label>
+      <input id="st-numero" value={valor || ""} maxLength={16} placeholder="Ej: 12 o A-14"
+        onChange={(e) => onCambio(e.target.value.replace(/[^\p{L}0-9 .\-]/gu, "").slice(0, 16))}/>
+      <span className="ayuda" style={{ color: completa ? "var(--good)" : "var(--ink-3)" }}>
+        {completa
+          ? "Todos los espacios están numerados: la plataforma usa estos números."
+          : (todos.length === 0
+            ? "Es el número del recinto, el que sale en el mapa impreso."
+            : `Se usará en toda la plataforma cuando lo tengan TODOS los espacios; faltan ${sinNumero} de ${todos.length}. Mientras tanto se enseña el código del sistema (#${String(idActual || "").toUpperCase()}).`)}
+      </span>
+    </div>
+  );
+};
+
 const StandEditor = ({ stand }) => {
   const isNew = !stand;
   const [form, setForm] = React.useState(stand || {
@@ -300,8 +333,15 @@ const StandEditor = ({ stand }) => {
     nombre: "", municipio: "", region: "", direccion: "", correo: "",
     descripcion: "", propietario: "", propietario_documento: "", nit: "", sitio_web: "",
     telefono: "", lat: null, lng: null,
+    numero: "",
     tipo_organizacion: "", tipo_organizacion_otro: "",
     actividad_cafe: "", actividad_cafe_otro: "",
+    poblacion: "", poblacion_otro: "",
+    linea_productiva: [], presentacion: [], presentacion_otro: "",
+    promedio_taza: "", camara_comercio_numero: "", invima_detalle: "",
+    cert_internacional: null, organico: null, especial: null,
+    marca_registrada: null, camara_comercio: null, invima: null,
+    manipulacion_alimentos: null,
     logo: "", votos: { bueno: 0, regular: 0, malo: 0 },
     coords: { x: 0.5, y: 0.5 },
     color: "oklch(0.45 0.1 40)",
@@ -338,10 +378,26 @@ const StandEditor = ({ stand }) => {
         telefono: form.telefono,
         lat: form.lat,
         lng: form.lng,
+        numero: form.numero || "",
         tipo_organizacion: form.tipo_organizacion || "",
         tipo_organizacion_otro: form.tipo_organizacion_otro || "",
         actividad_cafe: form.actividad_cafe || "",
         actividad_cafe_otro: form.actividad_cafe_otro || "",
+        poblacion: form.poblacion || "",
+        poblacion_otro: form.poblacion_otro || "",
+        linea_productiva: form.linea_productiva || [],
+        presentacion: form.presentacion || [],
+        presentacion_otro: form.presentacion_otro || "",
+        promedio_taza: form.promedio_taza || "",
+        camara_comercio_numero: form.camara_comercio_numero || "",
+        invima_detalle: form.invima_detalle || "",
+        cert_internacional: form.cert_internacional ?? null,
+        organico: form.organico ?? null,
+        especial: form.especial ?? null,
+        marca_registrada: form.marca_registrada ?? null,
+        camara_comercio: form.camara_comercio ?? null,
+        invima: form.invima ?? null,
+        manipulacion_alimentos: form.manipulacion_alimentos ?? null,
         logo: form.logo || null,
         coords: form.coords,
         color: form.color,
@@ -359,6 +415,8 @@ const StandEditor = ({ stand }) => {
       else if (code.includes("detalle_requerido")) setError(ERRORES.detalle_requerido);
       else if (code.includes("tipo_organizacion_invalido")) setError(ERRORES.tipo_organizacion_invalido);
       else if (code.includes("actividad_cafe_invalida")) setError(ERRORES.actividad_cafe_invalida);
+      else if (code.includes("poblacion_invalida")) setError(ERRORES.poblacion_invalida);
+      else if (code.includes("numero_invalido")) setError(ERRORES.numero_invalido);
       else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");
       else setError("No fue posible guardar: " + code);
     } finally { setBusy(false); }
@@ -400,9 +458,13 @@ const StandEditor = ({ stand }) => {
             </div>
           )}
           <div className="field">
-            <label>Nombre del espacio</label>
+            <label>Nombre del producto</label>
             <input value={form.nombre} onChange={e => update("nombre", e.target.value)} placeholder="Ej: Finca El Tambo" maxLength={80} required/>
           </div>
+
+          {/* El número del recinto. Sólo lo asigna la organización, así que no
+              está en la inscripción pública. Ver NumeroDelEspacio. */}
+          <NumeroDelEspacio valor={form.numero} onCambio={(v) => update("numero", v)} idActual={form.id}/>
           <div className="grid-2" style={{ gap: 20 }}>
             <SelectorMunicipio id="st-municipio" valor={form.municipio} requerido
               onCambio={(municipio, region) => setForm((f) => ({
@@ -424,7 +486,7 @@ const StandEditor = ({ stand }) => {
               valor={form.telefono} onCambio={(v) => update("telefono", v)}/>
           </div>
           <div className="field">
-            <label>Descripción corta</label>
+            <label>Descripción del producto</label>
             <textarea value={form.descripcion} onChange={e => update("descripcion", e.target.value)} rows={3} maxLength={800}/>
           </div>
 
@@ -465,6 +527,82 @@ const StandEditor = ({ stand }) => {
             onCambio={(v) => setForm((f) => ({ ...f, actividad_cafe: v, actividad_cafe_otro: v === "otro" ? f.actividad_cafe_otro : "" }))}
             onOtro={(v) => update("actividad_cafe_otro", v)}
             etiquetaOtro="¿Cuál es la actividad?"/>
+
+          {/* La misma ficha que rellena la inscripción pública, aquí toda
+              opcional: los espacios creados antes de que existieran estos
+              campos se tienen que poder seguir editando sin inventárselos. */}
+          <SelectorCatalogo id="st-pob"
+            etiqueta="¿A cuál grupo o tipo de población pertenece?"
+            catalogo={POBLACIONES}
+            valor={form.poblacion} otro={form.poblacion_otro}
+            onCambio={(v) => setForm((f) => ({ ...f, poblacion: v, poblacion_otro: v === "otro" ? f.poblacion_otro : "" }))}
+            onOtro={(v) => update("poblacion_otro", v)}
+            etiquetaOtro="¿Cuál?"/>
+
+          <SelectorMultiple id="st-linea"
+            etiqueta="Línea productiva en la cual participa"
+            catalogo={LINEAS_PRODUCTIVAS}
+            valores={form.linea_productiva} onCambio={(v) => update("linea_productiva", v)}/>
+
+          <div>
+            <div className="mono" style={{ marginBottom: 12 }}>Información detallada</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <SiNo id="st-certint" valor={form.cert_internacional ?? null}
+                onCambio={(v) => update("cert_internacional", v)}
+                etiqueta="¿Su café cuenta con certificaciones internacionales?"/>
+              <SiNo id="st-organico" valor={form.organico ?? null}
+                onCambio={(v) => update("organico", v)}
+                etiqueta="¿Su café es orgánico?"/>
+              <SiNo id="st-especial" valor={form.especial ?? null}
+                onCambio={(v) => update("especial", v)}
+                etiqueta="¿Su café es especial?"/>
+              <div className="field">
+                <label htmlFor="st-taza">Promedio de taza</label>
+                <input id="st-taza" value={form.promedio_taza || ""} maxLength={40}
+                  onChange={(e) => update("promedio_taza", e.target.value)} placeholder="Ej: 84,5 puntos SCA"/>
+              </div>
+              <SiNo id="st-marca" valor={form.marca_registrada ?? null}
+                onCambio={(v) => update("marca_registrada", v)}
+                etiqueta="¿Marca registrada ante la Superintendencia de Industria y Comercio?"/>
+              <SiNo id="st-camara" valor={form.camara_comercio ?? null}
+                onCambio={(v) => update("camara_comercio", v)}
+                etiqueta="¿Certificado de Existencia y Representación Legal (Cámara de Comercio)?"
+                nota="Con fecha de expedición no mayor a noventa (90) días. Para pequeños
+                      productores individuales vale la certificación de la UMATA, la
+                      Secretaría de Agricultura Municipal o el Comité de Cafeteros."/>
+              {form.camara_comercio === true && (
+                <div className="field">
+                  <label htmlFor="st-cc-num">Número del certificado de Cámara de Comercio</label>
+                  <input id="st-cc-num" value={form.camara_comercio_numero || ""} maxLength={60}
+                    onChange={(e) => update("camara_comercio_numero", e.target.value)}/>
+                </div>
+              )}
+              <SiNo id="st-invima" valor={form.invima ?? null}
+                onCambio={(v) => update("invima", v)}
+                etiqueta="¿Acreditación sanitaria (INVIMA)?"/>
+              {form.invima === true && (
+                <div className="field">
+                  <label htmlFor="st-invima-det">Tipo y número de la acreditación sanitaria</label>
+                  <textarea id="st-invima-det" rows={3} maxLength={800}
+                    value={form.invima_detalle || ""} onChange={(e) => update("invima_detalle", e.target.value)}/>
+                </div>
+              )}
+              <SiNo id="st-manip" valor={form.manipulacion_alimentos ?? null}
+                onCambio={(v) => update("manipulacion_alimentos", v)}
+                etiqueta="¿Certificado de manipulación de alimentos vigente?"/>
+              <SelectorMultiple id="st-pres"
+                etiqueta="Presentación del producto"
+                catalogo={PRESENTACIONES}
+                valores={form.presentacion} onCambio={(v) => update("presentacion", v)}/>
+              {(form.presentacion || []).includes("otros") && (
+                <div className="field">
+                  <label htmlFor="st-pres-otro">¿Qué otra presentación?</label>
+                  <input id="st-pres-otro" value={form.presentacion_otro || ""} maxLength={120}
+                    onChange={(e) => update("presentacion_otro", e.target.value)}/>
+                </div>
+              )}
+            </div>
+          </div>
 
           <SubirImagen
             actual={urlImagen(form.logo)}
@@ -553,4 +691,4 @@ const StandEditor = ({ stand }) => {
   );
 };
 
-Object.assign(window, { AdminShell, LoginAdmin, AdminPage, StandsList, StandEditor });
+Object.assign(window, { AdminShell, LoginAdmin, AdminPage, StandsList, StandEditor, NumeroDelEspacio });

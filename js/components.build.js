@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Sistema.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 917bec0a90aaa812
+// Huella de las fuentes: b6da7dc43acb106e
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -732,6 +732,13 @@ const ERRORES = {
   municipio_invalido: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_municipio: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_json: "Los datos enviados no son válidos. Recarga la página.",
+  poblacion_invalida: "Elige a qué grupo o tipo de población perteneces.",
+  marca_registrada_requerida: "Indica si tu marca está registrada ante la SIC.",
+  camara_comercio_requerido: "Indica si cuentas con certificado de Cámara de Comercio.",
+  invima_requerido: "Indica si tu marca cuenta con acreditación sanitaria del INVIMA.",
+  manipulacion_requerida: "Indica si cuentas con certificado de manipulación de alimentos.",
+  presentacion_requerida: "Elige al menos una presentación del producto.",
+  numero_invalido: "El número del espacio admite letras, números, punto y guión (máx. 16).",
   enlace_invalido: "El enlace debe empezar por https:// y ser una dirección válida.",
   direccion_requerida: "La dirección es obligatoria.",
   tipo_organizacion_invalido: "Elige un tipo de organización de la lista.",
@@ -1370,8 +1377,21 @@ const EstrellasLectura = ({
     color: v >= n - 0.5 ? "var(--meh)" : "var(--line-2)"
   }))));
 };
+const numeracionCompleta = stands => {
+  const lista = stands || window.STANDS_DATA || [];
+  return lista.length > 0 && lista.every(s => String(s.numero || "").trim() !== "");
+};
+const numeroDeEspacio = (stand, stands) => {
+  if (!stand) return "";
+  const propio = String(stand.numero || "").trim();
+  if (propio && numeracionCompleta(stands)) return propio;
+  return String(stand.id || "").toUpperCase();
+};
 const ORGANIZACIONES = [["persona_natural", "Persona Natural"], ["sas", "Sociedades por Acciones Simplificadas S.A.S."], ["limitada", "Sociedad Limitada"], ["civil", "Las demás organizaciones civiles, corporaciones, fundaciones"], ["unipersonal", "Empresas unipersonales"], ["comunidades_indigenas", "Corporaciones, asociación y fundaciones creadas para adelantar actividades en comunidades indígenas"], ["anonima", "Sociedad Anónima"], ["utilidad_comun", "Asociaciones, corporaciones, fundaciones e instituciones de utilidad común (gremiales, de beneficencia; profesionales, juveniles, sociales, democráticas y participativas, cívicas y comunitarias, de egresados, de rehabilitación social y ayuda a indigentes y clubes sociales)"], ["fundacion", "Fundaciones"], ["comandita_simple", "Sociedad en Comandita Simple"], ["corporacion", "Corporaciones"], ["no_formalizada", "Organización no formalizada"], ["otro", "Otro"]];
 const ACTIVIDADES_CAFE = [["tostado_marca_propia", "Productor de café tostado con marca propia"], ["transformador", "Transformador de productos derivados del café"], ["distribuidor", "Distribuidor de productos de café"], ["barista", "Barista / establecimiento especializado en café"], ["proveedor", "Proveedor de equipos, maquinaria o insumos para café"], ["artesanias", "Artesanías / productos con identidad cafetera"], ["servicios", "Servicios relacionados con el café"], ["organizacion", "Organización o asociación cafetera"], ["otro", "Otro"]];
+const POBLACIONES = [["urbana", "Urbana (ciudad o zona metropolitana)"], ["rural", "Rural (campo o zona agrícola)"], ["indigena", "Indígena"], ["afrodescendiente", "Afrodescendiente / Negra / Raizal / Palenquera"], ["rrom", "Rrom / Gitana"], ["victima", "Víctima del conflicto armado"], ["discapacidad", "Persona en condición de discapacidad"], ["adulto_mayor", "Adulto mayor (60 años o más)"], ["estudiante", "Estudiante"], ["ninguna", "Ninguna de las anteriores / Población general"], ["otro", "Otro"]];
+const LINEAS_PRODUCTIVAS = [["cafes_especiales", "Cafés especiales de origen"], ["transformacion", "Transformación agroindustrial y derivados"], ["economia_circular", "Economía circular y subproductos"]];
+const PRESENTACIONES = [["grano", "Grano"], ["molido", "Molido"], ["instantaneo", "Café instantáneo"], ["descafeinado", "Café descafeinado"], ["capsulas", "Cápsulas"], ["otros", "Otros"]];
 const etiquetaCatalogo = (catalogo, clave, otro) => {
   if (!clave) return "";
   if (clave === "otro") return (otro || "").trim() || "Otro";
@@ -1417,6 +1437,133 @@ const SelectorCatalogo = ({
   onChange: e => onOtro(e.target.value),
   placeholder: "Escr\xEDbelo en pocas palabras"
 })));
+const SiNo = ({
+  id,
+  etiqueta,
+  valor,
+  onCambio,
+  requerido = false,
+  nota
+}) => React.createElement("fieldset", {
+  style: {
+    border: 0,
+    padding: 0,
+    margin: 0,
+    minWidth: 0
+  }
+}, React.createElement("legend", {
+  style: {
+    fontSize: 13,
+    color: "var(--ink)",
+    lineHeight: 1.5,
+    padding: 0,
+    marginBottom: 6
+  }
+}, etiqueta, requerido ? " *" : ""), nota && React.createElement("p", {
+  style: {
+    fontSize: 12,
+    color: "var(--ink-3)",
+    lineHeight: 1.5,
+    margin: "0 0 8px"
+  }
+}, nota), React.createElement("div", {
+  style: {
+    display: "flex",
+    gap: 8
+  }
+}, [[true, "Sí"], [false, "No"]].map(([v, texto]) => React.createElement("label", {
+  key: String(v),
+  style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    cursor: "pointer",
+    padding: "8px 16px",
+    borderRadius: "var(--r-sm)",
+    border: "1px solid " + (valor === v ? "var(--grano)" : "var(--line-2)"),
+    background: valor === v ? "color-mix(in oklch, var(--grano) 8%, var(--paper))" : "var(--paper)",
+    fontSize: 14
+  }
+}, React.createElement("input", {
+  type: "radio",
+  name: id,
+  checked: valor === v,
+  required: requerido && valor === null,
+  onChange: () => onCambio(v)
+}), texto)), valor !== null && valor !== undefined && !requerido && React.createElement("button", {
+  type: "button",
+  onClick: () => onCambio(null),
+  className: "mono",
+  style: {
+    background: "none",
+    border: 0,
+    color: "var(--ink-3)",
+    cursor: "pointer",
+    textDecoration: "underline"
+  }
+}, "sin responder")));
+const SelectorMultiple = ({
+  id,
+  etiqueta,
+  catalogo,
+  valores,
+  onCambio,
+  requerido = false,
+  ayuda
+}) => {
+  const puestos = Array.isArray(valores) ? valores : [];
+  const alternar = clave => {
+    const siguiente = catalogo.map(([k]) => k).filter(k => k === clave ? !puestos.includes(k) : puestos.includes(k));
+    onCambio(siguiente);
+  };
+  return React.createElement("fieldset", {
+    style: {
+      border: 0,
+      padding: 0,
+      margin: 0,
+      minWidth: 0
+    }
+  }, React.createElement("legend", {
+    style: {
+      fontSize: 13,
+      color: "var(--ink)",
+      lineHeight: 1.5,
+      padding: 0,
+      marginBottom: 8
+    }
+  }, etiqueta, requerido ? " *" : ""), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, catalogo.map(([k, texto]) => React.createElement("label", {
+    key: k,
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+      cursor: "pointer",
+      padding: "9px 12px",
+      borderRadius: "var(--r-sm)",
+      fontSize: 14,
+      lineHeight: 1.45,
+      border: "1px solid " + (puestos.includes(k) ? "var(--grano)" : "var(--line-2)"),
+      background: puestos.includes(k) ? "color-mix(in oklch, var(--grano) 6%, var(--paper))" : "var(--paper)"
+    }
+  }, React.createElement("input", {
+    type: "checkbox",
+    id: id + "-" + k,
+    checked: puestos.includes(k),
+    style: {
+      marginTop: 2
+    },
+    onChange: () => alternar(k)
+  }), React.createElement("span", null, texto)))), ayuda && React.createElement("span", {
+    className: "ayuda"
+  }, ayuda));
+};
+const etiquetasCatalogo = (catalogo, claves, otro) => (Array.isArray(claves) ? claves : []).map(k => k === "otros" || k === "otro" ? (otro || "").trim() || "Otros" : (catalogo.find(([c]) => c === k) || [k, k])[1]).join(" · ");
 const usarAjustesFestival = () => {
   const leer = () => window.LMTFestival && window.LMTFestival.ajustes() || {};
   const [aj, setAj] = React.useState(leer);
@@ -1643,7 +1790,15 @@ Object.assign(window, {
   ORGANIZACIONES,
   ACTIVIDADES_CAFE,
   SelectorCatalogo,
-  etiquetaCatalogo
+  etiquetaCatalogo,
+  POBLACIONES,
+  LINEAS_PRODUCTIVAS,
+  PRESENTACIONES,
+  SiNo,
+  SelectorMultiple,
+  etiquetasCatalogo,
+  numeroDeEspacio,
+  numeracionCompleta
 });
 })();
 
@@ -2776,6 +2931,31 @@ const StandsList = ({
     }
   }, "\u2192"))))));
 };
+const NumeroDelEspacio = ({
+  valor,
+  onCambio,
+  idActual
+}) => {
+  const todos = window.STANDS_DATA || [];
+  const sinNumero = todos.filter(s => s.id === idActual ? String(valor || "").trim() === "" : String(s.numero || "").trim() === "").length;
+  const completa = todos.length > 0 && sinNumero === 0;
+  return React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "st-numero"
+  }, "N\xFAmero del espacio"), React.createElement("input", {
+    id: "st-numero",
+    value: valor || "",
+    maxLength: 16,
+    placeholder: "Ej: 12 o A-14",
+    onChange: e => onCambio(e.target.value.replace(/[^\p{L}0-9 .\-]/gu, "").slice(0, 16))
+  }), React.createElement("span", {
+    className: "ayuda",
+    style: {
+      color: completa ? "var(--good)" : "var(--ink-3)"
+    }
+  }, completa ? "Todos los espacios están numerados: la plataforma usa estos números." : todos.length === 0 ? "Es el número del recinto, el que sale en el mapa impreso." : `Se usará en toda la plataforma cuando lo tengan TODOS los espacios; faltan ${sinNumero} de ${todos.length}. Mientras tanto se enseña el código del sistema (#${String(idActual || "").toUpperCase()}).`));
+};
 const StandEditor = ({
   stand
 }) => {
@@ -2795,10 +2975,26 @@ const StandEditor = ({
     telefono: "",
     lat: null,
     lng: null,
+    numero: "",
     tipo_organizacion: "",
     tipo_organizacion_otro: "",
     actividad_cafe: "",
     actividad_cafe_otro: "",
+    poblacion: "",
+    poblacion_otro: "",
+    linea_productiva: [],
+    presentacion: [],
+    presentacion_otro: "",
+    promedio_taza: "",
+    camara_comercio_numero: "",
+    invima_detalle: "",
+    cert_internacional: null,
+    organico: null,
+    especial: null,
+    marca_registrada: null,
+    camara_comercio: null,
+    invima: null,
+    manipulacion_alimentos: null,
     logo: "",
     votos: {
       bueno: 0,
@@ -2847,10 +3043,26 @@ const StandEditor = ({
         telefono: form.telefono,
         lat: form.lat,
         lng: form.lng,
+        numero: form.numero || "",
         tipo_organizacion: form.tipo_organizacion || "",
         tipo_organizacion_otro: form.tipo_organizacion_otro || "",
         actividad_cafe: form.actividad_cafe || "",
         actividad_cafe_otro: form.actividad_cafe_otro || "",
+        poblacion: form.poblacion || "",
+        poblacion_otro: form.poblacion_otro || "",
+        linea_productiva: form.linea_productiva || [],
+        presentacion: form.presentacion || [],
+        presentacion_otro: form.presentacion_otro || "",
+        promedio_taza: form.promedio_taza || "",
+        camara_comercio_numero: form.camara_comercio_numero || "",
+        invima_detalle: form.invima_detalle || "",
+        cert_internacional: form.cert_internacional ?? null,
+        organico: form.organico ?? null,
+        especial: form.especial ?? null,
+        marca_registrada: form.marca_registrada ?? null,
+        camara_comercio: form.camara_comercio ?? null,
+        invima: form.invima ?? null,
+        manipulacion_alimentos: form.manipulacion_alimentos ?? null,
         logo: form.logo || null,
         coords: form.coords,
         color: form.color
@@ -2860,7 +3072,7 @@ const StandEditor = ({
       window.LMTRouter.go(isNew ? "/admin/qr" : "/admin/stands");
     } catch (e) {
       const code = String(e && (e.code || e.message) || e);
-      if (code.includes("bad_id")) setError("Identificador inválido (sólo minúsculas, números y guión).");else if (code.includes("bad_nombre")) setError("Nombre obligatorio (máx. 80).");else if (code.includes("bad_municipio")) setError("Municipio obligatorio (máx. 80).");else if (code.includes("direccion_requerida")) setError(ERRORES.direccion_requerida);else if (code.includes("detalle_requerido")) setError(ERRORES.detalle_requerido);else if (code.includes("tipo_organizacion_invalido")) setError(ERRORES.tipo_organizacion_invalido);else if (code.includes("actividad_cafe_invalida")) setError(ERRORES.actividad_cafe_invalida);else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");else setError("No fue posible guardar: " + code);
+      if (code.includes("bad_id")) setError("Identificador inválido (sólo minúsculas, números y guión).");else if (code.includes("bad_nombre")) setError("Nombre obligatorio (máx. 80).");else if (code.includes("bad_municipio")) setError("Municipio obligatorio (máx. 80).");else if (code.includes("direccion_requerida")) setError(ERRORES.direccion_requerida);else if (code.includes("detalle_requerido")) setError(ERRORES.detalle_requerido);else if (code.includes("tipo_organizacion_invalido")) setError(ERRORES.tipo_organizacion_invalido);else if (code.includes("actividad_cafe_invalida")) setError(ERRORES.actividad_cafe_invalida);else if (code.includes("poblacion_invalida")) setError(ERRORES.poblacion_invalida);else if (code.includes("numero_invalido")) setError(ERRORES.numero_invalido);else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");else setError("No fue posible guardar: " + code);
     } finally {
       setBusy(false);
     }
@@ -2922,13 +3134,17 @@ const StandEditor = ({
     maxLength: 32
   })), React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Nombre del espacio"), React.createElement("input", {
+  }, React.createElement("label", null, "Nombre del producto"), React.createElement("input", {
     value: form.nombre,
     onChange: e => update("nombre", e.target.value),
     placeholder: "Ej: Finca El Tambo",
     maxLength: 80,
     required: true
-  })), React.createElement("div", {
+  })), React.createElement(NumeroDelEspacio, {
+    valor: form.numero,
+    onCambio: v => update("numero", v),
+    idActual: form.id
+  }), React.createElement("div", {
     className: "grid-2",
     style: {
       gap: 20
@@ -2975,7 +3191,7 @@ const StandEditor = ({
     onCambio: v => update("telefono", v)
   })), React.createElement("div", {
     className: "field"
-  }, React.createElement("label", null, "Descripci\xF3n corta"), React.createElement("textarea", {
+  }, React.createElement("label", null, "Descripci\xF3n del producto"), React.createElement("textarea", {
     value: form.descripcion,
     onChange: e => update("descripcion", e.target.value),
     rows: 3,
@@ -3041,7 +3257,117 @@ const StandEditor = ({
     })),
     onOtro: v => update("actividad_cafe_otro", v),
     etiquetaOtro: "\xBFCu\xE1l es la actividad?"
-  }), React.createElement(SubirImagen, {
+  }), React.createElement(SelectorCatalogo, {
+    id: "st-pob",
+    etiqueta: "\xBFA cu\xE1l grupo o tipo de poblaci\xF3n pertenece?",
+    catalogo: POBLACIONES,
+    valor: form.poblacion,
+    otro: form.poblacion_otro,
+    onCambio: v => setForm(f => ({
+      ...f,
+      poblacion: v,
+      poblacion_otro: v === "otro" ? f.poblacion_otro : ""
+    })),
+    onOtro: v => update("poblacion_otro", v),
+    etiquetaOtro: "\xBFCu\xE1l?"
+  }), React.createElement(SelectorMultiple, {
+    id: "st-linea",
+    etiqueta: "L\xEDnea productiva en la cual participa",
+    catalogo: LINEAS_PRODUCTIVAS,
+    valores: form.linea_productiva,
+    onCambio: v => update("linea_productiva", v)
+  }), React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 12
+    }
+  }, "Informaci\xF3n detallada"), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 16
+    }
+  }, React.createElement(SiNo, {
+    id: "st-certint",
+    valor: form.cert_internacional ?? null,
+    onCambio: v => update("cert_internacional", v),
+    etiqueta: "\xBFSu caf\xE9 cuenta con certificaciones internacionales?"
+  }), React.createElement(SiNo, {
+    id: "st-organico",
+    valor: form.organico ?? null,
+    onCambio: v => update("organico", v),
+    etiqueta: "\xBFSu caf\xE9 es org\xE1nico?"
+  }), React.createElement(SiNo, {
+    id: "st-especial",
+    valor: form.especial ?? null,
+    onCambio: v => update("especial", v),
+    etiqueta: "\xBFSu caf\xE9 es especial?"
+  }), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "st-taza"
+  }, "Promedio de taza"), React.createElement("input", {
+    id: "st-taza",
+    value: form.promedio_taza || "",
+    maxLength: 40,
+    onChange: e => update("promedio_taza", e.target.value),
+    placeholder: "Ej: 84,5 puntos SCA"
+  })), React.createElement(SiNo, {
+    id: "st-marca",
+    valor: form.marca_registrada ?? null,
+    onCambio: v => update("marca_registrada", v),
+    etiqueta: "\xBFMarca registrada ante la Superintendencia de Industria y Comercio?"
+  }), React.createElement(SiNo, {
+    id: "st-camara",
+    valor: form.camara_comercio ?? null,
+    onCambio: v => update("camara_comercio", v),
+    etiqueta: "\xBFCertificado de Existencia y Representaci\xF3n Legal (C\xE1mara de Comercio)?",
+    nota: "Con fecha de expedici\xF3n no mayor a noventa (90) d\xEDas. Para peque\xF1os productores individuales vale la certificaci\xF3n de la UMATA, la Secretar\xEDa de Agricultura Municipal o el Comit\xE9 de Cafeteros."
+  }), form.camara_comercio === true && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "st-cc-num"
+  }, "N\xFAmero del certificado de C\xE1mara de Comercio"), React.createElement("input", {
+    id: "st-cc-num",
+    value: form.camara_comercio_numero || "",
+    maxLength: 60,
+    onChange: e => update("camara_comercio_numero", e.target.value)
+  })), React.createElement(SiNo, {
+    id: "st-invima",
+    valor: form.invima ?? null,
+    onCambio: v => update("invima", v),
+    etiqueta: "\xBFAcreditaci\xF3n sanitaria (INVIMA)?"
+  }), form.invima === true && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "st-invima-det"
+  }, "Tipo y n\xFAmero de la acreditaci\xF3n sanitaria"), React.createElement("textarea", {
+    id: "st-invima-det",
+    rows: 3,
+    maxLength: 800,
+    value: form.invima_detalle || "",
+    onChange: e => update("invima_detalle", e.target.value)
+  })), React.createElement(SiNo, {
+    id: "st-manip",
+    valor: form.manipulacion_alimentos ?? null,
+    onCambio: v => update("manipulacion_alimentos", v),
+    etiqueta: "\xBFCertificado de manipulaci\xF3n de alimentos vigente?"
+  }), React.createElement(SelectorMultiple, {
+    id: "st-pres",
+    etiqueta: "Presentaci\xF3n del producto",
+    catalogo: PRESENTACIONES,
+    valores: form.presentacion,
+    onCambio: v => update("presentacion", v)
+  }), (form.presentacion || []).includes("otros") && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "st-pres-otro"
+  }, "\xBFQu\xE9 otra presentaci\xF3n?"), React.createElement("input", {
+    id: "st-pres-otro",
+    value: form.presentacion_otro || "",
+    maxLength: 120,
+    onChange: e => update("presentacion_otro", e.target.value)
+  })))), React.createElement(SubirImagen, {
     actual: urlImagen(form.logo),
     etiqueta: "Logo del producto",
     cuadrada: true,
@@ -3225,7 +3551,8 @@ Object.assign(window, {
   LoginAdmin,
   AdminPage,
   StandsList,
-  StandEditor
+  StandEditor,
+  NumeroDelEspacio
 });
 })();
 
@@ -3300,7 +3627,7 @@ const QRPoster = ({
     style: {
       textAlign: "right"
     }
-  }, "#", stand.id.toUpperCase(), React.createElement("br", null), React.createElement("span", {
+  }, "#", numeroDeEspacio(stand), React.createElement("br", null), React.createElement("span", {
     style: {
       color: "var(--ink-3)"
     }
@@ -3879,7 +4206,7 @@ const MobileHeader = ({
   style: {
     fontSize: 9
   }
-}, "#", stand.id.toUpperCase()), React.createElement("div", {
+}, "#", numeroDeEspacio(stand)), React.createElement("div", {
   style: {
     fontWeight: 600,
     fontSize: 15,
@@ -6856,7 +7183,7 @@ const PublicDetail = ({
     style: {
       color: "oklch(0.95 0.01 75)"
     }
-  }, "#", stand.id.toUpperCase()), React.createElement("div", null, React.createElement("div", {
+  }, "#", numeroDeEspacio(stand, allStands)), React.createElement("div", null, React.createElement("div", {
     style: {
       fontFamily: "var(--font-display)",
       fontStyle: "italic",
@@ -7458,6 +7785,12 @@ const PromotorRegistroPage = () => {
     tipo_organizacion_otro: "",
     actividad_cafe: "",
     actividad_cafe_otro: "",
+    poblacion: "",
+    poblacion_otro: "",
+    promedio_taza: "",
+    camara_comercio_numero: "",
+    invima_detalle: "",
+    presentacion_otro: "",
     acceso_metodo: "password",
     acceso_valor: "",
     acceso_valor2: ""
@@ -7467,6 +7800,21 @@ const PromotorRegistroPage = () => {
     lat: null,
     lng: null
   });
+  const [lineas, setLineas] = React.useState([]);
+  const [presentacion, setPresentacion] = React.useState([]);
+  const [sino, setSino] = React.useState({
+    cert_internacional: null,
+    organico: null,
+    especial: null,
+    marca_registrada: null,
+    camara_comercio: null,
+    invima: null,
+    manipulacion_alimentos: null
+  });
+  const ponSino = (k, v) => setSino(s => ({
+    ...s,
+    [k]: v
+  }));
   const [logo, setLogo] = React.useState("");
   const [acepta, setAcepta] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -7517,6 +7865,38 @@ const PromotorRegistroPage = () => {
       setError(ERRORES.detalle_requerido);
       return;
     }
+    if (!form.poblacion) {
+      setError(ERRORES.poblacion_invalida);
+      return;
+    }
+    if (form.poblacion === "otro" && !form.poblacion_otro.trim()) {
+      setError(ERRORES.detalle_requerido);
+      return;
+    }
+    if (sino.marca_registrada === null) {
+      setError(ERRORES.marca_registrada_requerida);
+      return;
+    }
+    if (sino.camara_comercio === null) {
+      setError(ERRORES.camara_comercio_requerido);
+      return;
+    }
+    if (sino.invima === null) {
+      setError(ERRORES.invima_requerido);
+      return;
+    }
+    if (sino.manipulacion_alimentos === null) {
+      setError(ERRORES.manipulacion_requerida);
+      return;
+    }
+    if (presentacion.length === 0) {
+      setError(ERRORES.presentacion_requerida);
+      return;
+    }
+    if (presentacion.includes("otros") && !form.presentacion_otro.trim()) {
+      setError(ERRORES.detalle_requerido);
+      return;
+    }
     if (!logo) {
       setError(ERRORES.logo_requerido);
       return;
@@ -7554,6 +7934,9 @@ const PromotorRegistroPage = () => {
         logo: logo || null,
         lat: ubicacion.lat,
         lng: ubicacion.lng,
+        linea_productiva: lineas,
+        presentacion,
+        ...sino,
         acepta_datos: true
       });
       if (res && res.qr_token) setQr({
@@ -7715,7 +8098,7 @@ const PromotorRegistroPage = () => {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "in-stand-nombre"
-  }, "Nombre del espacio"), React.createElement("input", {
+  }, "Nombre del producto"), React.createElement("input", {
     id: "in-stand-nombre",
     value: form.stand_nombre,
     onChange: e => set("stand_nombre", e.target.value),
@@ -7804,7 +8187,7 @@ const PromotorRegistroPage = () => {
     className: "field"
   }, React.createElement("label", {
     htmlFor: "in-desc"
-  }, "Descripci\xF3n del espacio"), React.createElement("textarea", {
+  }, "Descripci\xF3n del producto"), React.createElement("textarea", {
     id: "in-desc",
     rows: 3,
     value: form.stand_descripcion,
@@ -7850,6 +8233,129 @@ const PromotorRegistroPage = () => {
       }));
     }
   })), React.createElement(BloqueForm, {
+    titulo: "Qui\xE9n participa",
+    nota: "Sirve para saber a qui\xE9n est\xE1 llegando el festival. Nadie queda fuera por lo que responda aqu\xED."
+  }, React.createElement(SelectorCatalogo, {
+    id: "in-pob",
+    requerido: true,
+    etiqueta: "\xBFA cu\xE1l de los siguientes grupos o tipos de poblaci\xF3n pertenece usted principalmente?",
+    catalogo: POBLACIONES,
+    valor: form.poblacion,
+    otro: form.poblacion_otro,
+    onCambio: v => setForm(f => ({
+      ...f,
+      poblacion: v,
+      poblacion_otro: v === "otro" ? f.poblacion_otro : ""
+    })),
+    onOtro: v => set("poblacion_otro", v),
+    ayuda: "Selecciona una sola opci\xF3n.",
+    etiquetaOtro: "\xBFCu\xE1l?"
+  })), React.createElement(BloqueForm, {
+    titulo: "L\xEDnea productiva en la cual participa",
+    nota: "Puedes marcar m\xE1s de una."
+  }, React.createElement(SelectorMultiple, {
+    id: "in-linea",
+    etiqueta: "L\xEDnea productiva",
+    catalogo: LINEAS_PRODUCTIVAS,
+    valores: lineas,
+    onCambio: setLineas
+  })), React.createElement(BloqueForm, {
+    titulo: "Informaci\xF3n detallada",
+    nota: "Detalles sobre tu emprendimiento, la presentaci\xF3n del producto, el origen y tu propuesta de valor. Esta informaci\xF3n nos ayuda a conocer mejor tu papel en la cadena productiva del caf\xE9."
+  }, React.createElement(SiNo, {
+    id: "in-certint",
+    valor: sino.cert_internacional,
+    onCambio: v => ponSino("cert_internacional", v),
+    etiqueta: "\xBFSu caf\xE9 cuenta con certificaciones internacionales?"
+  }), React.createElement(SiNo, {
+    id: "in-organico",
+    valor: sino.organico,
+    onCambio: v => ponSino("organico", v),
+    etiqueta: "\xBFSu caf\xE9 es org\xE1nico?"
+  }), React.createElement(SiNo, {
+    id: "in-especial",
+    valor: sino.especial,
+    onCambio: v => ponSino("especial", v),
+    etiqueta: "\xBFSu caf\xE9 es especial?"
+  }), React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-taza"
+  }, "\xBFCu\xE1l es el promedio de taza de su caf\xE9?"), React.createElement("input", {
+    id: "in-taza",
+    value: form.promedio_taza,
+    maxLength: 40,
+    onChange: e => set("promedio_taza", e.target.value),
+    placeholder: "Ej: 84,5 puntos SCA"
+  })), React.createElement(SiNo, {
+    id: "in-marca",
+    requerido: true,
+    valor: sino.marca_registrada,
+    onCambio: v => ponSino("marca_registrada", v),
+    etiqueta: "\xBFSu marca se encuentra registrada ante la Superintendencia de Industria y Comercio?"
+  }), React.createElement(SiNo, {
+    id: "in-camara",
+    requerido: true,
+    valor: sino.camara_comercio,
+    onCambio: v => ponSino("camara_comercio", v),
+    etiqueta: "\xBFCuenta con Certificado de Existencia y Representaci\xF3n Legal (C\xE1mara de Comercio)?",
+    nota: "Para personas jur\xEDdicas, asociaciones o cooperativas, con fecha de expedici\xF3n no mayor a noventa (90) d\xEDas. Para peque\xF1os productores individuales se acepta la certificaci\xF3n de la UMATA, la Secretar\xEDa de Agricultura Municipal o el Comit\xE9 de Cafeteros."
+  }), sino.camara_comercio === true && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-cc-num"
+  }, "N\xFAmero del certificado de C\xE1mara de Comercio"), React.createElement("input", {
+    id: "in-cc-num",
+    value: form.camara_comercio_numero,
+    maxLength: 60,
+    onChange: e => set("camara_comercio_numero", e.target.value)
+  })), React.createElement(SiNo, {
+    id: "in-invima",
+    requerido: true,
+    valor: sino.invima,
+    onCambio: v => ponSino("invima", v),
+    etiqueta: "\xBFSu marca cuenta con acreditaci\xF3n sanitaria (INVIMA)?"
+  }), sino.invima === true && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-invima-det"
+  }, "Tipo y n\xFAmero de la acreditaci\xF3n sanitaria"), React.createElement("textarea", {
+    id: "in-invima-det",
+    rows: 3,
+    maxLength: 800,
+    value: form.invima_detalle,
+    onChange: e => set("invima_detalle", e.target.value),
+    placeholder: "Ej: Registro sanitario RSA-0012345, vigente hasta 2027",
+    style: {
+      border: "1px solid var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 12
+    }
+  })), React.createElement(SiNo, {
+    id: "in-manip",
+    requerido: true,
+    valor: sino.manipulacion_alimentos,
+    onCambio: v => ponSino("manipulacion_alimentos", v),
+    etiqueta: "\xBFEl o la expositora cuenta con certificado de manipulaci\xF3n de alimentos vigente?"
+  }), React.createElement(SelectorMultiple, {
+    id: "in-pres",
+    requerido: true,
+    etiqueta: "Presentaci\xF3n del producto",
+    catalogo: PRESENTACIONES,
+    valores: presentacion,
+    onCambio: setPresentacion,
+    ayuda: "Puedes marcar m\xE1s de una."
+  }), presentacion.includes("otros") && React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "in-pres-otro"
+  }, "\xBFQu\xE9 otra presentaci\xF3n? *"), React.createElement("input", {
+    id: "in-pres-otro",
+    value: form.presentacion_otro,
+    maxLength: 120,
+    required: true,
+    onChange: e => set("presentacion_otro", e.target.value)
+  }))), React.createElement(BloqueForm, {
     titulo: "C\xF3mo vas a entrar",
     nota: "Por si el correo no llega: con esto entras igual."
   }, React.createElement(SelectorAcceso, {
@@ -8938,7 +9444,7 @@ const RevisionInscripcion = ({
     style: {
       marginBottom: 8
     }
-  }, "El espacio que se crear\xE1"), fila("Nombre", b.nombre), fila("Municipio", b.municipio), fila("Región", b.region), fila("Dirección", b.direccion), fila("Organización", etiquetaCatalogo(ORGANIZACIONES, b.tipo_organizacion, b.tipo_organizacion_otro)), fila("Actividad", etiquetaCatalogo(ACTIVIDADES_CAFE, b.actividad_cafe, b.actividad_cafe_otro)), fila("NIT", b.nit), fila("Sitio web", b.sitio_web), fila("Ubicación", b.lat != null ? b.lat.toFixed(5) + ", " + b.lng.toFixed(5) : "sin marcar en el mapa"), b.descripcion && React.createElement("p", {
+  }, "El espacio que se crear\xE1"), fila("Nombre", b.nombre), fila("Municipio", b.municipio), fila("Región", b.region), fila("Dirección", b.direccion), fila("Organización", etiquetaCatalogo(ORGANIZACIONES, b.tipo_organizacion, b.tipo_organizacion_otro)), fila("Actividad", etiquetaCatalogo(ACTIVIDADES_CAFE, b.actividad_cafe, b.actividad_cafe_otro)), fila("Población", etiquetaCatalogo(POBLACIONES, b.poblacion, b.poblacion_otro)), fila("Línea productiva", etiquetasCatalogo(LINEAS_PRODUCTIVAS, b.linea_productiva)), fila("NIT", b.nit), fila("Sitio web", b.sitio_web), fila("Ubicación", b.lat != null ? b.lat.toFixed(5) + ", " + b.lng.toFixed(5) : "sin marcar en el mapa"), b.descripcion && React.createElement("p", {
     style: {
       fontSize: 13,
       marginTop: 10,
@@ -8946,6 +9452,37 @@ const RevisionInscripcion = ({
       lineHeight: 1.6
     }
   }, b.descripcion)), React.createElement("div", null, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "Requisitos"), [["Marca registrada (SIC)", b.marca_registrada], ["Cámara de Comercio", b.camara_comercio], ["Acreditación INVIMA", b.invima], ["Manipulación de alimentos", b.manipulacion_alimentos]].map(([k, v]) => React.createElement("div", {
+    key: k,
+    style: {
+      display: "flex",
+      gap: 12,
+      padding: "6px 0",
+      borderBottom: "1px solid var(--line)",
+      fontSize: 13
+    }
+  }, React.createElement("span", {
+    className: "mono",
+    style: {
+      color: "var(--ink-3)",
+      flex: "0 0 150px"
+    }
+  }, k), React.createElement("span", {
+    style: {
+      flex: 1,
+      color: v === true ? "var(--good)" : v === false ? "var(--bad)" : "var(--ink-3)",
+      fontWeight: 500
+    }
+  }, v === true ? "Sí" : v === false ? "No" : "sin responder"))), fila("Nº Cámara de Comercio", b.camara_comercio_numero), fila("Acreditación sanitaria", b.invima_detalle), React.createElement("div", {
+    className: "mono",
+    style: {
+      margin: "18px 0 8px"
+    }
+  }, "El producto"), fila("Presentación", etiquetasCatalogo(PRESENTACIONES, b.presentacion, b.presentacion_otro)), fila("Promedio de taza", b.promedio_taza), fila("Certificaciones int.", b.cert_internacional === null ? "" : b.cert_internacional ? "Sí" : "No"), fila("Orgánico", b.organico === null ? "" : b.organico ? "Sí" : "No"), fila("Especial", b.especial === null ? "" : b.especial ? "Sí" : "No")), React.createElement("div", null, React.createElement("div", {
     className: "mono",
     style: {
       marginBottom: 8

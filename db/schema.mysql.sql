@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS admins (
 -- Stands --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS stands (
   id            VARCHAR(32) PRIMARY KEY,
+  -- Número que la organización asigna al espacio en el recinto («12», «A-14»).
+  -- Sólo se usa en la plataforma si TODOS los espacios lo tienen: con la mitad
+  -- puestos, el público vería unos con número de feria y otros con el código
+  -- interno y no sabría cuál buscar en el mapa impreso. Ver stand_numeracion().
+  numero        VARCHAR(16) DEFAULT NULL,
   nombre        VARCHAR(80) NOT NULL,
   municipio     VARCHAR(80) NOT NULL,
   region        VARCHAR(80) DEFAULT NULL,
@@ -58,6 +63,27 @@ CREATE TABLE IF NOT EXISTS stands (
   tipo_organizacion_otro  VARCHAR(120) DEFAULT NULL,
   actividad_cafe          VARCHAR(40)  DEFAULT NULL,
   actividad_cafe_otro     VARCHAR(120) DEFAULT NULL,
+  -- Grupo o tipo de población. Dato sensible (Ley 1581/2012): catálogo cerrado
+  -- y con salida explícita («ninguna»).
+  poblacion              VARCHAR(40)  DEFAULT NULL,
+  poblacion_otro         VARCHAR(120) DEFAULT NULL,
+  -- Selección múltiple, guardada como JSON. Ver Catalogos::multiple().
+  linea_productiva       VARCHAR(255) DEFAULT NULL,
+  -- Ficha detallada del producto. Los «sí/no» son 0, 1 o NULL, y NULL significa
+  -- «no contestó», que no es lo mismo que «no»: publicar un café como no
+  -- orgánico porque nadie rellenó la casilla sería inventarse el dato.
+  cert_internacional     TINYINT(1)   DEFAULT NULL,
+  organico               TINYINT(1)   DEFAULT NULL,
+  especial               TINYINT(1)   DEFAULT NULL,
+  promedio_taza          VARCHAR(40)  DEFAULT NULL,
+  marca_registrada       TINYINT(1)   DEFAULT NULL,
+  camara_comercio        TINYINT(1)   DEFAULT NULL,
+  camara_comercio_numero VARCHAR(60)  DEFAULT NULL,
+  invima                 TINYINT(1)   DEFAULT NULL,
+  invima_detalle         VARCHAR(800) DEFAULT NULL,
+  manipulacion_alimentos TINYINT(1)   DEFAULT NULL,
+  presentacion           VARCHAR(255) DEFAULT NULL,
+  presentacion_otro      VARCHAR(120) DEFAULT NULL,
   -- Ubicación geográfica del stand, elegida en el mapa de la inscripción.
   lat           DECIMAL(9,6) DEFAULT NULL,
   lng           DECIMAL(9,6) DEFAULT NULL,
@@ -135,6 +161,27 @@ CREATE TABLE IF NOT EXISTS promotores (
   tipo_organizacion_otro  VARCHAR(120) DEFAULT NULL,
   actividad_cafe          VARCHAR(40)  DEFAULT NULL,
   actividad_cafe_otro     VARCHAR(120) DEFAULT NULL,
+  -- Grupo o tipo de población. Dato sensible (Ley 1581/2012): catálogo cerrado
+  -- y con salida explícita («ninguna»).
+  poblacion              VARCHAR(40)  DEFAULT NULL,
+  poblacion_otro         VARCHAR(120) DEFAULT NULL,
+  -- Selección múltiple, guardada como JSON. Ver Catalogos::multiple().
+  linea_productiva       VARCHAR(255) DEFAULT NULL,
+  -- Ficha detallada del producto. Los «sí/no» son 0, 1 o NULL, y NULL significa
+  -- «no contestó», que no es lo mismo que «no»: publicar un café como no
+  -- orgánico porque nadie rellenó la casilla sería inventarse el dato.
+  cert_internacional     TINYINT(1)   DEFAULT NULL,
+  organico               TINYINT(1)   DEFAULT NULL,
+  especial               TINYINT(1)   DEFAULT NULL,
+  promedio_taza          VARCHAR(40)  DEFAULT NULL,
+  marca_registrada       TINYINT(1)   DEFAULT NULL,
+  camara_comercio        TINYINT(1)   DEFAULT NULL,
+  camara_comercio_numero VARCHAR(60)  DEFAULT NULL,
+  invima                 TINYINT(1)   DEFAULT NULL,
+  invima_detalle         VARCHAR(800) DEFAULT NULL,
+  manipulacion_alimentos TINYINT(1)   DEFAULT NULL,
+  presentacion           VARCHAR(255) DEFAULT NULL,
+  presentacion_otro      VARCHAR(120) DEFAULT NULL,
   logo_path            VARCHAR(255) DEFAULT NULL,
   stand_lat            DECIMAL(9,6) DEFAULT NULL,
   stand_lng            DECIMAL(9,6) DEFAULT NULL,

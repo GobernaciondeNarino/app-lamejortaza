@@ -520,6 +520,13 @@ const ERRORES = {
   municipio_invalido: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_municipio: "Elige un municipio de la lista: deben ser los 64 de Nariño.",
   bad_json: "Los datos enviados no son válidos. Recarga la página.",
+  poblacion_invalida: "Elige a qué grupo o tipo de población perteneces.",
+  marca_registrada_requerida: "Indica si tu marca está registrada ante la SIC.",
+  camara_comercio_requerido: "Indica si cuentas con certificado de Cámara de Comercio.",
+  invima_requerido: "Indica si tu marca cuenta con acreditación sanitaria del INVIMA.",
+  manipulacion_requerida: "Indica si cuentas con certificado de manipulación de alimentos.",
+  presentacion_requerida: "Elige al menos una presentación del producto.",
+  numero_invalido: "El número del espacio admite letras, números, punto y guión (máx. 16).",
   enlace_invalido: "El enlace debe empezar por https:// y ser una dirección válida.",
   direccion_requerida: "La dirección es obligatoria.",
   tipo_organizacion_invalido: "Elige un tipo de organización de la lista.",
@@ -978,6 +985,34 @@ const EstrellasLectura = ({ valor, tam = 14, etiqueta }) => {
 };
 
 // ---------------------------------------------------------------------------
+// El número del espacio
+//
+// La organización numera los puestos del recinto («12», «A-14») y ese número es
+// el que sale en el mapa impreso y el que la gente pregunta. Mientras no exista,
+// la plataforma enseña el identificador del sistema (#ST-01), que es lo único
+// que hay.
+//
+// La regla es todo o nada: el número propio manda SÓLO si lo tienen todos los
+// espacios. Con la mitad puestos, el público vería unos con número de feria y
+// otros con el código interno, sin forma de saber cuál buscar en el mapa; es
+// peor que enseñar el código interno en todos.
+// ---------------------------------------------------------------------------
+
+/** ¿Están numerados TODOS los espacios? */
+const numeracionCompleta = (stands) => {
+  const lista = stands || window.STANDS_DATA || [];
+  return lista.length > 0 && lista.every((s) => String(s.numero || "").trim() !== "");
+};
+
+/** Lo que se enseña como número de un espacio, según la regla de todo o nada. */
+const numeroDeEspacio = (stand, stands) => {
+  if (!stand) return "";
+  const propio = String(stand.numero || "").trim();
+  if (propio && numeracionCompleta(stands)) return propio;
+  return String(stand.id || "").toUpperCase();
+};
+
+// ---------------------------------------------------------------------------
 // Catálogos de la inscripción
 //
 // Las CLAVES viven en api/lib/Catalogos.php, que es quien decide qué entra en
@@ -1016,6 +1051,35 @@ const ACTIVIDADES_CAFE = [
   ["servicios", "Servicios relacionados con el café"],
   ["organizacion", "Organización o asociación cafetera"],
   ["otro", "Otro"],
+];
+
+const POBLACIONES = [
+  ["urbana", "Urbana (ciudad o zona metropolitana)"],
+  ["rural", "Rural (campo o zona agrícola)"],
+  ["indigena", "Indígena"],
+  ["afrodescendiente", "Afrodescendiente / Negra / Raizal / Palenquera"],
+  ["rrom", "Rrom / Gitana"],
+  ["victima", "Víctima del conflicto armado"],
+  ["discapacidad", "Persona en condición de discapacidad"],
+  ["adulto_mayor", "Adulto mayor (60 años o más)"],
+  ["estudiante", "Estudiante"],
+  ["ninguna", "Ninguna de las anteriores / Población general"],
+  ["otro", "Otro"],
+];
+
+const LINEAS_PRODUCTIVAS = [
+  ["cafes_especiales", "Cafés especiales de origen"],
+  ["transformacion", "Transformación agroindustrial y derivados"],
+  ["economia_circular", "Economía circular y subproductos"],
+];
+
+const PRESENTACIONES = [
+  ["grano", "Grano"],
+  ["molido", "Molido"],
+  ["instantaneo", "Café instantáneo"],
+  ["descafeinado", "Café descafeinado"],
+  ["capsulas", "Cápsulas"],
+  ["otros", "Otros"],
 ];
 
 /** La frase de una clave, o la clave misma si el catálogo cambió bajo los pies. */
@@ -1059,6 +1123,91 @@ const SelectorCatalogo = ({
     )}
   </>
 );
+
+/**
+ * Un «sí / no» de tres estados.
+ *
+ * Nada viene marcado de entrada, y eso es a propósito: con «No» preseleccionado
+ * el formulario contestaría por la persona, y «este café NO es orgánico» y «no
+ * lo sé» son cosas distintas que no se pueden guardar igual. Van dos botones de
+ * radio y no una casilla porque una casilla sin marcar es exactamente esa
+ * ambigüedad.
+ */
+const SiNo = ({ id, etiqueta, valor, onCambio, requerido = false, nota }) => (
+  <fieldset style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+    <legend style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.5, padding: 0, marginBottom: 6 }}>
+      {etiqueta}{requerido ? " *" : ""}
+    </legend>
+    {nota && (
+      <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5, margin: "0 0 8px" }}>{nota}</p>
+    )}
+    <div style={{ display: "flex", gap: 8 }}>
+      {[[true, "Sí"], [false, "No"]].map(([v, texto]) => (
+        <label key={String(v)} style={{
+          display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+          padding: "8px 16px", borderRadius: "var(--r-sm)",
+          border: "1px solid " + (valor === v ? "var(--grano)" : "var(--line-2)"),
+          background: valor === v ? "color-mix(in oklch, var(--grano) 8%, var(--paper))" : "var(--paper)",
+          fontSize: 14,
+        }}>
+          <input type="radio" name={id} checked={valor === v} required={requerido && valor === null}
+            onChange={() => onCambio(v)}/>
+          {texto}
+        </label>
+      ))}
+      {valor !== null && valor !== undefined && !requerido && (
+        <button type="button" onClick={() => onCambio(null)} className="mono"
+          style={{ background: "none", border: 0, color: "var(--ink-3)", cursor: "pointer", textDecoration: "underline" }}>
+          sin responder
+        </button>
+      )}
+    </div>
+  </fieldset>
+);
+
+/** Casillas de selección múltiple contra un catálogo. */
+const SelectorMultiple = ({ id, etiqueta, catalogo, valores, onCambio, requerido = false, ayuda }) => {
+  const puestos = Array.isArray(valores) ? valores : [];
+  const alternar = (clave) => {
+    // Se reordena según el catálogo, igual que hace el servidor: así lo que se
+    // ve y lo que se guarda están en el mismo orden y comparar dos respuestas
+    // iguales da igual.
+    const siguiente = catalogo
+      .map(([k]) => k)
+      .filter((k) => (k === clave ? !puestos.includes(k) : puestos.includes(k)));
+    onCambio(siguiente);
+  };
+  return (
+    <fieldset style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+      <legend style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.5, padding: 0, marginBottom: 8 }}>
+        {etiqueta}{requerido ? " *" : ""}
+      </legend>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {catalogo.map(([k, texto]) => (
+          <label key={k} style={{
+            display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer",
+            padding: "9px 12px", borderRadius: "var(--r-sm)", fontSize: 14, lineHeight: 1.45,
+            border: "1px solid " + (puestos.includes(k) ? "var(--grano)" : "var(--line-2)"),
+            background: puestos.includes(k) ? "color-mix(in oklch, var(--grano) 6%, var(--paper))" : "var(--paper)",
+          }}>
+            <input type="checkbox" id={id + "-" + k} checked={puestos.includes(k)}
+              style={{ marginTop: 2 }} onChange={() => alternar(k)}/>
+            <span>{texto}</span>
+          </label>
+        ))}
+      </div>
+      {ayuda && <span className="ayuda">{ayuda}</span>}
+    </fieldset>
+  );
+};
+
+/** Las frases de una selección múltiple, ya legibles. */
+const etiquetasCatalogo = (catalogo, claves, otro) =>
+  (Array.isArray(claves) ? claves : [])
+    .map((k) => (k === "otros" || k === "otro"
+      ? ((otro || "").trim() || "Otros")
+      : (catalogo.find(([c]) => c === k) || [k, k])[1]))
+    .join(" · ");
 
 // ---------------------------------------------------------------------------
 // Ajustes del festival en el cliente
@@ -1227,4 +1376,7 @@ Object.assign(window, {
   usarPuerta, PuertaCorreo, InvitacionCorreo, EstadoAlmacen, CampoNumerico,
   usarAjustesFestival, pieDeMarca, PIE_MARCA, AvisoDatos, CasillaDatos,
   ORGANIZACIONES, ACTIVIDADES_CAFE, SelectorCatalogo, etiquetaCatalogo,
+  POBLACIONES, LINEAS_PRODUCTIVAS, PRESENTACIONES,
+  SiNo, SelectorMultiple, etiquetasCatalogo,
+  numeroDeEspacio, numeracionCompleta,
 });
