@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS admins (
 
 CREATE TABLE IF NOT EXISTS stands (
   id            TEXT PRIMARY KEY,
+  -- Número que la organización asigna al espacio en el recinto («12», «A-14»).
+  -- Sólo se usa en la plataforma si TODOS los espacios lo tienen: con la mitad
+  -- puestos, el público vería unos con número de feria y otros con el código
+  -- interno y no sabría cuál buscar en el mapa impreso. Ver stand_numeracion().
+  numero        TEXT,
   nombre        TEXT NOT NULL,
   municipio     TEXT NOT NULL,
   region        TEXT,
@@ -44,6 +49,27 @@ CREATE TABLE IF NOT EXISTS stands (
   tipo_organizacion_otro TEXT,
   actividad_cafe         TEXT,
   actividad_cafe_otro    TEXT,
+  -- Grupo o tipo de población. Dato sensible (Ley 1581/2012): catálogo cerrado
+  -- y con salida explícita («ninguna»).
+  poblacion              TEXT,
+  poblacion_otro         TEXT,
+  -- Selección múltiple, guardada como JSON. Ver Catalogos::multiple().
+  linea_productiva       TEXT,
+  -- Ficha detallada del producto. Los «sí/no» son 0, 1 o NULL, y NULL significa
+  -- «no contestó», que no es lo mismo que «no»: publicar un café como no
+  -- orgánico porque nadie rellenó la casilla sería inventarse el dato.
+  cert_internacional     INTEGER,
+  organico               INTEGER,
+  especial               INTEGER,
+  promedio_taza          TEXT,
+  marca_registrada       INTEGER,
+  camara_comercio        INTEGER,
+  camara_comercio_numero TEXT,
+  invima                 INTEGER,
+  invima_detalle         TEXT,
+  manipulacion_alimentos INTEGER,
+  presentacion           TEXT,
+  presentacion_otro      TEXT,
   -- Ubicación geográfica del stand, elegida en el mapa de la inscripción.
   lat           REAL,
   lng           REAL,
@@ -115,6 +141,27 @@ CREATE TABLE IF NOT EXISTS promotores (
   tipo_organizacion_otro TEXT,
   actividad_cafe         TEXT,
   actividad_cafe_otro    TEXT,
+  -- Grupo o tipo de población. Dato sensible (Ley 1581/2012): catálogo cerrado
+  -- y con salida explícita («ninguna»).
+  poblacion              TEXT,
+  poblacion_otro         TEXT,
+  -- Selección múltiple, guardada como JSON. Ver Catalogos::multiple().
+  linea_productiva       TEXT,
+  -- Ficha detallada del producto. Los «sí/no» son 0, 1 o NULL, y NULL significa
+  -- «no contestó», que no es lo mismo que «no»: publicar un café como no
+  -- orgánico porque nadie rellenó la casilla sería inventarse el dato.
+  cert_internacional     INTEGER,
+  organico               INTEGER,
+  especial               INTEGER,
+  promedio_taza          TEXT,
+  marca_registrada       INTEGER,
+  camara_comercio        INTEGER,
+  camara_comercio_numero TEXT,
+  invima                 INTEGER,
+  invima_detalle         TEXT,
+  manipulacion_alimentos INTEGER,
+  presentacion           TEXT,
+  presentacion_otro      TEXT,
   logo_path            TEXT,
   stand_lat            REAL,
   stand_lng            REAL,

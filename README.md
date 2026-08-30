@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.6.0.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.7.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -65,7 +65,7 @@ lee en pantalla.
 | `/promotor`                          | Promotor  | Portal: acceso, cambio de clave, empresa y productos.     |
 | `/admin/login`                       | Admin     | Login del organizador.                                    |
 | `/admin` · `/admin/stands`           | Admin     | Lista y métricas de espacios (gating real).               |
-| `/admin/stands/new`                  | Admin     | Crear espacio (POST `/api/stands`).                       |
+| `/admin/stands/new`                  | Admin     | Crear espacio, con su número y su ficha (POST `/api/stands`). |
 | `/admin/stands/{id}/edit`            | Admin     | Editar / borrar (PUT/DELETE `/api/stands/{id}`).          |
 | `/admin/qr`                          | Admin     | Carteles A5 imprimibles con el QR del espacio.            |
 | `/admin/live`                        | Admin     | Actividad y ranking en tiempo real.                       |
@@ -282,10 +282,44 @@ Módulo completo de inscripción para quienes exhiben en el festival.
    igual que al tocar el mapa, y un par que caiga fuera del rectángulo de Nariño
    se avisa en vez de guardarse.
 
-   **Quién eres, del catálogo.** Dos desplegables cerrados —tipo de
-   organización (13 opciones) y actividad o vínculo con la cadena de valor del
-   café (9)— con una salida «Otro» que abre un campo de texto y lo exige: «otro»
-   a secas no caracteriza a nadie. Se guarda **la clave, no la frase**
+   **Quién eres, del catálogo.** Cuatro listas cerradas: tipo de organización
+   (13 opciones), actividad o vínculo con la cadena de valor del café (9), grupo
+   o tipo de población (11) y línea productiva (3, selección múltiple). Las tres
+   primeras traen una salida «Otro» que abre un campo de texto y lo exige:
+   «otro» a secas no caracteriza a nadie.
+
+   El **grupo o tipo de población** es un dato sensible en el sentido de la Ley
+   1581 de 2012 —pertenencia étnica, discapacidad, condición de víctima—: por eso
+   sale de un catálogo cerrado con salida explícita («Ninguna de las
+   anteriores»), se pide en el mismo formulario donde se autoriza el tratamiento
+   y **no viaja a la ficha pública**; sólo lo ve el panel.
+
+   **La ficha detallada del producto.** Nueve preguntas más: certificaciones
+   internacionales, orgánico, especial, promedio de taza, marca registrada ante
+   la SIC, certificado de Cámara de Comercio (con su número), acreditación
+   sanitaria del INVIMA (con tipo y número), certificado de manipulación de
+   alimentos y presentación del producto. **Las cuatro últimas de esa lista son
+   obligatorias**: son requisitos de participación en la muestra, y preguntarlos
+   después —cuando ya se armó el recinto— no sirve de nada.
+
+   Un «sí/no» aquí tiene **tres estados**. Nada viene premarcado, y `null`
+   significa «no contestó», que se guarda distinto de «no»: con «No» por defecto
+   el formulario contestaría por la persona, y publicar un café como *no*
+   orgánico porque nadie tocó la casilla es inventarse el dato. Los campos
+   condicionales (el número de la Cámara, el detalle del INVIMA, la otra
+   presentación) aparecen sólo al responder que sí, y **se limpian al
+   rectificar**: quien marca «sí», escribe el número y luego cambia a «no» no
+   deja en la base un certificado que el formulario dice que no tiene.
+
+   Las selecciones múltiples se guardan como JSON y **con el orden del
+   catálogo**, no como llegaron: así dos respuestas iguales se guardan igual y
+   agrupar por presentación en un informe funciona.
+
+   **Los avisos siguen el orden del formulario.** Las validaciones corren de
+   arriba abajo, en el mismo orden en que están los campos en pantalla. A quien
+   se deja la marca registrada sin marcar se le dice eso, y no que falta el
+   INVIMA —tres preguntas más abajo—, que es lo que le pone a buscar el error
+   donde no está. Se guarda **la clave, no la frase**
    (`sas`, `barista`): si se guardara el texto, corregir una tilde crearía un
    tipo de organización nuevo y el conteo por tipo dejaría de valer, que es
    exactamente lo que pasó con los municipios. Las claves viven en
@@ -317,6 +351,24 @@ Módulo completo de inscripción para quienes exhiben en el festival.
    (que invalida la anterior).
 
 **Estados:** `pendiente → verificado → activo`, y `rechazado` / `suspendido`.
+
+### El número del espacio
+
+La organización numera los puestos del recinto («12», «A-14») y ese número es el
+que sale en el mapa impreso y el que la gente pregunta. Se pone en el editor del
+panel (**«Número del espacio»**), nunca en la inscripción pública: lo asigna
+quien arma el recinto, no quien se inscribe.
+
+**La regla es todo o nada.** El número propio manda en toda la plataforma —ficha
+del espacio, cartel del QR, página de votación— **sólo si lo tienen todos los
+espacios**. Si falta en uno, se sigue enseñando el código del sistema
+(`#ST-01`). Con la mitad puestos, el público vería unos con número de feria y
+otros con el código interno y no sabría cuál buscar en el mapa; es peor que
+enseñar el código en todos.
+
+El campo dice cuántos faltan y cuenta lo que hay escrito en ese momento, no lo
+último guardado: sin ese aviso, quien numere tres espacios y no vea ningún
+cambio en la plataforma pensaría que el campo no sirve.
 
 ### Cómo entra un promotor que no recibe el correo
 
@@ -992,12 +1044,23 @@ php -r "echo bin2hex(random_bytes(32)) . PHP_EOL;"   # ejecuta dos veces
 Esquema completo en [`db/schema.mysql.sql`](db/schema.mysql.sql) y
 [`db/schema.sqlite.sql`](db/schema.sqlite.sql).
 
-**Nota sobre `tipo_organizacion` y `actividad_cafe`** (en `stands` y en
-`promotores`): guardan la **clave** del catálogo, no la frase —`sas`, no
-«Sociedades por Acciones Simplificadas S.A.S.»—. La lista cerrada está en
-[`api/lib/Catalogos.php`](api/lib/Catalogos.php); las frases, en
+**Nota sobre las columnas de catálogo** (`tipo_organizacion`, `actividad_cafe`,
+`poblacion`, en `stands` y en `promotores`): guardan la **clave**, no la frase
+—`sas`, no «Sociedades por Acciones Simplificadas S.A.S.»—. Las listas cerradas
+están en [`api/lib/Catalogos.php`](api/lib/Catalogos.php); las frases, en
 `components/Shared.jsx`. La columna `_otro` que acompaña a cada una sólo se
 llena cuando la clave es `otro`, y en ese caso es obligatoria.
+
+**`linea_productiva` y `presentacion`** son selecciones múltiples y guardan un
+**JSON** con las claves elegidas, en el orden del catálogo. Como JSON y no como
+una columna por opción porque las listas cambian entre ediciones del festival y
+cada cambio significaría una migración; y no como texto separado por comas
+porque entonces buscar `grano` encontraría también `grano molido` el día que
+alguien añada esa opción.
+
+**Los `sí/no` de la ficha** (`organico`, `invima`, `marca_registrada`…) son `0`,
+`1` o **`NULL`**, y el `NULL` importa: significa «no contestó», que no es lo
+mismo que «no».
 
 ### 6.1.bis. Actualizar una instalación existente
 
@@ -1328,7 +1391,8 @@ la-mejor-taza/
 ├── .htaccess                  # cabeceras globales + rewrites
 ├── components/                # JSX precompilado a js/components.build.js
 │   ├── Shared.jsx             # Logo, sello, QR, avisos, SubirImagen, EncuadreImagen,
-│   │                          #   CampoNumerico, SelectorCatalogo, AvisoDatos, EstadoAlmacen
+│   │                          #   CampoNumerico, SelectorCatalogo, SelectorMultiple, SiNo,
+│   │                          #   AvisoDatos, EstadoAlmacen, numeroDeEspacio
 │   ├── Admin.jsx              # login + AdminShell + StandsList + StandEditor
 │   ├── QRPrint.jsx            # cartel A5 + hojas de impresión + actividad
 │   ├── VoteFlow.jsx           # MobileVotePage real (full-screen)
@@ -1370,7 +1434,7 @@ la-mejor-taza/
 │   │   ├── Uploads.php        # imágenes: valida, recodifica y guarda
 │   │   ├── Ajustes.php        # config editable desde el panel, con secretos cifrados
 │   │   ├── Territorio.php     # GENERADO: los 64 municipios y sus 13 subregiones
-│   │   ├── Catalogos.php      # tipo de organización y actividad cafetera (claves)
+│   │   ├── Catalogos.php      # catálogos cerrados y la ficha del participante
 │   │   └── Router.php
 │   └── routes/
 │       ├── auth.php
@@ -1426,9 +1490,9 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 ### Antes de abrir al público
 
 - [ ] `php db/migrate.php` ejecutado. Añade las columnas nuevas de la versión
-      (la 2.6.0 trae la caracterización: `tipo_organizacion` y `actividad_cafe`
-      en `stands` y en `promotores`) sin tocar nada de lo que ya había, y da su
-      emblema a los espacios de ejemplo que aún no tengan logo.
+      (la 2.7.0 trae la ficha del participante: población, línea productiva,
+      requisitos y presentación, más `stands.numero`) sin tocar nada de lo que
+      ya había, y da su emblema a los espacios de ejemplo que aún no tengan logo.
 - [ ] `assets/logos/` subido: son los emblemas de los stands del prototipo y se
       versionan. Se regeneran con `php tools/logos-ejemplo.php`.
 - [ ] `node tools/build-components.mjs` ejecutado y `js/components.build.js` subido.
@@ -1456,6 +1520,9 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 - [ ] **Nombre de la edición.** También en *Personalización*: el renglón bajo el
       logotipo y en la cabecera de los correos. Si el año o el nombre de la
       muestra cambiaron, se ajusta aquí.
+- [ ] **Espacios numerados, o ninguno.** Si vas a usar la numeración del
+      recinto, ponla en TODOS los espacios: mientras falte uno, la plataforma
+      sigue enseñando el código del sistema. El propio campo dice cuántos faltan.
 - [ ] **Sistema en cero.** Desde *Panel → Empezar de cero* (`/admin/sistema`,
       sólo propietario) borra los stands de ejemplo, las inscripciones de prueba,
       los votos y los visitantes de las pruebas. Haz antes una copia de la base

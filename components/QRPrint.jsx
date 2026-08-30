@@ -23,7 +23,7 @@ const QRPoster = ({ stand, variant = "vertical", paraImprimir = false }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <Wordmark size={14}/>
         <div className="mono" style={{ textAlign: "right" }}>
-          #{stand.id.toUpperCase()}<br/>
+          #{numeroDeEspacio(stand)}<br/>
           <span style={{ color: "var(--ink-3)" }}>Festival 2026</span>
         </div>
       </div>

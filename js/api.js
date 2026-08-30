@@ -102,14 +102,33 @@
       sitio_web: s.sitio_web || "",
       telefono: s.telefono || "",
       logo: s.logo || "",
-      // Caracterización del participante. Esta función es una lista blanca: lo
-      // que no se nombre aquí no llega al cliente, y el editor del panel lo
-      // guardaría vacío en el primer «Guardar». Ya pasó con el propietario y
-      // el NIT; quien añada una columna la añade también aquí.
+      // Caracterización del participante y ficha del producto. Esta función es
+      // una lista blanca: lo que no se nombre aquí no llega al cliente, y el
+      // editor del panel lo guardaría vacío en el primer «Guardar». Ya pasó con
+      // el propietario, con el NIT y con el tipo de organización; quien añada
+      // una columna la añade también aquí.
+      numero: s.numero || "",
       tipo_organizacion: s.tipo_organizacion || "",
       tipo_organizacion_otro: s.tipo_organizacion_otro || "",
       actividad_cafe: s.actividad_cafe || "",
       actividad_cafe_otro: s.actividad_cafe_otro || "",
+      poblacion: s.poblacion || "",
+      poblacion_otro: s.poblacion_otro || "",
+      linea_productiva: Array.isArray(s.linea_productiva) ? s.linea_productiva : [],
+      presentacion: Array.isArray(s.presentacion) ? s.presentacion : [],
+      presentacion_otro: s.presentacion_otro || "",
+      promedio_taza: s.promedio_taza || "",
+      camara_comercio_numero: s.camara_comercio_numero || "",
+      invima_detalle: s.invima_detalle || "",
+      // Los «sí/no» se copian tal cual: null significa «no contestó» y hay que
+      // poder distinguirlo de «no», también en el cliente.
+      cert_internacional: s.cert_internacional ?? null,
+      organico: s.organico ?? null,
+      especial: s.especial ?? null,
+      marca_registrada: s.marca_registrada ?? null,
+      camara_comercio: s.camara_comercio ?? null,
+      invima: s.invima ?? null,
+      manipulacion_alimentos: s.manipulacion_alimentos ?? null,
       lat: typeof s.lat === "number" ? s.lat : null,
       lng: typeof s.lng === "number" ? s.lng : null,
       coords: s.coords || { x: 0.5, y: 0.5 },

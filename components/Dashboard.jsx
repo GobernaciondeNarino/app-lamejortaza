@@ -455,7 +455,7 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
           {/* Sin el botón de votar, la proporción fija dejaba medio bloque de
               color vacío. Crece con lo que tenga dentro. */}
           <div style={{ minHeight: 260, background: stand.color, borderRadius: "var(--r-md)", padding: 28, color: "var(--paper)", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 24, position: "relative", overflow: "hidden" }}>
-            <div className="mono" style={{ color: "oklch(0.95 0.01 75)" }}>#{stand.id.toUpperCase()}</div>
+            <div className="mono" style={{ color: "oklch(0.95 0.01 75)" }}>#{numeroDeEspacio(stand, allStands)}</div>
             <div>
               <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, lineHeight: 0.95, letterSpacing: "-0.02em" }}>{stand.nombre}</div>
               <div style={{ fontSize: 13, marginTop: 12, opacity: 0.85 }}>{stand.direccion}</div>

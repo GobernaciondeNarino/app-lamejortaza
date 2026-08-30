@@ -30,11 +30,15 @@ function register_routes_stands(\LMT\Router $r): void
         $stmt = Db::pdo()->prepare(
             'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
                                  propietario, propietario_documento, nit, sitio_web, logo_path,
-                                 telefono, lat, lng, tipo_organizacion, tipo_organizacion_otro,
-                                 actividad_cafe, actividad_cafe_otro, coords_x, coords_y, color)
+                                 telefono, lat, lng, numero, tipo_organizacion, tipo_organizacion_otro,
+                                 actividad_cafe, actividad_cafe_otro,
+                                 poblacion, poblacion_otro, linea_productiva, cert_internacional, organico, especial, promedio_taza, marca_registrada, camara_comercio, camara_comercio_numero, invima, invima_detalle, manipulacion_alimentos, presentacion, presentacion_otro,
+                                 coords_x, coords_y, color)
              VALUES (:id, :nombre, :municipio, :region, :direccion, :correo, :descripcion,
-                     :prop, :propdoc, :nit, :web, :logo, :tel, :lat, :lng,
-                     :torg, :torgo, :act, :acto, :cx, :cy, :color)'
+                     :prop, :propdoc, :nit, :web, :logo, :tel, :lat, :lng, :numero,
+                     :torg, :torgo, :act, :acto,
+                     :poblacion, :poblacion_otro, :linea_productiva, :cert_internacional, :organico, :especial, :promedio_taza, :marca_registrada, :camara_comercio, :camara_comercio_numero, :invima, :invima_detalle, :manipulacion_alimentos, :presentacion, :presentacion_otro,
+                     :cx, :cy, :color)'
         );
         $stmt->execute([
             ':id'          => $stand['id'],
@@ -52,10 +56,26 @@ function register_routes_stands(\LMT\Router $r): void
             ':tel'         => $stand['telefono'],
             ':lat'         => $stand['lat'],
             ':lng'         => $stand['lng'],
+            ':numero'      => $stand['numero'] !== '' ? $stand['numero'] : null,
             ':torg'        => $stand['tipo_organizacion'],
             ':torgo'       => $stand['tipo_organizacion_otro'],
             ':act'         => $stand['actividad_cafe'],
             ':acto'        => $stand['actividad_cafe_otro'],
+            ':poblacion' => $stand['poblacion'],
+            ':poblacion_otro' => $stand['poblacion_otro'],
+            ':linea_productiva' => $stand['linea_productiva'],
+            ':cert_internacional' => $stand['cert_internacional'],
+            ':organico' => $stand['organico'],
+            ':especial' => $stand['especial'],
+            ':promedio_taza' => $stand['promedio_taza'],
+            ':marca_registrada' => $stand['marca_registrada'],
+            ':camara_comercio' => $stand['camara_comercio'],
+            ':camara_comercio_numero' => $stand['camara_comercio_numero'],
+            ':invima' => $stand['invima'],
+            ':invima_detalle' => $stand['invima_detalle'],
+            ':manipulacion_alimentos' => $stand['manipulacion_alimentos'],
+            ':presentacion' => $stand['presentacion'],
+            ':presentacion_otro' => $stand['presentacion_otro'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
@@ -77,9 +97,24 @@ function register_routes_stands(\LMT\Router $r): void
                                 direccion=:direccion, correo=:correo, descripcion=:descripcion,
                                 propietario=:prop, propietario_documento=:propdoc,
                                 nit=:nit, sitio_web=:web, logo_path=COALESCE(:logo, logo_path),
-                                telefono=:tel, lat=:lat, lng=:lng,
+                                telefono=:tel, lat=:lat, lng=:lng, numero=:numero,
                                 tipo_organizacion=:torg, tipo_organizacion_otro=:torgo,
                                 actividad_cafe=:act, actividad_cafe_otro=:acto,
+                                poblacion=:poblacion,
+                                poblacion_otro=:poblacion_otro,
+                                linea_productiva=:linea_productiva,
+                                cert_internacional=:cert_internacional,
+                                organico=:organico,
+                                especial=:especial,
+                                promedio_taza=:promedio_taza,
+                                marca_registrada=:marca_registrada,
+                                camara_comercio=:camara_comercio,
+                                camara_comercio_numero=:camara_comercio_numero,
+                                invima=:invima,
+                                invima_detalle=:invima_detalle,
+                                manipulacion_alimentos=:manipulacion_alimentos,
+                                presentacion=:presentacion,
+                                presentacion_otro=:presentacion_otro,
                                 coords_x=:cx, coords_y=:cy, color=:color
              WHERE id=:id'
         );
@@ -98,10 +133,26 @@ function register_routes_stands(\LMT\Router $r): void
             ':tel'         => $stand['telefono'],
             ':lat'         => $stand['lat'],
             ':lng'         => $stand['lng'],
+            ':numero'      => $stand['numero'] !== '' ? $stand['numero'] : null,
             ':torg'        => $stand['tipo_organizacion'],
             ':torgo'       => $stand['tipo_organizacion_otro'],
             ':act'         => $stand['actividad_cafe'],
             ':acto'        => $stand['actividad_cafe_otro'],
+            ':poblacion' => $stand['poblacion'],
+            ':poblacion_otro' => $stand['poblacion_otro'],
+            ':linea_productiva' => $stand['linea_productiva'],
+            ':cert_internacional' => $stand['cert_internacional'],
+            ':organico' => $stand['organico'],
+            ':especial' => $stand['especial'],
+            ':promedio_taza' => $stand['promedio_taza'],
+            ':marca_registrada' => $stand['marca_registrada'],
+            ':camara_comercio' => $stand['camara_comercio'],
+            ':camara_comercio_numero' => $stand['camara_comercio_numero'],
+            ':invima' => $stand['invima'],
+            ':invima_detalle' => $stand['invima_detalle'],
+            ':manipulacion_alimentos' => $stand['manipulacion_alimentos'],
+            ':presentacion' => $stand['presentacion'],
+            ':presentacion_otro' => $stand['presentacion_otro'],
             ':cx'          => $stand['coords_x'],
             ':cy'          => $stand['coords_y'],
             ':color'       => $stand['color'],
@@ -236,6 +287,30 @@ function stand_row_to_api(array $r): array
         'tipo_organizacion_otro' => (string) ($r['tipo_organizacion_otro'] ?? ''),
         'actividad_cafe'         => (string) ($r['actividad_cafe'] ?? ''),
         'actividad_cafe_otro'    => (string) ($r['actividad_cafe_otro'] ?? ''),
+        // Número que la organización asignó en el recinto. Público: es lo que
+        // el visitante busca en el mapa impreso del festival.
+        'numero'                 => (string) ($r['numero'] ?? ''),
+        // Ficha del participante. La población es un dato sensible de la
+        // PERSONA (Ley 1581/2012) y sólo viaja al panel; el resto describe el
+        // producto y sale también en la ficha pública, que es donde ayuda a
+        // decidir a qué espacio ir.
+        'poblacion'              => $esAdmin ? (string) ($r['poblacion'] ?? '') : '',
+        'poblacion_otro'         => $esAdmin ? (string) ($r['poblacion_otro'] ?? '') : '',
+        'linea_productiva'       => \LMT\Catalogos::listaDe($r['linea_productiva'] ?? null),
+        'presentacion'           => \LMT\Catalogos::listaDe($r['presentacion'] ?? null),
+        'presentacion_otro'      => (string) ($r['presentacion_otro'] ?? ''),
+        'cert_internacional'     => stand_si_no($r['cert_internacional'] ?? null),
+        'organico'               => stand_si_no($r['organico'] ?? null),
+        'especial'               => stand_si_no($r['especial'] ?? null),
+        'promedio_taza'          => (string) ($r['promedio_taza'] ?? ''),
+        // Los requisitos administrativos son gestión interna: al público no le
+        // dicen nada y delatan quién tiene los papeles al día.
+        'marca_registrada'       => $esAdmin ? stand_si_no($r['marca_registrada'] ?? null) : null,
+        'camara_comercio'        => $esAdmin ? stand_si_no($r['camara_comercio'] ?? null) : null,
+        'camara_comercio_numero' => $esAdmin ? (string) ($r['camara_comercio_numero'] ?? '') : '',
+        'invima'                 => $esAdmin ? stand_si_no($r['invima'] ?? null) : null,
+        'invima_detalle'         => $esAdmin ? (string) ($r['invima_detalle'] ?? '') : '',
+        'manipulacion_alimentos' => $esAdmin ? stand_si_no($r['manipulacion_alimentos'] ?? null) : null,
         // La ubicación del stand SÍ es pública: es lo que se pinta en el mapa
         // del festival y lo que un visitante necesita para llegar.
         'lat'         => isset($r['lat']) && $r['lat'] !== null ? (float) $r['lat'] : null,
@@ -262,6 +337,18 @@ function stand_row_to_api(array $r): array
     ];
 }
 
+/**
+ * Un «sí/no» de la base tal y como lo espera el cliente.
+ *
+ * Devuelve true, false o null, y el null importa: significa «no contestó», que
+ * no es lo mismo que «no». Un `(bool)` a secas convertiría las dos cosas en
+ * false y publicaría como «no orgánico» un café del que nadie sabe nada.
+ */
+function stand_si_no($v): ?bool
+{
+    return ($v === null || $v === '') ? null : (bool) (int) $v;
+}
+
 /** Media a un decimal, o null si nadie ha puntuado todavía. */
 function stand_promedio($valor): ?float
 {
@@ -282,9 +369,10 @@ function stand_select(string $tabla = 'stands'): string
 {
     return 'SELECT id, nombre, municipio, region, direccion, correo, descripcion,
                    propietario, propietario_documento, nit, sitio_web, logo_path,
-                   telefono, lat, lng,
+                   telefono, lat, lng, numero,
                    tipo_organizacion, tipo_organizacion_otro,
                    actividad_cafe, actividad_cafe_otro,
+                   poblacion, poblacion_otro, linea_productiva, cert_internacional, organico, especial, promedio_taza, marca_registrada, camara_comercio, camara_comercio_numero, invima, invima_detalle, manipulacion_alimentos, presentacion, presentacion_otro,
                    coords_x, coords_y, color, votos_bueno, votos_regular, votos_malo'
          . stand_select_estrellas($tabla)
          . ' FROM ' . $tabla;
@@ -354,6 +442,22 @@ function stand_payload(array $b, bool $needsId): array
         \LMT\Catalogos::ACTIVIDAD, 'actividad_cafe_invalida', false
     );
 
+    // Población, línea productiva y ficha detallada. Aquí NADA es obligatorio,
+    // al revés que en la inscripción: los espacios que ya existían no tienen
+    // estos datos y hay que poder seguir editando su nombre sin inventárselos.
+    try {
+        $ficha = \LMT\Catalogos::ficha($b, false);
+    } catch (\RuntimeException $e) {
+        Response::error(422, $e->getMessage());
+    }
+
+    // Número del espacio en el recinto. Lo asigna la organización, así que sólo
+    // se acepta desde aquí y nunca desde la inscripción pública.
+    $numero = mb_substr(trim((string) ($b['numero'] ?? '')), 0, 16, 'UTF-8');
+    if ($numero !== '' && !preg_match('/\A[\p{L}0-9 .\-]{1,16}\z/u', $numero)) {
+        Response::error(422, 'numero_invalido');
+    }
+
     $color = (string)($b['color'] ?? 'oklch(0.45 0.1 40)');
     if (!preg_match('/^oklch\([^)]{1,80}\)$/i', $color) && !preg_match('/^#[0-9a-f]{3,8}$/i', $color)) {
         $color = 'oklch(0.45 0.1 40)';
@@ -367,9 +471,9 @@ function stand_payload(array $b, bool $needsId): array
     return compact(
         'id', 'nombre', 'municipio', 'region', 'direccion', 'correo', 'descripcion', 'color',
         'propietario', 'propietario_documento', 'nit', 'sitio_web', 'logo_path',
-        'telefono', 'lat', 'lng',
+        'telefono', 'lat', 'lng', 'numero',
         'tipo_organizacion', 'tipo_organizacion_otro', 'actividad_cafe', 'actividad_cafe_otro'
-    ) + ['coords_x' => $cx, 'coords_y' => $cy];
+    ) + ['coords_x' => $cx, 'coords_y' => $cy] + $ficha;
 }
 
 /** Ruta de imagen que se puede devolver al cliente, o null. */
