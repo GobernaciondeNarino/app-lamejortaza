@@ -7,6 +7,115 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.7.2 — La contraseña del buzón: se limpia entera y se puede comprobar
+
+**Punto de reversión (v2.7.1):** `363ebec`
+
+### Qué se comprobó
+
+La contraseña **sí se guardaba bien**. Los cuatro grupos de cuatro que enseña
+Google —«abcd efgh ijkl mnop»— entraban con 19 caracteres y quedaban 16 en la
+base, cifrados, y volvían a salir intactos para el AUTH. Eso ya funcionaba.
+
+### El hueco que sí había
+
+El limpiado quitaba `\s`, y eso deja pasar los caracteres **invisibles** que
+arrastra un copiar-pegar desde una página web: espacio de ancho cero (U+200B),
+BOM, marcas de dirección. Con uno de ellos dentro se guardaban 17 caracteres y
+el servidor respondía **«535 Username and Password not accepted»** — el mismo
+error exacto que con una contraseña equivocada, y sin nada que ver en pantalla
+que permitiera distinguirlos.
+
+Ahora hay `Validate::secreto()`, que quita todo espacio (incluidos el duro, el
+fino y el ideográfico), todo invisible y todo carácter de control. Una
+contraseña con símbolos legítimos no se toca. Y una que quede vacía después de
+limpiar se rechaza en vez de guardarse en blanco.
+
+### Y lo que faltaba: poder verlo
+
+El panel no decía nada de la clave guardada más allá de que existía, así que
+«está mal escrita» y «se coló un carácter que no se ve» eran indistinguibles
+desde fuera. Ahora, bajo el campo:
+
+> **Guardada · 16 caracteres**
+
+En verde si son los 16 que espera una contraseña de aplicación de Google, en
+rojo con «Gmail espera 16» si no. Y el diagnóstico añade un aviso cuando la
+longitud no cuadra, o cuando no hay ninguna contraseña guardada.
+
+La longitud no es la contraseña ni ayuda a adivinarla —la de Google son 16
+siempre—, sólo la ve un administrador, y es lo único que convierte un 535 mudo
+en algo que se puede leer.
+
+### Comprobado
+
+Ocho comprobaciones nuevas en `suite.sh`: los cuatro grupos de cuatro, el
+espacio duro, el de ancho cero, una clave ya limpia, una de sólo espacios, que
+no cambiarla conserva la que había, que nunca sale del servidor, y que el aviso
+de los 16 aparece cuando toca.
+
+### Cómo volver atrás
+
+```bash
+git revert --no-commit 363ebec..HEAD && git commit -m "Volver a v2.7.1"
+```
+
+Nada que deshacer en la base. Las contraseñas guardadas siguen valiendo.
+
+---
+
+## v2.7.1 — «Quitar» una hoja del pasaporte ahora quita
+
+**Punto de reversión (v2.7.0):** `96857cc`
+
+### El fallo
+
+En *Personalización → Hojas internas*, pulsar **«quitar»** respondía que sí y no
+quitaba nada. Recargar la página seguía enseñando la misma hoja.
+
+La causa estaba en `Ajustes::combinar()`, que mezcla lo guardado en la base con
+lo que trae `config.php` **clave a clave y recursivamente**. Para un conjunto de
+ajustes con nombre —`estrellas`, `marca`, `smtp`— eso es exactamente lo que hace
+falta: lo guardado pisa a lo del fichero sin borrar lo que nadie tocó.
+
+Para una **lista** no significa nada. `pasaporte.hojas` es una lista, y mezclarla
+por índice hace que una lista más corta no pueda pisar a una más larga:
+
+| Guardado | Se quiere dejar | Quedaba |
+| --- | --- | --- |
+| `[A, B, C]` | `[A, B]` | `[A, B, C]` — C sobrevivía en el índice 2 |
+| `[A, B, C]` | `[A, C]` | `[A, C, C]` — además duplicaba |
+| `[A]` | `[]` | `[A]` — el bucle no llegaba a ejecutarse |
+
+Por eso el endpoint contestaba `200 ok`: por su parte había hecho el trabajo, y
+lo que fallaba era el guardado.
+
+### La corrección
+
+`combinar()` ahora **reemplaza una lista entera** en vez de mezclarla elemento a
+elemento (`array_is_list()`, PHP 8.1+). Los arrays asociativos se siguen
+mezclando igual que siempre, que es lo que no debía cambiar.
+
+Es un arreglo en la capa de ajustes, no en la ruta: cualquier ajuste que sea una
+lista habría tenido el mismo problema.
+
+### Comprobado
+
+Siete comprobaciones nuevas en `suite.sh` («Fondos del pasaporte»): subir dos
+hojas, quitar una, quitar la última, índice fuera de rango, destino desconocido,
+y la portada —que es un valor suelto, no una lista— aparte.
+
+### Cómo volver atrás
+
+```bash
+git revert --no-commit 96857cc..HEAD && git commit -m "Volver a v2.7.0"
+```
+
+Nada que deshacer en la base. Si alguna instalación quedó con hojas que no se
+pudieron quitar, al actualizar se quitan pulsando «quitar» otra vez.
+
+---
+
 ## v2.7.0 — La ficha del participante
 
 **Punto de reversión (v2.6.0):** `55ba1df`

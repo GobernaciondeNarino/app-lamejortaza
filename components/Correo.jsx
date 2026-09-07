@@ -126,6 +126,9 @@ const AdminCorreoConfig = () => {
   const diag = (datos && datos.diagnostico) || { avisos: [], historico: [] };
   const esGmail = /(^|\.)(gmail|googlemail)\.com$/i.test((form.smtp && form.smtp.host) || "");
   const sobrescrito = (datos && datos.sobrescrito) || [];
+  // Longitud de la contraseña que hay GUARDADA, no de la que se esté
+  // escribiendo: viene del servidor y por eso sobrevive a recargar la página.
+  const guardadaLargo = Number(((datos && datos.config && datos.config.smtp) || {}).password_largo) || 0;
 
   return (
     <div className="admin-page">
@@ -342,9 +345,23 @@ const AdminCorreoConfig = () => {
                   {esGmail && (
                     <> <strong>En Gmail no sirve la contraseña de la cuenta</strong>: crea una
                     «contraseña de aplicación» de 16 caracteres en cuenta de Google → Seguridad →
-                    Verificación en dos pasos → Contraseñas de aplicaciones.</>
+                    Verificación en dos pasos → Contraseñas de aplicaciones. Pégala con sus cuatro
+                    grupos de cuatro: los espacios se quitan solos.</>
                   )}
                 </span>
+                {/* Cuántos caracteres quedaron guardados de verdad. Es lo único
+                    que distingue «la clave está mal» de «se coló un carácter
+                    invisible al pegarla»: desde fuera, las dos cosas son el
+                    mismo 535 y no hay nada que mirar en pantalla. */}
+                {guardadaLargo > 0 && (
+                  <span className="mono" style={{
+                    marginTop: 6, display: "inline-block",
+                    color: esGmail && guardadaLargo !== 16 ? "var(--bad)" : "var(--good)",
+                  }}>
+                    Guardada · {guardadaLargo} caracteres
+                    {esGmail && guardadaLargo !== 16 && " · Gmail espera 16"}
+                  </span>
+                )}
               </div>
             </div>
           </BloqueForm>

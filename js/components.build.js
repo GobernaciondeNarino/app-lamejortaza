@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
 // Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Sistema.jsx, components/Correo.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: b6da7dc43acb106e
+// Huella de las fuentes: 1b2b0f5b1f725c4d
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -12838,6 +12838,7 @@ const AdminCorreoConfig = () => {
   };
   const esGmail = /(^|\.)(gmail|googlemail)\.com$/i.test(form.smtp && form.smtp.host || "");
   const sobrescrito = datos && datos.sobrescrito || [];
+  const guardadaLargo = Number((datos && datos.config && datos.config.smtp || {}).password_largo) || 0;
   return React.createElement("div", {
     className: "admin-page"
   }, React.createElement("div", {
@@ -13223,7 +13224,14 @@ const AdminCorreoConfig = () => {
     maxLength: 200
   }), React.createElement("span", {
     className: "ayuda"
-  }, "Se guarda cifrada y no vuelve a mostrarse.", esGmail && React.createElement(React.Fragment, null, " ", React.createElement("strong", null, "En Gmail no sirve la contrase\xF1a de la cuenta"), ": crea una \xABcontrase\xF1a de aplicaci\xF3n\xBB de 16 caracteres en cuenta de Google \u2192 Seguridad \u2192 Verificaci\xF3n en dos pasos \u2192 Contrase\xF1as de aplicaciones."))))), React.createElement(Aviso, {
+  }, "Se guarda cifrada y no vuelve a mostrarse.", esGmail && React.createElement(React.Fragment, null, " ", React.createElement("strong", null, "En Gmail no sirve la contrase\xF1a de la cuenta"), ": crea una \xABcontrase\xF1a de aplicaci\xF3n\xBB de 16 caracteres en cuenta de Google \u2192 Seguridad \u2192 Verificaci\xF3n en dos pasos \u2192 Contrase\xF1as de aplicaciones. P\xE9gala con sus cuatro grupos de cuatro: los espacios se quitan solos.")), guardadaLargo > 0 && React.createElement("span", {
+    className: "mono",
+    style: {
+      marginTop: 6,
+      display: "inline-block",
+      color: esGmail && guardadaLargo !== 16 ? "var(--bad)" : "var(--good)"
+    }
+  }, "Guardada \xB7 ", guardadaLargo, " caracteres", esGmail && guardadaLargo !== 16 && " · Gmail espera 16")))), React.createElement(Aviso, {
     tipo: "ok"
   }, ok), React.createElement(Aviso, null, error), React.createElement("div", {
     style: {

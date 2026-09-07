@@ -82,6 +82,38 @@ final class Validate
     }
 
     /**
+     * Un secreto tal y como se pega desde otra pantalla.
+     *
+     * Google enseña la contraseña de aplicación en cuatro grupos de cuatro
+     * —«abcd efgh ijkl mnop»— y quien la copia se lleva los espacios. El SMTP
+     * espera los 16 caracteres seguidos y con espacios responde
+     * «535 Username and Password not accepted», que es exactamente el error de
+     * una contraseña equivocada: nadie sospecha de tres blancos.
+     *
+     * Quitar sólo `\s` no basta. Copiar de una página web arrastra también
+     * caracteres INVISIBLES —espacio de ancho cero, marcas de dirección, BOM—
+     * que no son espacios para la expresión regular y sí rompen la
+     * autenticación igual, con el mismo error y sin nada que ver en pantalla.
+     * Aquí se van todos: ninguno puede formar parte de una contraseña de
+     * verdad, y un carácter que no se ve no se puede depurar a ojo.
+     */
+    public static function secreto($value): string
+    {
+        if (!is_scalar($value)) return '';
+        $v = (string) $value;
+        if (class_exists('\Normalizer')) {
+            $v = \Normalizer::normalize($v, \Normalizer::FORM_C) ?: $v;
+        }
+        // Controles C0, DEL y C1.
+        $v = preg_replace('/[\x00-\x1F\x7F]|\x{0080}-\x{009F}/u', '', $v) ?? $v;
+        // Invisibles: ancho cero, unión/separación, marcas bidi, BOM.
+        $v = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{2069}\x{FEFF}]/u', '', $v) ?? $v;
+        // Cualquier espacio, incluidos los que no son el 0x20 de toda la vida.
+        $v = preg_replace('/[\s\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}]+/u', '', $v) ?? $v;
+        return $v;
+    }
+
+    /**
      * Texto largo que SÍ conserva los saltos de párrafo.
      *
      * `texto()` aplasta todos los espacios en uno solo, que es lo correcto para

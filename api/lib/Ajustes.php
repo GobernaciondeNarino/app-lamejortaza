@@ -31,11 +31,25 @@ final class Ajustes
         return self::combinar($porDefecto, is_array($guardado) ? $guardado : []);
     }
 
-    /** Combina recursivamente: lo guardado pisa a lo del fichero, clave a clave. */
+    /**
+     * Combina recursivamente: lo guardado pisa a lo del fichero, clave a clave.
+     *
+     * Con una excepción que no es un detalle: **una LISTA se reemplaza entera**,
+     * no se mezcla elemento a elemento.
+     *
+     * Un array asociativo —`estrellas`, `pasaporte`, `marca`— es un conjunto de
+     * ajustes con nombre, y mezclarlo clave a clave es justo lo que hace que lo
+     * guardado pise a lo del fichero sin borrar lo que nadie tocó. Una lista
+     * —`pasaporte.hojas`— es UN valor, y mezclarla por índice no significa nada:
+     * guardar `[A, B]` sobre `[A, B, C]` dejaba el índice 2 intacto y C
+     * sobrevivía. Por eso «Quitar» en las hojas del pasaporte respondía que sí y
+     * no quitaba nada, y quitar la única hoja (`[]` sobre `[A]`) no llegaba
+     * siquiera a entrar en el bucle.
+     */
     private static function combinar(array $base, array $encima): array
     {
         foreach ($encima as $k => $v) {
-            if (is_array($v) && isset($base[$k]) && is_array($base[$k])) {
+            if (is_array($v) && isset($base[$k]) && is_array($base[$k]) && !array_is_list($v)) {
                 $base[$k] = self::combinar($base[$k], $v);
             } elseif ($v !== null) {
                 $base[$k] = $v;

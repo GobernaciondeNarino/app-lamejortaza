@@ -76,13 +76,13 @@ function register_routes_correo(\LMT\Router $r): void
         // un marcador de posición, y guardarlo tal cual borraría la buena.
         $clave = $smtp['password'] ?? null;
         if (is_string($clave) && $clave !== '' && $clave !== CORREO_CLAVE_OCULTA) {
-            // Google enseña la contraseña de aplicación en cuatro grupos de
-            // cuatro —«abcd efgh ijkl mnop»— y quien la copia se lleva los
-            // espacios. El servidor SMTP espera los 16 caracteres seguidos, así
-            // que con espacios responde 535 y parece que la clave está mal
-            // cuando lo único que sobra son tres blancos. Se limpian aquí en
-            // vez de pedirle a nadie que lo haga a mano.
-            $clave = preg_replace('/\s+/u', '', $clave) ?? $clave;
+            // Se quitan los espacios Y todo lo invisible que arrastra un
+            // copiar-pegar. Ver Validate::secreto(): con cualquiera de esos
+            // caracteres dentro, el SMTP responde «535 Username and Password
+            // not accepted» —el mismo error que con una clave equivocada— y no
+            // hay nada que ver en pantalla que lo explique.
+            $clave = Validate::secreto($clave);
+            if ($clave === '') Response::error(422, 'clave_vacia');
             try {
                 $valores['smtp']['password'] = Ajustes::cifrar($clave);
             } catch (\RuntimeException $e) {
@@ -219,6 +219,12 @@ function correo_config_publica(array $c): array
             // Nunca sale del servidor; el formulario manda este mismo valor
             // cuando no se quiere cambiar.
             'password' => ($s['password'] ?? '') !== '' ? CORREO_CLAVE_OCULTA : '',
+            // Cuántos caracteres quedaron guardados. No es la contraseña ni
+            // ayuda a adivinarla —y esto sólo lo ve un administrador—, pero es
+            // lo único que permite distinguir «la clave está mal» de «se
+            // guardaron 17 caracteres porque se coló uno invisible», que desde
+            // fuera son el mismo 535.
+            'password_largo' => mb_strlen((string) ($s['password'] ?? ''), 'UTF-8'),
         ],
     ];
 }
@@ -268,6 +274,25 @@ function correo_diagnostico(array $c): array
                          . '(Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones) '
                          . 'y pegarla aquí. Con la contraseña de siempre el servidor responde 535.',
             ];
+            // Lo que de verdad hay guardado. Una contraseña de aplicación son
+            // 16 caracteres exactos; cualquier otra cosa es una clave normal
+            // del buzón o un pegado que se trajo algo de más, y las dos dan el
+            // mismo 535 sin que nada en pantalla lo distinga.
+            $largo = mb_strlen((string) ($s['password'] ?? ''), 'UTF-8');
+            if ($largo === 0) {
+                $avisos[] = [
+                    'nivel' => 'critico',
+                    'texto' => 'No hay ninguna contraseña guardada para el buzón: Gmail va a rechazar el envío.',
+                ];
+            } elseif ($largo !== 16) {
+                $avisos[] = [
+                    'nivel' => 'alto',
+                    'texto' => "La contraseña guardada tiene {$largo} caracteres y la de aplicación de Google "
+                             . 'son exactamente 16. Si pegaste los cuatro grupos de cuatro, vuelve a pegarla: '
+                             . 'se guardan sin espacios. Si es la contraseña normal de la cuenta, no sirve.',
+                ];
+            }
+
             $usuario = strtolower((string) ($s['user'] ?? ''));
             if ($usuario !== '' && $dominioFrom !== '' && strtolower($from) !== $usuario) {
                 $avisos[] = [
