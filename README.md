@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.7.1.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.7.2.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
