@@ -10,7 +10,7 @@ if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
 // primero que hay que mirar cuando algo falla en producción: sin ella, decidir
 // si revertir se convierte en «creo que subimos lo último». El historial y el
 // procedimiento de reversión de cada versión están en CHANGELOG.md.
-if (!defined('LMT_VERSION')) define('LMT_VERSION', '2.7.2');
+if (!defined('LMT_VERSION')) define('LMT_VERSION', '2.7.3');
 
 // Front controller — no exponer detalles de errores al cliente.
 ini_set('display_errors', '0');

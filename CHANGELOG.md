@@ -7,6 +7,72 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.7.3 — Gmail: AUTH LOGIN antes que AUTH PLAIN
+
+**Punto de reversión (v2.7.2):** `06c570b`
+
+### El fallo
+
+Gmail rechazaba el envío con **«535 Username and Password not accepted»** aunque
+la contraseña de aplicación fuera correcta. El mismo buzón, con las mismas
+credenciales y en el mismo servidor, **sí funcionaba desde el proyecto
+`app-eventos`**. Ese contraste es lo que descartó la contraseña y señaló al
+código.
+
+### La causa
+
+Los dos proyectos eligen distinto método de autenticación, y Gmail anuncia ambos:
+
+```
+250-AUTH LOGIN PLAIN XOAUTH2 PLAIN-CLIENTTOKEN OAUTHBEARER XOAUTH
+```
+
+| Proyecto | Elegía | Resultado |
+| --- | --- | --- |
+| `app-eventos` | `AUTH LOGIN`, con `PLAIN` de respaldo | funciona |
+| `la-mejor-taza` | `AUTH PLAIN`, con `LOGIN` de respaldo | 535 |
+
+Con una contraseña de aplicación, Gmail rechaza `AUTH PLAIN` y acepta
+`AUTH LOGIN` con esas mismas credenciales. Y como el error es idéntico al de una
+clave equivocada, todo apuntaba a la contraseña.
+
+Se comprobó midiendo lo que el cliente transmite de verdad contra un servidor
+SMTP de prueba: el `AUTH PLAIN` iba perfectamente formado —`\0usuario\0clave`,
+21 y 16 caracteres—. El formato no era el problema; el método sí.
+
+### La corrección
+
+- **`AUTH LOGIN` primero**, `PLAIN` sólo si el servidor no ofrece LOGIN, y un
+  error explícito si no ofrece ninguno de los dos.
+- Los métodos se leen de la línea `250-AUTH …` en vez de buscar palabras sueltas
+  por toda la respuesta. El anuncio de Gmail incluye `PLAIN-CLIENTTOKEN`, y un
+  `stripos` de «PLAIN» daba por ofrecido un método que no era ese.
+- La traza dice ahora con cuál se autenticó, que es lo que permite verlo sin
+  adivinar.
+
+### El instalador guardaba la contraseña sin limpiar
+
+`instalar_guardar_correo()` cifraba lo que llegaba tal cual, sin quitar espacios
+ni caracteres invisibles — el panel sí lo hacía desde la v2.7.2. Una instalación
+nueva podía nacer con la clave inservible. Ahora usa el mismo
+`Validate::secreto()`.
+
+### Comprobado
+
+Cuatro comprobaciones nuevas en `suite.sh`: que el envío se acepta, que
+autentica con `AUTH LOGIN`, que no cae a `PLAIN` habiendo `LOGIN`, y que la
+contraseña no aparece en la traza. Más el instalador de punta a punta.
+
+### Cómo volver atrás
+
+```bash
+git revert --no-commit 06c570b..HEAD && git commit -m "Volver a v2.7.2"
+```
+
+Nada que deshacer en la base.
+
+---
+
 ## v2.7.2 — La contraseña del buzón: se limpia entera y se puede comprobar
 
 **Punto de reversión (v2.7.1):** `363ebec`

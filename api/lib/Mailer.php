@@ -324,6 +324,25 @@ final class Mailer
      * @param  resource $ctx  contexto con peer_name puesto al NOMBRE del host
      * @return resource|null
      */
+    /**
+     * Los métodos de autenticación que anuncia el servidor tras EHLO.
+     *
+     * Se lee la línea «250-AUTH LOGIN PLAIN XOAUTH2 …» y se devuelve su lista,
+     * en mayúsculas. Buscar «PLAIN» por toda la respuesta con stripos daba
+     * falsos positivos —«PLAIN-CLIENTTOKEN» contiene «PLAIN»— y elegía un
+     * método que el servidor no había ofrecido.
+     */
+    private static function metodosAuth(string $ehlo): string
+    {
+        foreach (preg_split('/\r?\n/', $ehlo) ?: [] as $linea) {
+            $resto = trim(substr($linea, 4));
+            if ($resto === '') continue;
+            $partes = explode(' ', $resto, 2);
+            if (strtoupper($partes[0]) === 'AUTH') return strtoupper(trim($partes[1] ?? ''));
+        }
+        return '';
+    }
+
     private static function conectar(string $host, int $port, bool $ssl, int $timeout, $ctx, ?string &$fallo)
     {
         $esquema = $ssl ? 'ssl://' : 'tcp://';
@@ -470,14 +489,32 @@ final class Mailer
             }
 
             if ($user !== '') {
-                if (stripos($resp, 'AUTH') !== false && stripos($resp, 'PLAIN') !== false) {
-                    [$code] = $decir('AUTH PLAIN ' . base64_encode("\0" . $user . "\0" . $pass), true);
-                } else {
+                // Qué métodos ofrece el servidor, leídos de la línea «250-AUTH
+                // …» y no buscando palabras sueltas por toda la respuesta: el
+                // anuncio de Gmail incluye «PLAIN-CLIENTTOKEN», y un stripos de
+                // «PLAIN» daba por bueno un método que no es ese.
+                $metodos = self::metodosAuth($resp);
+
+                // LOGIN primero, PLAIN de respaldo. El orden NO es indiferente:
+                // Gmail anuncia los dos y con una contraseña de aplicación
+                // rechaza AUTH PLAIN con «535 Username and Password not
+                // accepted» —el mismo error que daría una clave equivocada— y
+                // acepta AUTH LOGIN con esas mismas credenciales. Se perdieron
+                // horas buscando el fallo en la contraseña.
+                if ($metodos === '' || strpos($metodos, 'LOGIN') !== false) {
+                    self::traza('· autenticando con AUTH LOGIN');
                     [$code] = $decir('AUTH LOGIN');
                     if ($code !== 334) { $error = 'smtp_auth_' . $code; return false; }
                     [$code] = $decir(base64_encode($user), true);
                     if ($code !== 334) { $error = 'smtp_auth_usuario_' . $code; return false; }
                     [$code] = $decir(base64_encode($pass), true);
+                } elseif (strpos($metodos, 'PLAIN') !== false) {
+                    self::traza('· autenticando con AUTH PLAIN');
+                    [$code] = $decir('AUTH PLAIN ' . base64_encode("\0" . $user . "\0" . $pass), true);
+                } else {
+                    $error = 'smtp_auth_sin_metodo';
+                    self::traza('✗ el servidor no ofrece LOGIN ni PLAIN, sólo: ' . $metodos);
+                    return false;
                 }
                 if ($code !== 235) { $error = 'smtp_auth_rechazado_' . $code; return false; }
             } else {
