@@ -783,7 +783,11 @@ function instalar_runtime(): void {
 
 function instalar_guardar_correo(array $mail): void {
     instalar_runtime();
-    $clave = (string) $mail['smtp']['password'];
+    // Se limpia igual que en el panel: Google enseña la contraseña de
+    // aplicación en cuatro grupos de cuatro y quien la copia se lleva espacios,
+    // y a veces caracteres invisibles. Aquí faltaba, así que una instalación
+    // nueva podía nacer con la clave inservible y el 535 que eso provoca.
+    $clave = \LMT\Validate::secreto($mail['smtp']['password'] ?? '');
     unset($mail['smtp']['password']);
     if ($clave !== '') {
         try { $mail['smtp']['password'] = \LMT\Ajustes::cifrar($clave); }
