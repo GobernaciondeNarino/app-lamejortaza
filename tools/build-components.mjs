@@ -41,6 +41,8 @@ const ARCHIVOS = [
   'components/Festival.jsx',
   'components/Sistema.jsx',
   'components/Correo.jsx',
+  'components/Interfaz.jsx',
+  'components/Configuracion.jsx',
   'components/App.jsx',
 ];
 

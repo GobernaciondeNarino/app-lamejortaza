@@ -155,6 +155,14 @@ function register_routes_promotores(\LMT\Router $r):void
             Response::ok(['recibido' => true]);
         }
 
+        // Un espacio que ya participa con ese nombre. Se comprueba contra los
+        // espacios publicados —su nombre ya es público en el ranking—, no
+        // contra otras solicitudes pendientes, que no lo son. Si dos
+        // pendientes chocan, se distinguen al verificarlas.
+        if ($standNombre !== null && ($otro = stand_nombre_en_uso($pdo, $standNombre))) {
+            Response::error(409, 'nombre_duplicado', $otro['nombre'] . ($otro['municipio'] !== '' ? ' · ' . $otro['municipio'] : ''));
+        }
+
         try {
             $ins = $pdo->prepare(
                 'INSERT INTO promotores (email, nombre, documento, telefono, municipio,
@@ -964,6 +972,11 @@ function promotor_emitir_credenciales(\PDO $pdo, array $row, string $tipoCorreo,
         'correo_enviado' => $enviado,
         'expira_en'      => $expira,
         'stand_id'       => $stand['id'] ?? null,
+        'stand_nombre'   => $stand['nombre'] ?? null,
+        // Si otro espacio ya se llamaba así, el nombre se distinguió al crear
+        // éste (ver stand_nombre_libre). El panel lo avisa: el promotor verá
+        // su espacio con un nombre que no escribió.
+        'renombrado_de'  => $stand['renombrado_de'] ?? null,
         'acceso_propio'  => $conservaSuAcceso ? $metodo :null,
     ];
     if (!$enviado) {
@@ -1039,6 +1052,13 @@ function promotor_asegurar_stand(\PDO $pdo, array $row):array
         $datos[':' . $campo] = ($p[$campo] === '' ? null : $p[$campo]);
     }
 
+    // Otro espacio con el mismo nombre: se distingue aquí en vez de rechazar
+    // la verificación. Ver stand_nombre_libre().
+    $pedido = $datos[':nombre'];
+    $datos[':nombre'] = stand_nombre_libre($pdo, $pedido, (string) $datos[':mun'],
+        !empty($p['stand_id']) ? (string) $p['stand_id'] : null);
+    $renombrado = $datos[':nombre'] !== $pedido ? $pedido : null;
+
     if (!empty($p['stand_id'])) {
         $pdo->prepare(
             'UPDATE stands SET nombre=:nombre, municipio=:mun, region=:reg, direccion=:dir,
@@ -1067,7 +1087,7 @@ function promotor_asegurar_stand(\PDO $pdo, array $row):array
                                presentacion_otro=:presentacion_otro
              WHERE id=:id'
         )->execute($datos + [':id' => $p['stand_id']]);
-        return ['id' => (string) $p['stand_id'], 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun']];
+        return ['id' => (string) $p['stand_id'], 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun'], 'renombrado_de' => $renombrado];
     }
 
     $id = promotor_id_stand_libre($pdo, $nombreStand);
@@ -1084,7 +1104,7 @@ function promotor_asegurar_stand(\PDO $pdo, array $row):array
                  0.5, 0.5, :color)'
     )->execute($datos + [':id' => $id, ':color' => promotor_color_stand($id)]);
 
-    return ['id' => $id, 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun']];
+    return ['id' => $id, 'nombre' => $datos[':nombre'], 'municipio' => $datos[':mun'], 'renombrado_de' => $renombrado];
 }
 
 /** Identificador legible y libre para el stand, derivado del nombre. */

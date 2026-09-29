@@ -1,19 +1,21 @@
 /* La Mejor Taza — Design tokens */
 :root {
-  /* Paleta base */
-  --paper: oklch(0.97 0.015 75);
+  /* Paleta base. Fondo, texto y acentos son los de la paleta «mercado» del
+     diseño aprobado; los demás tonos, los de siempre. Configuración →
+     Interfaz los sobrescribe desde un <style> posterior (ver app.php). */
+  --paper: oklch(0.96 0.025 80);
   --paper-2: oklch(0.93 0.025 75);
   --paper-3: oklch(0.88 0.03 75);
-  --ink: oklch(0.22 0.02 60);
+  --ink: oklch(0.22 0.03 50);
   --ink-2: oklch(0.4 0.02 60);
   --ink-3: oklch(0.58 0.02 60);
   --line: oklch(0.85 0.01 75);
   --line-2: oklch(0.78 0.015 75);
 
   /* Acentos */
-  --grano: oklch(0.42 0.09 50);
-  --galeras: oklch(0.55 0.13 30);
-  --cafeto: oklch(0.5 0.08 145);
+  --grano: oklch(0.4 0.12 30);
+  --galeras: oklch(0.6 0.17 45);
+  --cafeto: oklch(0.55 0.11 130);
 
   /* Estados voto */
   --good: oklch(0.6 0.14 145);
@@ -72,6 +74,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .btn:active { transform: scale(0.97); }
+/* Un enlace con aspecto de botón no lleva el subrayado de enlace. */
+a.btn { text-decoration: none; }
 .btn-primary { background: var(--ink); color: var(--paper); }
 .btn-primary:hover { background: var(--grano); }
 .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line-2); }
@@ -188,6 +192,75 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .admin-page { padding: 40px 48px; }
 @media (max-width: 860px) { .admin-page { padding: 24px 18px 48px; } }
 @media (max-width: 420px) { .admin-page { padding: 20px 14px 48px; } }
+
+/* Configuración: una barra de pestañas sobre la pantalla de cada sección.
+   Las pantallas de dentro traen su propio .admin-page (se usaban sueltas);
+   aquí se anula su relleno para no sumarlo dos veces al del contenedor. */
+.config-cuerpo > .admin-page { padding: 0; }
+.config-pestanas {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  margin: 10px 0 28px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.config-pestana {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 9px 14px; border-radius: var(--r-md);
+  text-decoration: none; color: var(--ink-2); font-size: 14px;
+  border: 1px solid transparent;
+}
+.config-pestana:hover { background: var(--paper-2); color: var(--ink); }
+.config-pestana.activa {
+  background: var(--paper-2); color: var(--ink); font-weight: 600;
+  border-color: var(--line-2);
+}
+.config-pestana-sub { font-size: 9px; font-weight: 400; }
+@media (max-width: 860px) {
+  /* En el móvil, una fila que se desplaza, como el menú lateral. */
+  .config-pestanas {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px;
+  }
+  .config-pestanas::-webkit-scrollbar { display: none; }
+  .config-pestana { flex: 0 0 auto; white-space: nowrap; min-height: 44px; justify-content: center; }
+  .config-pestana-sub { display: none; }
+}
+
+/* Descargas: la barra de informes de cada pantalla y el «⤓ CSV» de la esquina
+   de cada tarjeta. El pequeño tiene 32px de alto de toque: va en esquinas
+   ya apretadas, pero tiene que poder pulsarse con el pulgar. */
+.barra-descargas {
+  display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+  padding: 12px 14px; margin-bottom: 24px;
+  border: 1px dashed var(--line-2); border-radius: var(--r-md); background: var(--paper);
+}
+.descarga-mini {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 6px;
+  color: var(--ink-3); text-decoration: none; border-radius: var(--r-sm); white-space: nowrap;
+}
+.descarga-mini:hover { color: var(--ink); background: var(--paper-2); }
+.cabecera-tarjeta { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* Configuración → Interfaz: formulario a la izquierda, vista previa fija a la
+   derecha. En el móvil la vista previa baja al final. */
+.interfaz-rejilla { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+.interfaz-colores { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.interfaz-color { display: flex; gap: 10px; align-items: flex-start; }
+.interfaz-color input[type="color"] {
+  width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-2);
+  border-radius: var(--r-sm); background: none; cursor: pointer; flex: 0 0 auto;
+}
+.interfaz-iconos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.interfaz-guardar {
+  position: sticky; bottom: 0; z-index: 15; margin: 28px -4px 0; padding: 12px 14px;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.interfaz-guardar.pendiente { border-color: var(--grano); box-shadow: var(--shadow-2); }
+@media (max-width: 1100px) {
+  .interfaz-rejilla { grid-template-columns: minmax(0, 1fr); }
+  .interfaz-lateral > div { position: static !important; }
+}
 
 /* Portada: dos mitades en escritorio, apiladas en móvil. */
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100dvh; background: var(--paper); }

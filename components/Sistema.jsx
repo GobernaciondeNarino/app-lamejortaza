@@ -88,6 +88,23 @@ const SistemaPage = () => {
         </Aviso>
       )}
 
+      {/* Antes de borrar, la copia. Una vez vaciada la base no hay de dónde
+          sacar el informe que alguien pida la semana siguiente. */}
+      <div style={{ marginTop: 18 }}>
+        <BarraDescargas titulo="Antes de borrar, descarga una copia" informes={[
+          { ruta: "/export/resumen.csv", etiqueta: "Resumen" },
+          { ruta: "/export/ranking.csv", etiqueta: "Ranking" },
+          { ruta: "/export/stands.csv", etiqueta: "Espacios" },
+          { ruta: "/export/votos.csv", etiqueta: "Votos", nota: "Varios archivos llevan datos personales: guárdalos donde corresponda." },
+          { ruta: "/export/economia.csv", etiqueta: "Economía" },
+          { ruta: "/export/pasaportes.csv", etiqueta: "Pasaportes", nota: "Varios archivos llevan datos personales: guárdalos donde corresponda." },
+          { ruta: "/export/promotores.csv", etiqueta: "Promotores", nota: "Varios archivos llevan datos personales: guárdalos donde corresponda." },
+          { ruta: "/export/visitantes.csv", etiqueta: "Visitantes", nota: "Varios archivos llevan datos personales: guárdalos donde corresponda." },
+          { ruta: "/export/caracterizacion.csv", etiqueta: "Caracterización" },
+          { ruta: "/export/correos.csv", etiqueta: "Bitácora", nota: "Varios archivos llevan datos personales: guárdalos donde corresponda." },
+        ]}/>
+      </div>
+
       {/* Lo que hay ahora. Se lee antes de decidir, no después. */}
       <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 20, marginTop: 18 }}>
         <div className="mono" style={{ marginBottom: 12 }}>Qué hay ahora en la base</div>

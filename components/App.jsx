@@ -2,17 +2,10 @@
 // Vive aquí (y no incrustado en app.php) para que el compilador de JSX
 // pueda precompilarlo junto al resto de componentes.
 
-const PALETTES = {
-  "nariño":  { grano: "oklch(0.42 0.09 50)", galeras: "oklch(0.55 0.13 30)", cafeto: "oklch(0.5 0.08 145)",  paper: "oklch(0.97 0.015 75)", ink: "oklch(0.22 0.02 60)" },
-  "mercado": { grano: "oklch(0.4 0.12 30)",  galeras: "oklch(0.6 0.17 45)",  cafeto: "oklch(0.55 0.11 130)", paper: "oklch(0.96 0.025 80)", ink: "oklch(0.22 0.03 50)" },
-};
-const applyPalette = (name) => {
-  const p = PALETTES[name] || PALETTES["mercado"];
-  const r = document.documentElement.style;
-  Object.entries(p).forEach(([k, v]) => r.setProperty("--" + k, v));
-};
-// Paleta del diseño aprobado (handoff Claude Design): "mercado".
-applyPalette("mercado");
+// La paleta de fábrica («mercado», la del diseño aprobado) vive en
+// styles/tokens.css. Antes se escribía aquí como estilo en línea sobre <html>,
+// y un estilo en línea gana a cualquier hoja: los colores de Configuración →
+// Interfaz no habrían podido cambiarla nunca.
 
 const App = () => {
   const [route, setRoute] = React.useState(() => window.LMTRouter.current());
@@ -41,6 +34,15 @@ const App = () => {
 
   const stands = window.STANDS_DATA || [];
   const comentarios = window.COMENTARIOS_DEMO || [];
+
+  // El área decide qué tema de Configuración → Interfaz se aplica (plataforma,
+  // panel o pasaporte). Se fija aquí, durante el render, y no en un efecto:
+  // los hijos leen los colores al montarse —el libro 3D del pasaporte los
+  // pasa a sus texturas— y un efecto del padre llega después que los suyos.
+  const area = areaDeRuta(route.path);
+  if (document.documentElement.getAttribute("data-area") !== area) {
+    document.documentElement.setAttribute("data-area", area);
+  }
 
   // Hasta que termine el bootstrap, no decidimos si redirigir a login (evita parpadeo).
   if (!ready && route.path.startsWith("/admin") && route.path !== "/admin/login") {
@@ -144,31 +146,22 @@ const App = () => {
   if (route.path === "/admin/promotores") {
     return <AdminPage section="promotores" user={user} stands={stands}/>;
   }
-  if (route.path === "/admin/correos") {
-    return <AdminPage section="correos" user={user} stands={stands}/>;
-  }
-  if (route.path === "/admin/correo") {
-    return <AdminPage section="correo" user={user} stands={stands}/>;
-  }
   if (route.path === "/admin/economia") {
     return <EconomiaPage/>;
   }
-
-  if (route.path === "/admin/festival") {
-    return <FestivalPage/>;
-  }
-
   if (route.path === "/admin/caracterizacion") {
     return <AdminPage section="caracterizacion" user={user} stands={stands}/>;
   }
-  if (route.path === "/admin/sistema") {
-    // Vaciar la base es cosa del propietario, igual que las cuentas.
-    if (user.rol !== "propietario") return <NotFound back="/admin"/>;
-    return <AdminPage section="sistema" user={user} stands={stands}/>;
-  }
-  if (route.path === "/admin/cuentas") {
-    if (user.rol !== "propietario") return <NotFound back="/admin"/>;
-    return <AdminPage section="cuentas" user={user} stands={stands}/>;
+
+  // 7. Configuración: personalización, interfaz, correo, bitácora, cuentas y
+  //    «empezar de cero», como pestañas de una sola sección. Las URL antiguas
+  //    (/admin/correo, /admin/festival…) siguen llevando a su pestaña.
+  const pestana = window.pestanaConfigPorRuta && window.pestanaConfigPorRuta(route.path);
+  if (pestana) {
+    // Vaciar la base y gestionar cuentas es cosa del propietario. El backend
+    // lo rechaza igual; esto evita enseñar una pantalla que respondería 403.
+    if (pestana.propietario && user.rol !== "propietario") return <NotFound back="/admin"/>;
+    return <ConfiguracionPage tab={pestana.id} user={user}/>;
   }
 
   return <NotFound back="/"/>;
@@ -192,7 +185,8 @@ window.Splash = Splash;
 const waitForGlobals = () => {
   const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail",
                   "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave",
-                  "PerfilVisitantePage", "AdminCaracterizacion", "AdminCorreoConfig"];
+                  "PerfilVisitantePage", "AdminCaracterizacion", "AdminCorreoConfig",
+                  "FestivalPage", "EconomiaPage", "SistemaPage", "InterfazPage", "ConfiguracionPage"];
   if (needed.every((k) => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
   } else {

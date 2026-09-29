@@ -1,10 +1,16 @@
 // Pantallas del Panel Administrador (con autenticación real, CRUD real,
 // y navegación por rutas /admin/...).
 
-const AdminShell = ({ active, user, children }) => {
-  // Las cuentas de acceso sólo las ve un propietario. Se oculta el enlace
-  // además de que el backend lo rechace: enseñar una sección que siempre
-  // responde 403 es una trampa, no una medida de seguridad.
+const AdminShell = ({ active, user: userProp, children }) => {
+  // La cuenta llega por prop, y si no llega se lee de la sesión. Personalización
+  // y Actividad económica montaban el shell sin `user`, y al entrar en ellas el
+  // menú perdía en silencio las secciones del propietario: parecía que la
+  // cuenta había perdido permisos al cambiar de pantalla.
+  const user = userProp || (window.LMTApi && window.LMTApi.user && window.LMTApi.user()) || null;
+
+  // Lo del día a día, arriba y a la vista. Todo lo que se configura una vez al
+  // montar el evento vive dentro de «Configuración», con sus pestañas; las que
+  // son sólo del propietario se filtran allí, igual que antes se filtraban aquí.
   const items = [
     { id: "stands",     label: "Espacios",     sub: "Registro",     path: "/admin/stands" },
     { id: "promotores", label: "Promotores",   sub: "Inscripciones", path: "/admin/promotores" },
@@ -12,15 +18,8 @@ const AdminShell = ({ active, user, children }) => {
     { id: "live",       label: "Actividad",    sub: "En vivo",      path: "/admin/live" },
     { id: "economia",   label: "Actividad económica", sub: "Compras del evento", path: "/admin/economia" },
     { id: "caracterizacion", label: "Visitantes", sub: "Caracterización", path: "/admin/caracterizacion" },
-    { id: "festival",   label: "Personalización", sub: "Títulos y fondos", path: "/admin/festival" },
-    { id: "correo",     label: "Correo",       sub: "Envío y pruebas", path: "/admin/correo" },
-    { id: "correos",    label: "Bitácora",     sub: "Mensajes enviados", path: "/admin/correos" },
-  ].concat(user && user.rol === "propietario"
-    ? [
-        { id: "cuentas", label: "Administradores", sub: "Cuentas de acceso", path: "/admin/cuentas" },
-        { id: "sistema", label: "Empezar de cero", sub: "Borrar datos de prueba", path: "/admin/sistema" },
-      ]
-    : []);
+    { id: "configuracion", label: "Configuración", sub: "Interfaz, correo, cuentas", path: "/admin/configuracion" },
+  ];
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
     window.LMTRouter.go("/");
@@ -32,7 +31,7 @@ const AdminShell = ({ active, user, children }) => {
           <Wordmark size={16}/>
         </a>
         <nav className="admin-nav">
-          <div className="mono" style={{ marginBottom: 8 }}>Admin · Festival 2026</div>
+          <div className="mono" style={{ marginBottom: 8 }}><Texto k="admin.menu.rotulo" d="Admin · Festival 2026"/></div>
           {items.map((it) => (
             <a key={it.id} href={it.path} data-route style={{
               display: "flex", flexDirection: "column", alignItems: "flex-start",
@@ -110,21 +109,19 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
     <div className="split">
       <div className="split-hero">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ filter: "invert(1)" }}><LogoTaza size={36}/></div>
-          <div className="mono" style={{ color: "var(--paper-3)" }}>La Mejor Taza · Festival 2026</div>
+          <Logotipo size={36} area="plataforma" filtro="invert(1)"/>
+          <div className="mono" style={{ color: "var(--paper-3)" }}><Texto k="plataforma.portada.rotulo" d="La Mejor Taza · Festival 2026"/></div>
         </div>
         <div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 64, lineHeight: 0.95, margin: 0, fontWeight: 400, letterSpacing: "-0.02em", maxWidth: "16ch" }}>
-            El pasaporte<br/>del café<br/><span style={{ color: "var(--galeras)" }}>nariñense</span>.
+            <Texto k="plataforma.portada.titulo" d={"El pasaporte\ndel café\n*nariñense*."}/>
           </h1>
           <p style={{ fontSize: 15, color: "var(--paper-3)", maxWidth: 420, marginTop: 24, lineHeight: 1.6 }}>
-            Recorre los stands, prueba los cafés y vota. Tu pasaporte se va
-            sellando con cada visita, y entre todos decidimos cuál es la mejor
-            taza de Nariño.
+            <Texto k="plataforma.portada.texto" d="Recorre los stands, prueba los cafés y vota. Tu pasaporte se va sellando con cada visita, y entre todos decidimos cuál es la mejor taza de Nariño."/>
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-          <span className="mono" style={{ color: "var(--paper-3)" }}>¿Tienes un espacio en el festival?</span>
+          <span className="mono" style={{ color: "var(--paper-3)" }}><Texto k="plataforma.portada.promotor" d="¿Tienes un espacio en el festival?"/></span>
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <a href="/inscripcion" data-route style={{ color: "var(--paper)", fontSize: 14, textDecoration: "underline" }}>
               Inscribirme como promotor
@@ -141,13 +138,12 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
           institucional y una contraseña nada más entrar era mandarlo de vuelta.
           El acceso interno sigue estando, pero abajo y plegado. */}
       <div className="split-form">
-        <div className="mono">Festival 2026 · Nariño</div>
+        <div className="mono"><Texto k="plataforma.bienvenida.rotulo" d="Festival 2026 · Nariño"/></div>
         <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "8px 0 14px", lineHeight: 1.05 }}>
-          Bienvenido al<br/>festival.
+          <Texto k="plataforma.bienvenida.titulo" d={"Bienvenido al\nfestival."}/>
         </h2>
         <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, marginBottom: 22 }}>
-          No necesitas cuenta ni contraseña: entra, mira el ranking en vivo y
-          vota en los espacios que visites.
+          <Texto k="plataforma.bienvenida.texto" d="No necesitas cuenta ni contraseña: entra, mira el ranking en vivo y vota en los espacios que visites."/>
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -155,11 +151,11 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
             onClick={onVisitor || (() => window.LMTRouter.go("/festival"))}
             className="btn btn-primary"
             style={{ justifyContent: "center", padding: 15, fontSize: 15 }}>
-            Entrar al festival →
+            <Texto k="plataforma.bienvenida.boton" d="Entrar al festival →"/>
           </button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <a href="/recorrido" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>Mi recorrido</a>
-            <a href="/pasaporte" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>Mi pasaporte</a>
+            <a href="/recorrido" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}><Texto k="plataforma.menu.recorrido" d="Mi recorrido"/></a>
+            <a href="/pasaporte" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}><Texto k="plataforma.menu.pasaporte" d="Mi pasaporte"/></a>
           </div>
         </div>
 
@@ -172,11 +168,11 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
               background: "none", border: "none", cursor: "pointer", padding: "14px 0",
               color: "var(--ink-3)", textDecoration: "underline", textAlign: "left", minHeight: 44,
             }}>
-            ¿Eres administrador o promotor? Entra aquí
+            <Texto k="admin.acceso.enlace" d="¿Eres administrador o promotor? Entra aquí"/>
           </button>
         ) : (
           <form onSubmit={handleLogin} style={{ animation: "fade-up 0.25s", paddingTop: 18 }}>
-            <div className="mono" style={{ marginBottom: 10 }}>Acceso · Organizadores</div>
+            <div className="mono" style={{ marginBottom: 10 }}><Texto k="admin.acceso.rotulo" d="Acceso · Organizadores"/></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <div className="field">
                 <label htmlFor="lg-email">Correo institucional</label>
@@ -212,15 +208,14 @@ const LoginAdmin = ({ onLogin, onVisitor }) => {
 // Punto único del panel admin: switch interno por sección
 const AdminPage = ({ section, user, stands, comentarios, editingId }) => {
   if (section === "stands")  return <AdminShell active="stands" user={user}><StandsList stands={stands}/></AdminShell>;
-  if (section === "editor")  return <AdminShell active="stands" user={user}><StandEditor stand={editingId ? stands.find((s) => s.id === editingId) : null}/></AdminShell>;
+  // `key`: el formulario se inicializa UNA vez con el espacio que recibe. Sin
+  // ella, pasar de «Registrar espacio» a editar otro (o de uno a otro) reusaba
+  // el mismo componente y enseñaba el formulario anterior.
+  if (section === "editor")  return <AdminShell active="stands" user={user}><StandEditor key={editingId || "nuevo"} stand={editingId ? stands.find((s) => s.id === editingId) : null}/></AdminShell>;
   if (section === "qr")      return <AdminShell active="qr" user={user}><QRPrintView stands={stands}/></AdminShell>;
   if (section === "live")    return <AdminShell active="live" user={user}><ActivityLive stands={stands} comentarios={comentarios || (window.COMENTARIOS_DEMO || [])}/></AdminShell>;
   if (section === "promotores") return <AdminShell active="promotores" user={user}><AdminPromotores stands={stands}/></AdminShell>;
-  if (section === "correos")    return <AdminShell active="correos" user={user}><AdminCorreos/></AdminShell>;
-  if (section === "correo")     return <AdminShell active="correo" user={user}><AdminCorreoConfig/></AdminShell>;
   if (section === "caracterizacion") return <AdminShell active="caracterizacion" user={user}><AdminCaracterizacion/></AdminShell>;
-  if (section === "cuentas")    return <AdminShell active="cuentas" user={user}><AdminCuentas user={user}/></AdminShell>;
-  if (section === "sistema")    return <AdminShell active="sistema" user={user}><SistemaPage/></AdminShell>;
   return <AdminShell active="stands" user={user}><div style={{ padding: 32 }}>—</div></AdminShell>;
 };
 
@@ -231,11 +226,21 @@ const StandsList = ({ stands }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 32, gap: 12, flexWrap: "wrap" }}>
         <div>
           <div className="mono">Registro · {stands.length} espacios</div>
-          <h1 className="titulo-xl">Espacios del festival</h1>
+          <h1 className="titulo-xl"><Texto k="admin.espacios.titulo" d="Espacios del festival"/></h1>
         </div>
         <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar espacio</a>
       </div>
 
+      <BarraDescargas informes={[
+        { ruta: "/export/resumen.csv", etiqueta: "Resumen general" },
+        { ruta: "/export/ranking.csv", etiqueta: "Ranking" },
+        { ruta: "/export/stands.csv", etiqueta: "Espacios con su ficha", nota: "Lleva correos y teléfonos de contacto: guárdalo donde corresponda." },
+      ]}/>
+
+      <div className="cabecera-tarjeta" style={{ marginBottom: 6 }}>
+        <span className="mono">Cifras</span>
+        <DescargaMini ruta="/export/resumen.csv" titulo="Descargar las cifras (CSV)"/>
+      </div>
       <div className="grid-4" style={{ marginBottom: 32 }}>
         {[
           { k: "Espacios", v: stands.length, sub: "registrados" },
@@ -251,13 +256,20 @@ const StandsList = ({ stands }) => {
         ))}
       </div>
 
+      <AvisoDuplicados stands={stands}/>
+
       {stands.length === 0 ? (
         <div style={{ padding: 60, border: "1px dashed var(--line-2)", borderRadius: "var(--r-md)", textAlign: "center", color: "var(--ink-3)" }}>
           <div className="mono">Sin espacios</div>
-          <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 28, color: "var(--ink)", margin: "8px 0 16px" }}>Registra el primero.</div>
+          <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 28, color: "var(--ink)", margin: "8px 0 16px" }}><Texto k="admin.espacios.vacio" d="Registra el primero."/></div>
           <a href="/admin/stands/new" data-route className="btn btn-primary">+ Registrar espacio</a>
         </div>
       ) : (
+        <>
+        <div className="cabecera-tarjeta" style={{ marginBottom: 6 }}>
+          <span className="mono">Ranking</span>
+          <DescargaMini ruta="/export/ranking.csv" titulo="Descargar el ranking (CSV)"/>
+        </div>
         <div className="tabla-scroll" style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", background: "var(--paper)" }}>
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "60px 2fr 1fr 1fr 1.2fr 80px", padding: "12px 20px", borderBottom: "1px solid var(--line)", background: "var(--paper-2)" }}>
@@ -272,7 +284,13 @@ const StandsList = ({ stands }) => {
               <div className="mono" style={{ fontSize: 13 }}>{String(i + 1).padStart(2, "0")}</div>
               <div>
                 <div style={{ fontWeight: 500, fontSize: 15 }}>{s.nombre}</div>
-                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{s.direccion}</div>
+                {/* El identificador va a la vista: es lo que sale en el cartel
+                    QR y en los informes, y lo que distingue a dos espacios de
+                    nombre parecido. */}
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
+                  <span className="mono" style={{ fontSize: 10 }}>#{numeroDeEspacio(s, stands)}</span>
+                  {s.direccion ? " · " + s.direccion : ""}
+                </div>
               </div>
               <div style={{ fontSize: 14 }}>{s.municipio}</div>
               <div style={{ fontSize: 13, color: "var(--ink-2)" }}>{s.region}</div>
@@ -288,7 +306,41 @@ const StandsList = ({ stands }) => {
           ))}
         </div>
         </div>
+        </>
       )}
+    </div>
+  );
+};
+
+/**
+ * Aviso de nombres o números repetidos entre los espacios ya registrados.
+ * Desde la v2.8 el servidor no deja crear nuevos, pero los de antes siguen
+ * ahí, y en el ranking y en los CSV dos filas iguales no se pueden atribuir.
+ */
+const AvisoDuplicados = ({ stands }) => {
+  const { nombres, numeros } = duplicadosEspacios(stands);
+  if (!nombres.length && !numeros.length) return null;
+  const enlaces = (grupo) => grupo.map((s, i) => (
+    <React.Fragment key={s.id}>
+      {i > 0 && ", "}
+      <a href={"/admin/stands/" + s.id + "/edit"} data-route style={{ color: "var(--grano)" }}>
+        {s.nombre} <span className="mono" style={{ fontSize: 10 }}>({String(s.id).toUpperCase()})</span>
+      </a>
+    </React.Fragment>
+  ));
+  return (
+    <div role="alert" style={{
+      padding: "14px 16px", marginBottom: 24, borderRadius: "var(--r-md)",
+      border: "1px solid var(--bad)", background: "color-mix(in oklch, var(--bad) 8%, var(--paper))",
+      fontSize: 14, lineHeight: 1.6,
+    }}>
+      <strong style={{ fontWeight: 600 }}>Hay espacios que se confunden entre sí.</strong>{" "}
+      En el ranking y en los informes descargados no se sabría a cuál corresponde cada fila.
+      Renombra o renumera uno de cada grupo:
+      <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+        {nombres.map((g, i) => <li key={"n" + i}>Mismo nombre: {enlaces(g)}</li>)}
+        {numeros.map((g, i) => <li key={"u" + i}>Mismo número «{g[0].numero}»: {enlaces(g)}</li>)}
+      </ul>
     </div>
   );
 };
@@ -417,6 +469,7 @@ const StandEditor = ({ stand }) => {
       else if (code.includes("actividad_cafe_invalida")) setError(ERRORES.actividad_cafe_invalida);
       else if (code.includes("poblacion_invalida")) setError(ERRORES.poblacion_invalida);
       else if (code.includes("numero_invalido")) setError(ERRORES.numero_invalido);
+      else if (code.includes("nombre_duplicado") || code.includes("numero_duplicado")) setError(mensajeError(e));
       else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");
       else setError("No fue posible guardar: " + code);
     } finally { setBusy(false); }
@@ -460,6 +513,18 @@ const StandEditor = ({ stand }) => {
           <div className="field">
             <label>Nombre del producto</label>
             <input value={form.nombre} onChange={e => update("nombre", e.target.value)} placeholder="Ej: Finca El Tambo" maxLength={80} required/>
+            {(() => {
+              // Se avisa mientras se escribe, no al guardar: quien teclea un
+              // nombre ya usado casi nunca lo sabe, y el servidor lo rechazaría.
+              const clave = claveNombreEspacio(form.nombre);
+              const otro = clave && (window.STANDS_DATA || []).find((s) => s.id !== form.id && claveNombreEspacio(s.nombre) === clave);
+              return otro ? (
+                <span className="ayuda" role="alert" style={{ color: "var(--bad)" }}>
+                  Ya hay un espacio con este nombre: «{otro.nombre}» ({otro.municipio}, #{String(otro.id).toUpperCase()}).
+                  Distínguelo con el municipio, la vereda o la marca.
+                </span>
+              ) : null;
+            })()}
           </div>
 
           {/* El número del recinto. Sólo lo asigna la organización, así que no
@@ -691,4 +756,4 @@ const StandEditor = ({ stand }) => {
   );
 };
 
-Object.assign(window, { AdminShell, LoginAdmin, AdminPage, StandsList, StandEditor, NumeroDelEspacio });
+Object.assign(window, { AdminShell, LoginAdmin, AdminPage, StandsList, StandEditor, NumeroDelEspacio, AvisoDuplicados });

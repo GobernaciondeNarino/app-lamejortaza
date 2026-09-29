@@ -87,6 +87,23 @@ final class Ajustes
         self::$cache = $actual;
     }
 
+    /**
+     * Guarda el grupo TAL CUAL, sin combinar con lo que había.
+     *
+     * guardar() mezcla clave a clave, que es lo correcto para un formulario
+     * que sólo manda lo que cambió; pero en un mapa cuyas claves se pueden
+     * quitar —los textos de la interfaz— mezclar significa que quitar no
+     * quita: la clave vieja sobrevive debajo. Quien llama aquí manda el grupo
+     * entero y ya validado.
+     */
+    public static function reemplazar(string $nombre, array $valores): void
+    {
+        $actual = self::todo();
+        $actual[$nombre] = $valores;
+        self::escribir($nombre, $valores);
+        self::$cache = $actual;
+    }
+
     /** Devuelve el grupo a su estado de fábrica (el de config.php). */
     public static function olvidar(string $nombre): void
     {

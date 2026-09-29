@@ -16,17 +16,47 @@ const LogoTaza = ({ size = 40, mono = false }) => {
   );
 };
 
+/**
+ * El logotipo del área: el que se haya subido en Configuración → Interfaz o,
+ * si no hay, la taza dibujada de siempre.
+ *
+ * `filtro` es el que llevaba la taza en cada sitio (invertida sobre fondo
+ * oscuro). A una imagen subida no se le aplica: invertir los colores de un
+ * escudo institucional no es adaptarlo al fondo, es estropearlo.
+ */
+const Logotipo = ({ size = 36, area, filtro }) => {
+  const i = usarInterfaz();
+  const logo = logoDeArea(i, area || areaActual());
+  if (logo) {
+    return <img src={urlImagen(logo)} alt="" style={{
+      display: "block", height: size, width: "auto", maxWidth: size * 5, objectFit: "contain",
+    }}/>;
+  }
+  const taza = <LogoTaza size={size}/>;
+  return filtro ? <div style={{ filter: filtro }}>{taza}</div> : taza;
+};
+
 // El subtítulo sale de los ajustes: el año cambia y la muestra puede llamarse
 // de otra forma en la siguiente edición. Ver `pieDeMarca` más abajo.
-const Wordmark = ({ size = 20, onClick }) => {
+//
+// `area` fuerza el logotipo de un área concreta: los carteles QR se imprimen
+// desde el panel, pero son para el público y llevan el de la plataforma.
+const Wordmark = ({ size = 20, onClick, area }) => {
   const aj = usarAjustesFestival();
+  const i = usarInterfaz();
+  const zona = area || areaActual();
+  const conNombre = nombreJuntoAlLogo(i, zona);
   return (
     <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, cursor: onClick ? "pointer" : "default" }}>
-      <LogoTaza size={size * 1.4}/>
-      <div style={{ lineHeight: 1 }}>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: size, fontStyle: "italic", letterSpacing: "-0.01em" }}>La Mejor Taza</div>
-        <div className="mono" style={{ fontSize: 9, marginTop: 2 }}>{pieDeMarca(aj)}</div>
-      </div>
+      <Logotipo size={size * 1.4} area={zona}/>
+      {conNombre && (
+        <div style={{ lineHeight: 1 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: size, fontStyle: "italic", letterSpacing: "-0.01em" }}>
+            {texto("plataforma.marca.nombre", "La Mejor Taza")}
+          </div>
+          <div className="mono" style={{ fontSize: 9, marginTop: 2 }}>{pieDeMarca(aj)}</div>
+        </div>
+      )}
     </div>
   );
 };
@@ -551,13 +581,26 @@ const ERRORES = {
   telefono_invalido: "El teléfono debe ser sólo números, entre 7 y 15 dígitos.",
   nit_invalido: "El NIT debe ser sólo números.",
   clave_corta: "La clave debe tener al menos 6 caracteres.",
+  // Nombres y números de espacio únicos: en un informe, dos «Café Galeras»
+  // son una fila que nadie sabe a quién atribuir.
+  nombre_duplicado: "Ya hay un espacio con ese nombre. Distínguelo —por ejemplo con el municipio, la vereda o la marca— para que no se confundan en el ranking ni en los informes.",
+  numero_duplicado: "Ese número del recinto ya lo tiene otro espacio.",
+  // Configuración → Interfaz
+  no_es_fuente: "Ese archivo no es una fuente. Sube un .woff2, .woff, .ttf u .otf.",
+  demasiadas_fuentes: "Ya hay seis fuentes propias. Quita alguna antes de subir otra.",
+  destino_invalido: "No se reconoce el destino de la imagen.",
+  no_encontrado: "Ya no existe: puede que otra persona lo haya quitado. Recarga la página.",
+  subida_fallida: "La subida se cortó. Inténtalo de nuevo.",
   internal_error:
     "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado.",
 };
 
 const mensajeError = (e, porDefecto) => {
   const code = String((e && (e.code || e.message)) || e || "");
-  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
+  // El detalle del servidor (p. ej. qué espacio ya usa ese nombre) va detrás
+  // del mensaje: sin él, «ya existe» obliga a buscar a ciegas cuál.
+  const detalle = e && e.detalle ? ` (${e.detalle})` : "";
+  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k] + detalle;
   // Si el código es desconocido, mostrarlo: un mensaje genérico obliga a
   // adivinar, y quien administra el festival no tiene acceso a los logs.
   const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
@@ -807,11 +850,14 @@ const InvitacionCorreo = () => {
 // que tiene fondo oscuro— y tener dos copias acabaría con dos menús que no
 // dicen lo mismo.
 
-const MENU_PUBLICO = [
-  { href: "/festival",  texto: "Inicio",       icono: "◆" },
-  { href: "/pasaporte", texto: "Mi pasaporte", icono: "❖" },
-  { href: "/recorrido", texto: "Mi recorrido", icono: "◈" },
-  { href: "/perfil",    texto: "Mi perfil",    icono: "◉" },
+// Una función y no una constante: nombres e iconos se pueden cambiar en
+// Configuración → Interfaz, y una lista fijada al cargar la página no se
+// enteraría de que el organizador acaba de guardar otros.
+const MENU_PUBLICO = () => [
+  { href: "/festival",  texto: texto("plataforma.menu.inicio", "Inicio"),          icono: icono("menu.inicio", "◆") },
+  { href: "/pasaporte", texto: texto("plataforma.menu.pasaporte", "Mi pasaporte"), icono: icono("menu.pasaporte", "❖") },
+  { href: "/recorrido", texto: texto("plataforma.menu.recorrido", "Mi recorrido"), icono: icono("menu.recorrido", "◈") },
+  { href: "/perfil",    texto: texto("plataforma.menu.perfil", "Mi perfil"),       icono: icono("menu.perfil", "◉") },
 ];
 
 // currentPath() ya descuenta el subdirectorio del despliegue; location.pathname
@@ -828,6 +874,7 @@ const rutaActual = () => {
  * botón: abierto y sin salida es la trampa clásica de un menú en móvil.
  */
 const MenuPublico = ({ oscuro = false }) => {
+  usarInterfaz();
   const [abierto, setAbierto] = React.useState(false);
   const cajaRef = React.useRef(null);
   const botonRef = React.useRef(null);
@@ -880,7 +927,7 @@ const MenuPublico = ({ oscuro = false }) => {
           boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
           animation: "fade-up 0.18s",
         }}>
-          {MENU_PUBLICO.map((m) => {
+          {MENU_PUBLICO().map((m) => {
             const aqui = actual === m.href || actual.startsWith(m.href + "/");
             return (
               <a key={m.href} href={m.href} data-route role="menuitem"
@@ -1010,6 +1057,38 @@ const numeroDeEspacio = (stand, stands) => {
   const propio = String(stand.numero || "").trim();
   if (propio && numeracionCompleta(stands)) return propio;
   return String(stand.id || "").toUpperCase();
+};
+
+/**
+ * El nombre reducido a lo que distingue una persona. La misma regla que
+ * stand_nombre_clave() en el servidor: sin tildes, mayúsculas ni signos.
+ */
+const claveNombreEspacio = (nombre) => String(nombre || "")
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ").trim();
+
+const claveNumeroEspacio = (numero) => String(numero || "").trim().replace(/[\s.\-]+/g, "").toUpperCase();
+
+/**
+ * Grupos de espacios que chocan por nombre o por número del recinto.
+ * El servidor ya no deja crear duplicados, pero los que existían de antes
+ * siguen ahí hasta que alguien los renombre: esto es lo que se lo dice.
+ *
+ * @returns {{nombres: Array<Array<object>>, numeros: Array<Array<object>>}}
+ */
+const duplicadosEspacios = (stands) => {
+  const agrupar = (clave) => {
+    const grupos = {};
+    (stands || []).forEach((s) => {
+      const k = clave(s);
+      if (k) (grupos[k] = grupos[k] || []).push(s);
+    });
+    return Object.values(grupos).filter((g) => g.length > 1);
+  };
+  return {
+    nombres: agrupar((s) => claveNombreEspacio(s.nombre)),
+    numeros: agrupar((s) => claveNumeroEspacio(s.numero)),
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -1232,6 +1311,111 @@ const usarAjustesFestival = () => {
   return aj;
 };
 
+// ---------------------------------------------------------------------------
+// Configuración → Interfaz: textos, iconos y logotipos
+//
+// Todo lo que el organizador puede reescribir pasa por aquí. El texto de
+// fábrica va EN la llamada —texto(clave, textoDeFábrica)— para que el
+// componente se lea igual que antes y funcione aunque no llegue nada del
+// servidor. tools/check-textos.php compara esos textos con el catálogo de
+// api/lib/Interfaz.php y falla si alguno se queda atrás.
+// ---------------------------------------------------------------------------
+
+const interfazActual = () => (window.LMTInterfaz && window.LMTInterfaz.datos()) || null;
+
+/** Qué área se está viendo. La pone app.php y la mantiene el enrutador. */
+const areaActual = () => {
+  try { return document.documentElement.getAttribute("data-area") || "plataforma"; }
+  catch (_) { return "plataforma"; }
+};
+
+/**
+ * La misma regla que Interfaz::areaDeRuta en el servidor: si no coinciden,
+ * la primera carga y la navegación pintarían una misma página con dos temas.
+ */
+const areaDeRuta = (ruta) => {
+  const r = "/" + String(ruta || "").replace(/^\/+|\/+$/g, "");
+  if (r === "/admin" || r.startsWith("/admin/")) return "admin";
+  if (r === "/pasaporte") return "pasaporte";
+  return "plataforma";
+};
+
+/** Vuelve a pintar el componente cuando se guarda la interfaz. */
+const usarInterfaz = () => {
+  const [, setN] = React.useState(0);
+  React.useEffect(() => {
+    const f = () => setN((n) => n + 1);
+    window.addEventListener("lmt:interfaz", f);
+    return () => window.removeEventListener("lmt:interfaz", f);
+  }, []);
+  return interfazActual();
+};
+
+/** Un texto configurable como cadena: botones, atributos, el lienzo del libro. */
+const texto = (clave, defecto) => {
+  const i = interfazActual();
+  const v = i && i.textos ? i.textos[clave] : null;
+  return (typeof v === "string" && v.trim()) ? v : defecto;
+};
+
+/** Un icono configurable (un emoji o un símbolo). */
+const icono = (clave, defecto) => {
+  const i = interfazActual();
+  const v = i && i.iconos ? i.iconos[clave] : null;
+  return (typeof v === "string" && v.trim()) ? v : defecto;
+};
+
+/**
+ * El único formato que admiten los textos: saltos de línea, **negrita** y
+ * *acento* (el color de los titulares, como «Nariño» en la portada). Nada de
+ * HTML: lo que no es marcador se pinta como texto y React lo escapa.
+ */
+const pintarTexto = (s) => String(s).split("\n").map((linea, i) => (
+  <React.Fragment key={i}>
+    {i > 0 && <br/>}
+    {linea.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g).map((trozo, j) => {
+      if (/^\*\*[^*]+\*\*$/.test(trozo)) return <strong key={j}>{trozo.slice(2, -2)}</strong>;
+      if (/^\*[^*]+\*$/.test(trozo)) return <span key={j} style={{ color: "var(--galeras)" }}>{trozo.slice(1, -1)}</span>;
+      return trozo;
+    })}
+  </React.Fragment>
+));
+
+/** Un texto configurable ya pintado: <Texto k={clave} d={textoDeFábrica}/>. */
+const Texto = ({ k, d }) => {
+  usarInterfaz();
+  return <>{pintarTexto(texto(k, d))}</>;
+};
+
+/** El logotipo subido para un área, o el de la plataforma, o ninguno. */
+const logoDeArea = (i, area) => {
+  const logos = (i && i.logos) || {};
+  return logos[area] || logos.plataforma || "";
+};
+
+/**
+ * ¿Va el nombre junto al logotipo? Lo decide el área dueña del logotipo que
+ * se está enseñando. Sin logotipo subido, siempre: la taza sola no dice nada.
+ */
+const nombreJuntoAlLogo = (i, area) => {
+  const logos = (i && i.logos) || {};
+  const nombre = (i && i.nombre) || {};
+  const duena = logos[area] ? area : (logos.plataforma ? "plataforma" : null);
+  if (!duena) return true;
+  return nombre[duena] !== false;
+};
+
+/**
+ * Las tres calificaciones del voto, con el nombre y el icono que tengan.
+ * Una sola lista para el formulario, el ranking y el detalle: antes cada uno
+ * llevaba su copia y bastaba cambiar una para que dijeran cosas distintas.
+ */
+const opcionesVoto = () => [
+  { id: "malo",    label: texto("plataforma.voto.malo", "Malo"),         emoji: icono("voto.malo", "😞"),    color: "var(--bad)" },
+  { id: "regular", label: texto("plataforma.voto.regular", "Regular"),   emoji: icono("voto.regular", "😐"), color: "var(--meh)" },
+  { id: "bueno",   label: texto("plataforma.voto.bueno", "Excelente"),   emoji: icono("voto.bueno", "😍"),   color: "var(--good)" },
+];
+
 /** El pie de la marca: lo que va bajo «La Mejor Taza». */
 const PIE_MARCA = "Festival · Nariño 2026";
 const pieDeMarca = (aj) => {
@@ -1358,6 +1542,50 @@ const titulosEstrellas = () => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// Descargas para informes
+//
+// Cada cifra del panel tiene su CSV (api/routes/exports.php). Dos formas:
+// una barra con los informes de la pantalla, y un «⤓ CSV» pequeño en la
+// esquina de cada tarjeta o tabla, que descarga justo lo que esa tarjeta
+// enseña. Todas piden sesión de administrador: son enlaces normales y la
+// cookie de sesión viaja sola.
+// ---------------------------------------------------------------------------
+
+const urlDescarga = (ruta) => (window.LMTApi && window.LMTApi.urlFor) ? window.LMTApi.urlFor(ruta) : "#";
+
+/** El «⤓ CSV» de la esquina de una tarjeta. */
+const DescargaMini = ({ ruta, titulo }) => (
+  <a href={urlDescarga(ruta)} download className="descarga-mini mono"
+    title={titulo || "Descargar estos datos (CSV)"} aria-label={titulo || "Descargar estos datos (CSV)"}>
+    ⤓ CSV
+  </a>
+);
+
+/**
+ * Barra de descargas de una pantalla.
+ * `informes`: [{ ruta, etiqueta, nota? }]. La nota avisa cuando el archivo
+ * lleva datos personales.
+ */
+const BarraDescargas = ({ informes, titulo = "Descargar datos" }) => (
+  <div className="barra-descargas">
+    <span className="mono">{titulo}</span>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {informes.map((i) => (
+        <a key={i.ruta} href={urlDescarga(i.ruta)} download className="btn btn-ghost" title={i.nota || undefined}
+          style={{ padding: "7px 12px", fontSize: 13 }}>
+          ⤓ {i.etiqueta}{i.nota ? " *" : ""}
+        </a>
+      ))}
+    </div>
+    {informes.some((i) => i.nota) && (
+      <span className="ayuda" style={{ flexBasis: "100%" }}>
+        * {informes.filter((i) => i.nota).map((i) => i.nota).filter((n, k, a) => a.indexOf(n) === k).join(" ")}
+      </span>
+    )}
+  </div>
+);
+
 /** Formato de pesos colombianos, sin decimales. */
 const pesos = (n) => {
   const v = Number(n) || 0;
@@ -1378,5 +1606,8 @@ Object.assign(window, {
   ORGANIZACIONES, ACTIVIDADES_CAFE, SelectorCatalogo, etiquetaCatalogo,
   POBLACIONES, LINEAS_PRODUCTIVAS, PRESENTACIONES,
   SiNo, SelectorMultiple, etiquetasCatalogo,
-  numeroDeEspacio, numeracionCompleta,
+  numeroDeEspacio, numeracionCompleta, claveNombreEspacio, claveNumeroEspacio, duplicadosEspacios,
+  urlDescarga, DescargaMini, BarraDescargas,
+  Logotipo, interfazActual, areaActual, areaDeRuta, usarInterfaz, texto, icono,
+  pintarTexto, Texto, logoDeArea, nombreJuntoAlLogo, opcionesVoto,
 });

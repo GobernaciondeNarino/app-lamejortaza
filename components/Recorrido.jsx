@@ -145,12 +145,12 @@ const RecorridoPage = ({ stands }) => {
       <section className="seccion" style={{ paddingTop: 28, paddingBottom: 40 }}>
         <div className="mono">Mi recorrido</div>
         <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: "min(56px, 11vw)", fontWeight: 400, margin: "6px 0 8px", lineHeight: 1 }}>
-          Los stands del festival.
+          <Texto k="plataforma.recorrido.titulo" d="Los stands del festival."/>
         </h1>
         <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 560 }}>
           {visitados.length
             ? <>Llevas <strong style={{ fontWeight: 500 }}>{visitados.length} de {stands.length}</strong> sellados. Los que están a color ya los visitaste.</>
-            : <>Escanea el QR de cualquier espacio y vota: a partir de ahí, los que visites se van encendiendo aquí.</>}
+            : <Texto k="plataforma.recorrido.vacio" d="Escanea el QR de cualquier espacio y vota: a partir de ahí, los que visites se van encendiendo aquí."/>}
         </p>
 
         {cargando && (

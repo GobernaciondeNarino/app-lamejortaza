@@ -21,10 +21,12 @@ const QRPoster = ({ stand, variant = "vertical", paraImprimir = false }) => {
       })}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <Wordmark size={14}/>
+        {/* El cartel es para el público: lleva el logotipo de la plataforma
+            aunque se imprima desde el panel. */}
+        <Wordmark size={14} area="plataforma"/>
         <div className="mono" style={{ textAlign: "right" }}>
           #{numeroDeEspacio(stand)}<br/>
-          <span style={{ color: "var(--ink-3)" }}>Festival 2026</span>
+          <span style={{ color: "var(--ink-3)" }}><Texto k="plataforma.cartel.rotulo" d="Festival 2026"/></span>
         </div>
       </div>
 
@@ -205,7 +207,7 @@ const QRPrintView = ({ stands }) => {
 
 const ActivityLive = ({ stands, comentarios }) => {
   const standMap = Object.fromEntries(stands.map((s) => [s.id, s]));
-  const getEmoji = (e) => ({ bueno: "😍", regular: "😐", malo: "😞" }[e] || "•");
+  const getEmoji = (e) => (opcionesVoto().find((o) => o.id === e) || {}).emoji || "•";
 
   return (
     <div className="admin-page">
@@ -222,7 +224,10 @@ const ActivityLive = ({ stands, comentarios }) => {
 
       <div className="grid-2" style={{ gap: 22 }}>
         <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 18 }}>
-          <div className="mono" style={{ marginBottom: 14 }}>Últimos votos</div>
+          <div className="cabecera-tarjeta" style={{ marginBottom: 14 }}>
+            <span className="mono">Últimos votos</span>
+            <DescargaMini ruta="/export/votos.csv" titulo="Descargar todos los votos (CSV)"/>
+          </div>
           {comentarios.length === 0 && (
             <div className="mono" style={{ color: "var(--ink-3)" }}>Aún no hay votos.</div>
           )}
@@ -250,7 +255,10 @@ const ActivityLive = ({ stands, comentarios }) => {
           </div>
         </div>
         <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 18 }}>
-          <div className="mono" style={{ marginBottom: 14 }}>Ranking actual</div>
+          <div className="cabecera-tarjeta" style={{ marginBottom: 14 }}>
+            <span className="mono">Ranking actual</span>
+            <DescargaMini ruta="/export/ranking.csv" titulo="Descargar el ranking completo (CSV)"/>
+          </div>
           {[...stands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos)).slice(0, 8).map((s, i) => (
             <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 0", borderBottom: i < Math.min(stands.length, 8) - 1 ? "1px solid var(--line)" : "none" }}>
               <span className="mono" style={{ width: 24, fontSize: 13 }}>{String(i + 1).padStart(2, "0")}</span>
@@ -264,16 +272,14 @@ const ActivityLive = ({ stands, comentarios }) => {
         </div>
       </div>
 
-      <div style={{ marginTop: 24, padding: 18, border: "1px solid var(--line)", borderRadius: "var(--r-md)", background: "var(--paper)" }}>
-        <div className="mono" style={{ marginBottom: 10 }}>Exportar para reportes</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/votos.csv") : "#"} className="btn btn-ghost" download>⤓ Votos (CSV)</a>
-          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/stands.csv") : "#"} className="btn btn-ghost" download>⤓ Espacios (CSV)</a>
-          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/pasaportes.csv") : "#"} className="btn btn-ghost" download>⤓ Pasaportes (CSV)</a>
-        </div>
-        <div className="nota-menor" style={{ color: "var(--ink-3)", marginTop: 8 }}>
-          Las descargas requieren sesión activa de administrador.
-        </div>
+      <div style={{ marginTop: 24 }}>
+        <BarraDescargas titulo="Exportar para reportes" informes={[
+          { ruta: "/export/votos.csv", etiqueta: "Votos", nota: "Votos y pasaportes llevan el correo de cada visitante: son datos personales." },
+          { ruta: "/export/ranking.csv", etiqueta: "Ranking" },
+          { ruta: "/export/stands.csv", etiqueta: "Espacios" },
+          { ruta: "/export/pasaportes.csv", etiqueta: "Pasaportes", nota: "Votos y pasaportes llevan el correo de cada visitante: son datos personales." },
+          { ruta: "/export/resumen.csv", etiqueta: "Resumen general" },
+        ]}/>
       </div>
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>

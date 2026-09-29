@@ -326,11 +326,10 @@ const PromotorRegistroPage = () => {
         <a href="/" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Volver</a>
         <div className="mono" style={{ marginTop: 22 }}>Promotores · Inscripción</div>
         <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 38, fontWeight: 400, margin: "6px 0 10px", lineHeight: 1.05 }}>
-          Inscribe tu espacio<br/>en el festival.
+          <Texto k="plataforma.inscripcion.titulo" d={"Inscribe tu espacio\nen el festival."}/>
         </h1>
         <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.6, marginBottom: 26 }}>
-          Completa los datos de tu espacio. Un organizador revisará la solicitud y te enviará por
-          correo tu acceso al portal y el código QR de tu espacio, ya listo para imprimir.
+          <Texto k="plataforma.inscripcion.texto" d="Completa los datos de tu espacio. Un organizador revisará la solicitud y te enviará por correo tu acceso al portal y el código QR de tu espacio, ya listo para imprimir."/>
         </p>
 
         <form onSubmit={enviar} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -907,7 +906,7 @@ const PromotorPortalPage = ({ onSalir }) => {
       <header style={{ background: "var(--ink)", color: "var(--paper)", padding: "18px 22px" }}>
         <div style={{ maxWidth: 860, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ filter: "invert(1)" }}><LogoTaza size={30}/></div>
+            <Logotipo size={30} area="plataforma" filtro="invert(1)"/>
             <div>
               <div className="mono" style={{ color: "var(--paper-3)" }}>Portal del promotor</div>
               <div style={{ fontSize: 15, fontWeight: 500 }}>{p.nombre}</div>
@@ -1298,6 +1297,17 @@ const AdminPromotores = ({ stands }) => {
 
   const verificar = (p) => accion(p.id, () => window.LMTApi.verificarPromotor(p.id), (res) => {
     setRevisando(null);
+    const r = avisoVerificacion(p, res);
+    // Otro espacio ya se llamaba igual: el nombre se distinguió para que los
+    // informes no mezclen los dos. Se dice, porque el promotor verá su espacio
+    // con un nombre que no escribió y puede querer otro.
+    if (res.renombrado_de) {
+      r.texto += ` Ya había un espacio llamado «${res.renombrado_de}»: éste quedó como «${res.stand_nombre}». Puedes cambiarlo en Espacios.`;
+    }
+    return r;
+  });
+
+  const avisoVerificacion = (p, res) => {
     if (res.acceso_propio) {
       return { tipo: res.correo_enviado ? "ok" : "error",
         texto: res.correo_enviado
@@ -1307,7 +1317,7 @@ const AdminPromotores = ({ stands }) => {
     return res.correo_enviado
       ? { tipo: "ok", texto: `Aprobado. El espacio ya existe y la contraseña temporal salió hacia ${p.email}.` }
       : { tipo: "error", texto: `Aprobado, pero el correo NO pudo enviarse. Entrega esta clave a ${p.email} por un canal seguro: ${res.clave_temporal}` };
-  });
+  };
 
   const reenviar = (p) => accion(p.id, () => window.LMTApi.reenviarClave(p.id), (res) => (
     res.correo_enviado
@@ -1346,12 +1356,16 @@ const AdminPromotores = ({ stands }) => {
     <div className="admin-page">
       <div style={{ marginBottom: 26 }}>
         <div className="mono">Inscripciones · {lista.length} registros{pendientes ? ` · ${pendientes} por revisar` : ""}</div>
-        <h1 className="titulo-xl">Promotores de espacios</h1>
+        <h1 className="titulo-xl"><Texto k="admin.promotores.titulo" d="Promotores de espacios"/></h1>
         <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.6, marginTop: 10, maxWidth: 620 }}>
-          Al verificar una solicitud el sistema genera una contraseña temporal y la envía al
-          correo del promotor. Sólo entonces podrá entrar a cargar su empresa y sus productos.
+          <Texto k="admin.promotores.texto" d="Al verificar una solicitud el sistema genera una contraseña temporal y la envía al correo del promotor. Sólo entonces podrá entrar a cargar su empresa y sus productos."/>
         </p>
       </div>
+
+      <BarraDescargas informes={[
+        { ruta: "/export/promotores.csv", etiqueta: "Inscripciones con su caracterización", nota: "Lleva nombre, documento, correo y teléfono de cada promotor: son datos personales." },
+        { ruta: "/export/resumen.csv", etiqueta: "Resumen por estado" },
+      ]}/>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         {filtros.map((f) => (
@@ -1503,6 +1517,9 @@ const AdminCorreos = () => {
     <div className="admin-page">
       <div className="mono">Correo saliente · {lista.length} envíos</div>
       <h1 className="titulo-xl" style={{ marginBottom: 20 }}>Bitácora de correos</h1>
+      <BarraDescargas informes={[
+        { ruta: "/export/correos.csv", etiqueta: "Bitácora completa", nota: "Lleva las direcciones de correo de los destinatarios." },
+      ]}/>
       {fallidos > 0 && (
         <Aviso>
           {fallidos} envío{fallidos === 1 ? "" : "s"} fallaron. Revisa la sección <code>mail</code> de

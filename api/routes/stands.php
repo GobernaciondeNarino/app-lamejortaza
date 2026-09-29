@@ -27,7 +27,16 @@ function register_routes_stands(\LMT\Router $r): void
         Security::requireAdmin();
         $b = Security::jsonBody();
         $stand = stand_payload($b, true);
-        $stmt = Db::pdo()->prepare(
+        $pdo = Db::pdo();
+        stand_exigir_unicos($pdo, $stand, null);
+        // El identificador lo propone el editor al azar. Si ya existe, antes
+        // reventaba la clave primaria con un 500; ahora se busca uno libre a
+        // partir del nombre, igual que al verificar una inscripción, y se
+        // devuelve para que el panel sepa cuál quedó.
+        $chk = $pdo->prepare('SELECT 1 FROM stands WHERE id = :id');
+        $chk->execute([':id' => $stand['id']]);
+        if ($chk->fetchColumn()) $stand['id'] = promotor_id_stand_libre($pdo, $stand['nombre']);
+        $stmt = $pdo->prepare(
             'INSERT INTO stands (id, nombre, municipio, region, direccion, correo, descripcion,
                                  propietario, propietario_documento, nit, sitio_web, logo_path,
                                  telefono, lat, lng, numero, tipo_organizacion, tipo_organizacion_otro,
@@ -89,6 +98,7 @@ function register_routes_stands(\LMT\Router $r): void
         if (!$id) Response::error(400, 'bad_id');
         $b = Security::jsonBody();
         $stand = stand_payload($b, false);
+        stand_exigir_unicos(Db::pdo(), $stand, $id);
         // El logo se conserva si la petición no trae uno nuevo: el editor
         // manda el formulario entero y, sin el COALESCE, guardar cualquier
         // cambio de texto borraba la imagen que había subido el promotor.
@@ -513,4 +523,103 @@ function stand_logo_reclamado($valor): ?string
     if (!preg_match('#^uploads/(stands|inscripciones|logos)/[0-9a-f]{32}\.(jpg|png|webp)$#', $valor)) return null;
     $abs = \LMT\Uploads::raiz() . '/' . substr($valor, strlen('uploads/'));
     return is_file($abs) ? $valor : null;
+}
+
+// ---------------------------------------------------------------------------
+// Nombres, números e identificadores sin duplicados
+//
+// En un informe el espacio se reconoce por su nombre. Si hay dos «Café
+// Galeras», la fila de votos, la de compras y la del ranking no dicen cuál es
+// cuál, y quien lee el CSV suma lo de los dos o descarta uno sin saberlo. Por
+// eso el nombre tiene que ser único; y no sólo letra a letra: «Café Galeras»,
+// «cafe galeras» y «Café  Galeras.» son el mismo nombre para quien lee.
+// ---------------------------------------------------------------------------
+
+/** El nombre reducido a lo que distingue una persona: sin tildes, mayúsculas ni signos. */
+function stand_nombre_clave(string $nombre): string
+{
+    if (class_exists('\Normalizer')) $nombre = \Normalizer::normalize($nombre, \Normalizer::FORM_C) ?: $nombre;
+    $s = Validate::plegarAscii($nombre);
+    $s = preg_replace('/[^a-z0-9]+/', ' ', $s) ?? '';
+    return trim($s);
+}
+
+/** El número del recinto reducido: «A-14», «a 14» y «A14» son el mismo puesto. */
+function stand_numero_clave(string $numero): string
+{
+    return strtoupper(preg_replace('/[\s.\-]+/u', '', trim($numero)) ?? '');
+}
+
+/**
+ * El espacio que ya usa ese nombre (normalizado), o null.
+ * `$excluir` es el propio espacio cuando se está editando.
+ *
+ * @return array{id:string,nombre:string,municipio:string}|null
+ */
+function stand_nombre_en_uso(\PDO $pdo, string $nombre, ?string $excluir = null): ?array
+{
+    $clave = stand_nombre_clave($nombre);
+    if ($clave === '') return null;
+    foreach ($pdo->query('SELECT id, nombre, municipio FROM stands')->fetchAll(\PDO::FETCH_ASSOC) as $s) {
+        if ($excluir !== null && $s['id'] === $excluir) continue;
+        if (stand_nombre_clave((string) $s['nombre']) === $clave) {
+            return ['id' => (string) $s['id'], 'nombre' => (string) $s['nombre'], 'municipio' => (string) ($s['municipio'] ?? '')];
+        }
+    }
+    return null;
+}
+
+/** El espacio que ya usa ese número de recinto, o null. */
+function stand_numero_en_uso(\PDO $pdo, string $numero, ?string $excluir = null): ?array
+{
+    $clave = stand_numero_clave($numero);
+    if ($clave === '') return null;
+    foreach ($pdo->query('SELECT id, nombre, numero FROM stands WHERE numero IS NOT NULL AND numero <> \'\'')->fetchAll(\PDO::FETCH_ASSOC) as $s) {
+        if ($excluir !== null && $s['id'] === $excluir) continue;
+        if (stand_numero_clave((string) $s['numero']) === $clave) {
+            return ['id' => (string) $s['id'], 'nombre' => (string) $s['nombre'], 'numero' => (string) $s['numero']];
+        }
+    }
+    return null;
+}
+
+/**
+ * Un nombre libre a partir del pedido, para cuando no se puede preguntar.
+ *
+ * Al verificar una inscripción el organizador no está escribiendo el nombre:
+ * lo escribió el promotor semanas antes, y rechazar la verificación por eso
+ * dejaría al promotor sin acceso. Se distingue con el municipio —que es lo que
+ * de verdad separa a dos cafés que se llaman igual— y, si aun así choca, con
+ * un número. Quien verifica ve el nombre final en la respuesta.
+ */
+function stand_nombre_libre(\PDO $pdo, string $nombre, string $municipio, ?string $excluir = null): string
+{
+    if (!stand_nombre_en_uso($pdo, $nombre, $excluir)) return $nombre;
+    $candidatos = [];
+    if ($municipio !== '' && stripos(stand_nombre_clave($nombre), stand_nombre_clave($municipio)) === false) {
+        $candidatos[] = $nombre . ' (' . $municipio . ')';
+    }
+    for ($n = 2; $n <= 50; $n++) $candidatos[] = $nombre . ' ' . $n;
+    foreach ($candidatos as $c) {
+        $c = mb_substr($c, 0, 80, 'UTF-8');
+        if (!stand_nombre_en_uso($pdo, $c, $excluir)) return $c;
+    }
+    return mb_substr($nombre, 0, 70, 'UTF-8') . ' ' . bin2hex(random_bytes(2));
+}
+
+/**
+ * Rechaza un nombre o un número que ya tiene otro espacio. El mensaje dice
+ * cuál, para que quien edita pueda ir a mirarlo sin buscar a ciegas.
+ */
+function stand_exigir_unicos(\PDO $pdo, array $stand, ?string $excluir): void
+{
+    $otro = stand_nombre_en_uso($pdo, $stand['nombre'], $excluir);
+    if ($otro) {
+        Response::error(409, 'nombre_duplicado',
+            $otro['nombre'] . ($otro['municipio'] !== '' ? ' · ' . $otro['municipio'] : '') . ' · ' . strtoupper($otro['id']));
+    }
+    if (($stand['numero'] ?? '') !== '') {
+        $otro = stand_numero_en_uso($pdo, $stand['numero'], $excluir);
+        if ($otro) Response::error(409, 'numero_duplicado', $otro['numero'] . ' · ' . $otro['nombre']);
+    }
 }

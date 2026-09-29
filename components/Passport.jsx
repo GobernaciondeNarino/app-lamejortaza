@@ -5,12 +5,12 @@
 const PassportEmpty = () => (
   <div className="mobile-page">
     <div className="mobile-inner" style={{ textAlign: "center", padding: 40 }}>
-      <div className="mono" style={{ marginBottom: 8 }}>Aún no tienes pasaporte</div>
+      <div className="mono" style={{ marginBottom: 8 }}><Texto k="pasaporte.vacio.rotulo" d="Aún no tienes pasaporte"/></div>
       <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 38, fontWeight: 400, margin: "0 0 16px", lineHeight: 1.05 }}>
-        Empieza tu travesía<br/>del café.
+        <Texto k="pasaporte.vacio.titulo" d={"Empieza tu travesía\ndel café."}/>
       </h2>
       <p style={{ color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 360, margin: "0 auto 24px" }}>
-        Escanea el QR de cualquier stand del festival y emite tu primer voto. Cada visita estampa una página en tu pasaporte.
+        <Texto k="pasaporte.vacio.texto" d="Escanea el QR de cualquier stand del festival y emite tu primer voto. Cada visita estampa una página en tu pasaporte."/>
       </p>
       <a href="/festival" data-route className="btn btn-ghost" style={{ justifyContent: "center" }}>← Ver el ranking</a>
     </div>
@@ -247,6 +247,11 @@ const PassportBook = ({ passport, pages, visitados, visitadosIds, stands, page, 
     const libro = window.LMTPassportBook.mount(cont, {
       paginas: paginasRef.current,
       paginaInicial: 0,
+      // Lo que se haya cambiado en Configuración → Interfaz → Pasaporte. El
+      // libro pinta en un lienzo, así que no lee los textos del DOM: hay que
+      // dárselos.
+      textos: textosLibro(),
+      logo: urlImagen(logoDeArea(interfazActual(), "pasaporte")),
       onReady: () => setBook3d(true),
       onPageChange: (i) => setPage(i),
       onFallback: () => setBook3d(false),
@@ -638,9 +643,9 @@ const PaginaDatos = ({ passport, totalStands }) => {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)", lineHeight: 1.4 }}>
-            REPÚBLICA DE COLOMBIA<br/>DEPARTAMENTO DE NARIÑO
+            <Texto k="pasaporte.datos.encabezado" d={"REPÚBLICA DE COLOMBIA\nDEPARTAMENTO DE NARIÑO"}/>
           </div>
-          <LogoTaza size={24}/>
+          <Logotipo size={24} area="pasaporte"/>
         </div>
         <RayaFina margen="8px 0 9px"/>
 
@@ -953,18 +958,20 @@ const PaginaContenido = ({ pageData, passport, visitados, totalSlots, totalStand
         color: "var(--paper)",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div style={{ filter: "invert(1) hue-rotate(180deg)" }}><LogoTaza size={36}/></div>
-          <div className="mono" style={{ color: "var(--paper-3)", textAlign: "right" }}>NARIÑO<br/>COLOMBIA</div>
+          <Logotipo size={36} area="pasaporte" filtro="invert(1) hue-rotate(180deg)"/>
+          <div className="mono" style={{ color: "var(--paper-3)", textAlign: "right" }}>
+            <Texto k="pasaporte.portada.lugar" d={"NARIÑO\nCOLOMBIA"}/>
+          </div>
         </div>
         <div>
-          <div className="mono" style={{ color: "var(--paper-3)" }}>Pasaporte del Café</div>
+          <div className="mono" style={{ color: "var(--paper-3)" }}><Texto k="pasaporte.portada.rotulo" d="Pasaporte del Café"/></div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 48, fontWeight: 400, margin: "6px 0 0", lineHeight: 0.9, letterSpacing: "-0.02em" }}>
-            La Mejor<br/>Taza.
+            <Texto k="pasaporte.portada.titulo" d={"La Mejor\nTaza."}/>
           </h1>
         </div>
         <div>
           <div style={{ height: 1, background: "var(--paper-3)", opacity: 0.3, marginBottom: 16 }}/>
-          <div className="mono" style={{ color: "var(--paper-3)", marginBottom: 4 }}>Portador</div>
+          <div className="mono" style={{ color: "var(--paper-3)", marginBottom: 4 }}><Texto k="pasaporte.portada.portador" d="Portador"/></div>
           <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 26, fontWeight: 400 }}>{passport.nombre}</div>
           <div style={{ fontSize: 12, color: "var(--paper-3)", marginTop: 6 }}>{passport.correo}</div>
         </div>
@@ -1071,18 +1078,33 @@ const PaginaContenido = ({ pageData, passport, visitados, totalSlots, totalStand
   if (pageData.type === "end") {
     return (
       <div style={{ height: "100%", padding: 28, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", ...lineBg }}>
-        <div className="mono" style={{ fontSize: 12 }}>Fin del pasaporte</div>
+        <div className="mono" style={{ fontSize: 12 }}><Texto k="pasaporte.final.rotulo" d="Fin del pasaporte"/></div>
         <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 32, fontWeight: 400, margin: "12px 0 8px", lineHeight: 1 }}>
-          Gracias por<br/>caminar el café<br/>con nosotros.
+          <Texto k="pasaporte.final.titulo" d={"Gracias por\ncaminar el café\ncon nosotros."}/>
         </h2>
         <div style={{ marginTop: 20, padding: "12px 18px", border: "1px solid var(--line-2)", borderRadius: 999, fontSize: 14 }}>
-          Vuelve el próximo festival
+          <Texto k="pasaporte.final.nota" d="Vuelve el próximo festival"/>
         </div>
       </div>
     );
   }
   return null;
 };
+
+/**
+ * Los textos del pasaporte para el libro 3D, que pinta en un lienzo y no puede
+ * usar <Texto/>. Mismas claves y mismos textos de fábrica que la vista CSS.
+ */
+const textosLibro = () => ({
+  "pasaporte.portada.lugar":    texto("pasaporte.portada.lugar", "NARIÑO\nCOLOMBIA"),
+  "pasaporte.portada.rotulo":   texto("pasaporte.portada.rotulo", "Pasaporte del Café"),
+  "pasaporte.portada.titulo":   texto("pasaporte.portada.titulo", "La Mejor\nTaza."),
+  "pasaporte.portada.portador": texto("pasaporte.portada.portador", "Portador"),
+  "pasaporte.datos.encabezado": texto("pasaporte.datos.encabezado", "REPÚBLICA DE COLOMBIA\nDEPARTAMENTO DE NARIÑO"),
+  "pasaporte.final.rotulo":     texto("pasaporte.final.rotulo", "Fin del pasaporte"),
+  "pasaporte.final.titulo":     texto("pasaporte.final.titulo", "Gracias por\ncaminar el café\ncon nosotros."),
+  "pasaporte.final.nota":       texto("pasaporte.final.nota", "Vuelve el próximo festival"),
+});
 
 // `datosPagina` sale al exterior porque es el único sitio donde se decide qué
 // dice la hoja de datos, y las dos vistas (CSS y libro 3D) la comparten: poder

@@ -30,9 +30,12 @@ const BarraDimension = ({ filas, etiquetas, total }) => {
   );
 };
 
-const TarjetaDimension = ({ titulo, nota, children }) => (
+const TarjetaDimension = ({ titulo, nota, descarga, children }) => (
   <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 20, background: "var(--paper)" }}>
-    <div className="mono" style={{ marginBottom: nota ? 4 : 14 }}>{titulo}</div>
+    <div className="cabecera-tarjeta" style={{ marginBottom: nota ? 4 : 14 }}>
+      <span className="mono">{titulo}</span>
+      {descarga && <DescargaMini ruta={descarga} titulo={`Descargar «${titulo}» (CSV)`}/>}
+    </div>
     {nota && <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5, margin: "0 0 14px" }}>{nota}</p>}
     {children}
   </div>
@@ -70,7 +73,6 @@ const AdminCaracterizacion = () => {
   const eti = d.etiquetas || {};
   const total = d.total || 0;
   const cobertura = d.votantes > 0 ? Math.round((total * 100) / d.votantes) : 0;
-  const csv = window.LMTApi.urlFor("/export/visitantes.csv");
 
   const primera = (d.primera_visita || []).map((f) => ({
     valor: String(f.valor), n: f.n,
@@ -83,17 +85,25 @@ const AdminCaracterizacion = () => {
           <div className="mono">Visitantes · {total} perfiles</div>
           <h1 className="titulo-xl">Caracterización</h1>
         </div>
-        <a className="btn btn-ghost" href={csv}>Descargar CSV</a>
       </div>
+
+      <BarraDescargas informes={[
+        { ruta: "/export/caracterizacion.csv", etiqueta: "Resumen por respuesta" },
+        { ruta: "/export/expectativas.csv", etiqueta: "Expectativas" },
+        { ruta: "/export/visitantes.csv", etiqueta: "Perfiles uno a uno", nota: "Los perfiles uno a uno llevan datos personales y sensibles: guárdalos donde corresponda y no los reenvíes por correo." },
+      ]}/>
 
       <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.6, margin: "0 0 24px", maxWidth: 640 }}>
         Lo que los visitantes respondieron por su cuenta después de votar. Todo es voluntario, así
-        que las cifras describen a quien quiso contestar, no al total del público. El CSV lleva
-        datos personales: guárdalo donde corresponda y no lo reenvíes por correo.
+        que las cifras describen a quien quiso contestar, no al total del público.
       </p>
 
       <Aviso>{error}</Aviso>
 
+      <div className="cabecera-tarjeta" style={{ marginBottom: 6 }}>
+        <span className="mono">Cifras</span>
+        <DescargaMini ruta="/export/resumen.csv" titulo="Descargar las cifras (CSV)"/>
+      </div>
       <div className="grid-3" style={{ marginBottom: 24 }}>
         {[
           { k: "Perfiles", v: total, sub: "completados" },
@@ -118,28 +128,28 @@ const AdminCaracterizacion = () => {
         </div>
       ) : (
         <div className="grid-2" style={{ gap: 18, alignItems: "start" }}>
-          <TarjetaDimension titulo="Género">
+          <TarjetaDimension titulo="Género" descarga="/export/caracterizacion.csv?dimension=genero">
             <BarraDimension filas={d.dimensiones.genero} etiquetas={eti.genero} total={total}/>
           </TarjetaDimension>
-          <TarjetaDimension titulo="Rango de edad">
+          <TarjetaDimension titulo="Rango de edad" descarga="/export/caracterizacion.csv?dimension=rango_edad">
             <BarraDimension filas={d.dimensiones.rango_edad} etiquetas={eti.rango_edad} total={total}/>
           </TarjetaDimension>
-          <TarjetaDimension titulo="Tipo de visitante">
+          <TarjetaDimension titulo="Tipo de visitante" descarga="/export/caracterizacion.csv?dimension=tipo_visitante">
             <BarraDimension filas={d.dimensiones.tipo_visitante} etiquetas={eti.tipo_visitante} total={total}/>
           </TarjetaDimension>
-          <TarjetaDimension titulo="Cómo se enteraron">
+          <TarjetaDimension titulo="Cómo se enteraron" descarga="/export/caracterizacion.csv?dimension=como_se_entero">
             <BarraDimension filas={d.dimensiones.como_se_entero} etiquetas={eti.como_se_entero} total={total}/>
           </TarjetaDimension>
-          <TarjetaDimension titulo="Grupo étnico" nota="Dato sensible, de respuesta voluntaria.">
+          <TarjetaDimension titulo="Grupo étnico" descarga="/export/caracterizacion.csv?dimension=grupo_etnico" nota="Dato sensible, de respuesta voluntaria.">
             <BarraDimension filas={d.dimensiones.grupo_etnico} etiquetas={eti.grupo_etnico} total={total}/>
           </TarjetaDimension>
-          <TarjetaDimension titulo="Discapacidad" nota="Dato sensible, de respuesta voluntaria.">
+          <TarjetaDimension titulo="Discapacidad" descarga="/export/caracterizacion.csv?dimension=discapacidad" nota="Dato sensible, de respuesta voluntaria.">
             <BarraDimension filas={d.dimensiones.discapacidad} etiquetas={eti.discapacidad} total={total}/>
           </TarjetaDimension>
-          <TarjetaDimension titulo="Municipio de origen" nota="Los 25 más frecuentes.">
+          <TarjetaDimension titulo="Municipio de origen" descarga="/export/caracterizacion.csv?dimension=municipio" nota="Los 25 más frecuentes. El CSV los trae todos.">
             <BarraDimension filas={d.municipios} etiquetas={null} total={total}/>
           </TarjetaDimension>
-          <TarjetaDimension titulo="Primera visita">
+          <TarjetaDimension titulo="Primera visita" descarga="/export/caracterizacion.csv?dimension=primera_visita">
             <BarraDimension filas={primera} etiquetas={{ "1": "Es su primera vez", "0": "Ya había venido" }} total={total}/>
           </TarjetaDimension>
         </div>
@@ -147,7 +157,10 @@ const AdminCaracterizacion = () => {
 
       {expectativas.length > 0 && (
         <div style={{ marginTop: 28 }}>
-          <div className="mono" style={{ marginBottom: 12 }}>Qué esperan del festival · {expectativas.length} respuestas</div>
+          <div className="cabecera-tarjeta" style={{ marginBottom: 12 }}>
+            <span className="mono">Qué esperan del festival · {expectativas.length} respuestas</span>
+            <DescargaMini ruta="/export/expectativas.csv" titulo="Descargar todas las expectativas (CSV)"/>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {expectativas.map((e, i) => (
               <div key={i} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: "14px 16px", background: "var(--paper)" }}>

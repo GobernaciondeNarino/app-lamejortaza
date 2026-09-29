@@ -37,9 +37,9 @@ const EconomiaPage = () => {
     return () => { cancelado = true; window.removeEventListener("lmt:auth", cargar); };
   }, []);
 
-  if (error) return <AdminShell active="economia"><Aviso>{error}</Aviso></AdminShell>;
+  if (error) return <AdminShell active="economia"><div className="admin-page"><Aviso>{error}</Aviso></div></AdminShell>;
   if (!datos) {
-    return <AdminShell active="economia"><p className="mono" style={{ color: "var(--ink-3)" }}>Cargando…</p></AdminShell>;
+    return <AdminShell active="economia"><div className="admin-page"><p className="mono" style={{ color: "var(--ink-3)" }}>Cargando…</p></div></AdminShell>;
   }
 
   const t = datos.total;
@@ -48,9 +48,10 @@ const EconomiaPage = () => {
 
   return (
     <AdminShell active="economia">
+      <div className="admin-page">
       <div className="mono">Actividad económica</div>
       <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "6px 0 10px", lineHeight: 1 }}>
-        Las compras del festival.
+        <Texto k="admin.economia.titulo" d="Las compras del festival."/>
       </h1>
       <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 620, marginBottom: 22 }}>
         Sale de lo que declara el público al votar. No es la facturación del evento:
@@ -58,6 +59,15 @@ const EconomiaPage = () => {
         real siempre es igual o más</strong>. Sirve para medir la magnitud y comparar stands.
       </p>
 
+      <BarraDescargas informes={[
+        { ruta: "/export/economia.csv", etiqueta: "Compras por espacio y total" },
+        { ruta: "/export/votos.csv", etiqueta: "Detalle voto a voto", nota: "El detalle lleva el correo de cada visitante: son datos personales." },
+      ]}/>
+
+      <div className="cabecera-tarjeta" style={{ marginBottom: 6 }}>
+        <span className="mono">Todo el festival</span>
+        <DescargaMini ruta="/export/economia.csv" titulo="Descargar las cifras (CSV; el total es la última fila)"/>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 12 }}>
         <Cifra etiqueta="Valor declarado" valor={pesos(t.valor)}
           nota={`${t.con_valor} compras con importe`}/>
@@ -69,7 +79,10 @@ const EconomiaPage = () => {
           nota="entre las que declararon importe"/>
       </div>
 
-      <div className="mono" style={{ margin: "28px 0 12px" }}>Por espacio</div>
+      <div className="cabecera-tarjeta" style={{ margin: "28px 0 12px" }}>
+        <span className="mono">Por espacio</span>
+        <DescargaMini ruta="/export/economia.csv" titulo="Descargar la tabla por espacio (CSV)"/>
+      </div>
       {!conCompras.length && (
         <p style={{ color: "var(--ink-2)" }}>Todavía no hay compras registradas.</p>
       )}
@@ -88,7 +101,9 @@ const EconomiaPage = () => {
                 <tr key={s.id} style={{ borderBottom: "1px solid var(--line)" }}>
                   <td style={{ padding: "10px", minWidth: 180 }}>
                     <div style={{ fontWeight: 500 }}>{s.nombre}</div>
-                    <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)" }}>{s.municipio}</div>
+                    <div className="mono" style={{ fontSize: 9, color: "var(--ink-3)" }}>
+                      #{numeroDeEspacio((window.STANDS_DATA || []).find((x) => x.id === s.id) || s)} · {s.municipio}
+                    </div>
                     {/* Barra proporcional al mayor: la comparación entre stands
                         se ve antes en el largo de una barra que en la cifra. */}
                     <div style={{ height: 4, marginTop: 6, background: "var(--line)", borderRadius: 2, overflow: "hidden" }}>
@@ -105,6 +120,7 @@ const EconomiaPage = () => {
           </table>
         </div>
       )}
+      </div>
     </AdminShell>
   );
 };

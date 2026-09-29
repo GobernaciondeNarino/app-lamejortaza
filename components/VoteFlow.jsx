@@ -1,11 +1,8 @@
 // Vista móvil REAL de votación (la que se abre al escanear el QR del stand).
 // URL: /s/{standId}. Sin marco de teléfono — ocupa la pantalla.
 
-const EMOJIS = [
-  { id: "malo", label: "Malo", emoji: "😞", color: "var(--bad)" },
-  { id: "regular", label: "Regular", emoji: "😐", color: "var(--meh)" },
-  { id: "bueno", label: "Excelente", emoji: "😍", color: "var(--good)" },
-];
+// Las tres calificaciones salen de opcionesVoto() (Shared.jsx): nombre e icono
+// se pueden cambiar en Configuración → Interfaz.
 
 const MobileHeader = ({ stand }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 16, borderBottom: "1px solid var(--line)", marginBottom: 16 }}>
@@ -136,10 +133,10 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
       )}
 
       <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 30, fontWeight: 400, margin: "4px 0 6px", lineHeight: 1.1, letterSpacing: "-0.01em" }}>
-        ¿Cómo estuvo<br/>el café?
+        <Texto k="plataforma.voto.titulo" d={"¿Cómo estuvo\nel café?"}/>
       </h2>
       <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 18 }}>
-        Puntúa lo que quieras y toca un emoji para enviar.
+        <Texto k="plataforma.voto.texto" d="Puntúa lo que quieras y toca un emoji para enviar."/>
       </p>
 
       {/* Las tres valoraciones. Van ANTES de los emoji porque tocar un emoji
@@ -196,7 +193,7 @@ const VoteForm = ({ stand, onComplete, savedEmail }) => {
           qué se estaba puntuando ni que tocarlos ya era enviar. */}
       <div className="mono" style={{ marginBottom: 10 }}>¿Cómo te pareció nuestro espacio?</div>
       <div style={{ display: "flex", gap: 10 }}>
-        {EMOJIS.map(e => {
+        {opcionesVoto().map(e => {
           const selected = data.emoji === e.id;
           return (
             <button key={e.id} onClick={() => onEmoji(e.id)} disabled={submitting} aria-label={e.label} style={{
@@ -308,7 +305,7 @@ const VoteConfirm = ({ stand, onGoPassport, onGoDashboard }) => {
     <div>
       <div className="mono" style={{ textAlign: "center", marginTop: 8 }}>✓ Voto registrado</div>
       <h2 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 36, fontWeight: 400, margin: "12px 0 6px", textAlign: "center", lineHeight: 1.05 }}>
-        Tu pasaporte<br/>ha sido sellado.
+        <Texto k="plataforma.sellado.titulo" d={"Tu pasaporte\nha sido sellado."}/>
       </h2>
       <p style={{ fontSize: 13, color: "var(--ink-2)", textAlign: "center", marginTop: 8 }}>
         {stand.nombre} · {stand.municipio}

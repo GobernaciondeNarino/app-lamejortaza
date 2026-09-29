@@ -8,7 +8,7 @@ Gobernación de Nariño.
 > **PHP 8 + PDO** con MySQL/MariaDB o SQLite. Toda la capa de seguridad
 > (sesiones, CSRF, rate limiting, validación) vive en el servidor.
 
-**Versión 2.7.3.** Qué trae cada versión y —lo que de verdad importa el día del
+**Versión 2.8.0.** Qué trae cada versión y —lo que de verdad importa el día del
 evento— **cómo volver atrás**, en [CHANGELOG.md](CHANGELOG.md). La versión
 desplegada se consulta en `/api/health` con sesión de administrador.
 
@@ -25,6 +25,9 @@ desplegada se consulta en `/api/health` con sesión de administrador.
    - [Actividad económica](#1septies-actividad-económica)
    - [Personalización](#1octies-personalización)
    - [Empezar de cero](#1nonies-empezar-de-cero)
+   - [Configuración](#1decies-configuración)
+   - [Interfaz: colores, letra, logotipos, iconos y textos](#1undecies-interfaz-colores-letra-logotipos-iconos-y-textos)
+   - [Descargas para informes](#1duodecies-descargas-para-informes)
 2. [Arquitectura](#2-arquitectura)
 3. [Requisitos](#3-requisitos)
 4. [Instalación local](#4-instalación-local)
@@ -71,10 +74,20 @@ lee en pantalla.
 | `/admin/live`                        | Admin     | Actividad y ranking en tiempo real.                       |
 | `/admin/promotores`                  | Admin     | **Verificar inscripciones** y enviar la clave por correo. |
 | `/admin/economia`                    | Admin     | **Actividad económica**: compras del evento y por stand.  |
-| `/admin/festival`                    | Admin     | **Personalización**: marca, textos, columnas y fondos.    |
-| `/admin/correos`                     | Admin     | Bitácora de correo saliente (¿salió la clave?).           |
-| `/admin/sistema`                     | Propietario | **Empezar de cero**: borrar los datos de prueba.        |
+| `/admin/caracterizacion`             | Admin     | Caracterización del público (agregados).                  |
+| `/admin/configuracion`               | Admin     | **Configuración**, con una pestaña por sección (abajo).   |
+| `…/configuracion/personalizacion`    | Admin     | Marca, títulos, columnas, política de datos y fondos.     |
+| `…/configuracion/interfaz`           | Admin     | **Interfaz**: colores, letra, logotipos, iconos y textos. |
+| `…/configuracion/correo`             | Admin     | Envío de correo y pruebas.                                |
+| `…/configuracion/bitacora`           | Admin     | Bitácora de correo saliente (¿salió la clave?).           |
+| `…/configuracion/administradores`    | Propietario | Cuentas de acceso al panel.                             |
+| `…/configuracion/sistema`            | Propietario | **Empezar de cero**: borrar los datos de prueba.        |
 | `/install.php`                       | One-shot  | Asistente de instalación (auto-bloquea al terminar).      |
+
+Las direcciones anteriores a la v2.8 (`/admin/festival`, `/admin/correo`,
+`/admin/correos`, `/admin/cuentas`, `/admin/sistema`) **siguen funcionando** y
+abren su pestaña: hay enlaces a ellas en el asistente de instalación, en este
+documento y en correos ya enviados.
 | `/api/...`                           | Backend   | Front controller PHP (auth, stands, votos, pasaportes).   |
 
 ### Administrador
@@ -370,6 +383,33 @@ El campo dice cuántos faltan y cuenta lo que hay escrito en ese momento, no lo
 último guardado: sin ese aviso, quien numere tres espacios y no vea ningún
 cambio en la plataforma pensaría que el campo no sirve.
 
+### Nombres, números e identificadores sin duplicados
+
+En un informe el espacio se reconoce por su nombre. Con dos «Café Galeras», la
+fila del ranking, la de compras y la de votos no dicen cuál es cuál. Desde la
+v2.8:
+
+- **El nombre es único**, y no letra a letra: «Café Galeras», «cafe galeras» y
+  «Café  Galeras.» son el mismo nombre (se comparan sin tildes, mayúsculas ni
+  signos). Crear o editar un espacio con un nombre ya usado responde
+  `409 nombre_duplicado` y el mensaje dice **cuál** es el otro. El editor lo
+  avisa mientras se escribe.
+- **El número del recinto también**: «A-14», «a 14» y «A14» son el mismo puesto
+  (`409 numero_duplicado`).
+- **La inscripción pública** rechaza un nombre que ya tiene un espacio publicado.
+  Si dos solicitudes pendientes chocan entre sí, al **verificar** la segunda no
+  se bloquea al promotor: el nombre se distingue con el municipio
+  («Café Galeras (Sandoná)») o, si aun así choca, con un número, y el panel avisa
+  del cambio.
+- **El identificador** que propone el editor al crear un espacio ya no puede
+  chocar: si existe, el servidor busca uno libre a partir del nombre (antes era
+  un error 500).
+- Los duplicados **que ya existían** no se tocan solos: *Espacios* los enseña en
+  un aviso con enlace a cada uno para renombrarlos, y hasta entonces el servidor
+  no deja guardar cambios en ellos sin distinguir el nombre.
+- La lista de *Espacios* enseña el identificador de cada uno (`#ST-01` o su
+  número), y todos los CSV lo llevan junto al nombre.
+
 ### Cómo entra un promotor que no recibe el correo
 
 El acceso dependía de un correo, y eso falla: buzones que casi no se abren,
@@ -564,7 +604,7 @@ datos personales y es responsabilidad de quien lo descarga.
 
 ## 1.quinquies. Correo saliente
 
-`/admin/correo` — configuración, diagnóstico y prueba real.
+`/admin/configuracion/correo` (antes `/admin/correo`) — configuración, diagnóstico y prueba real.
 
 De aquí salen las contraseñas de los promotores, el QR de su stand y los enlaces
 del perfil de los visitantes. Es la pieza más frágil del sistema y la única que
@@ -705,7 +745,10 @@ convierte el informe en un disparate.
 
 ## 1.octies. Personalización
 
-`/admin/festival` — lo que el organizador cambia sin tocar código.
+`/admin/configuracion/personalizacion` (antes `/admin/festival`, que sigue
+funcionando) — lo que el organizador cambia sin tocar código. Los colores, la
+letra, los logotipos y los textos de las pantallas están en la pestaña vecina,
+**Interfaz**.
 
 - **Nombre de la edición**: el renglón que va bajo «La Mejor Taza» —de fábrica
   «Festival · Nariño 2026»— en toda la aplicación y en la cabecera de los
@@ -779,8 +822,8 @@ de `assets/uploads/` (`logos/`, `pasaporte/`, `visitantes/`).
 
 ## 1.nonies. Empezar de cero
 
-`/admin/sistema` — borrar los datos de ejemplo y de las pruebas antes de abrir al
-público. **Sólo la ve un propietario.**
+`/admin/configuracion/sistema` (antes `/admin/sistema`) — borrar los datos de
+ejemplo y de las pruebas antes de abrir al público. **Sólo la ve un propietario.**
 
 Entre montar el sistema y el día del evento hay semanas de pruebas: stands de
 ejemplo, inscripciones de mentira, votos para comprobar que el pasaporte sella.
@@ -817,11 +860,129 @@ Detalles que importan:
   dejen a nadie bloqueado.
 - Queda registro en el log del servidor de quién la ejecutó y qué eligió.
 
-No hay papelera ni «deshacer». Si se quiere poder volver atrás, hay que hacer una
-copia de la base de datos desde el panel del hosting **antes**.
+No hay papelera ni «deshacer». Encima de las casillas hay una barra
+**«Antes de borrar, descarga una copia»** con todos los informes en CSV; para
+poder restaurar de verdad, hay que hacer además una copia de la base de datos
+desde el panel del hosting **antes**.
 
 Después de una puesta a cero conviene volver a generar los QR de los stands
 nuevos desde *Códigos QR* y comprobar el envío desde *Correo*.
+
+---
+
+## 1.decies. Configuración
+
+`/admin/configuracion` — lo que se toca una vez al montar el evento, en una sola
+entrada del menú y con una pestaña por sección:
+
+| Pestaña | Qué es | Quién |
+| --- | --- | --- |
+| **Personalización** | Nombre de la edición, títulos de las valoraciones, columnas del recorrido, política de datos, fondos del pasaporte | Admin |
+| **Interfaz** | Colores, letra, logotipos, iconos y textos (ver abajo) | Admin |
+| **Correo** | Servidor de envío, diagnóstico y prueba | Admin |
+| **Bitácora** | Mensajes enviados y fallidos | Admin |
+| **Administradores** | Cuentas de acceso al panel | Propietario |
+| **Empezar de cero** | Borrar los datos de prueba | Propietario |
+
+El menú lateral se queda con lo del día a día (espacios, promotores, QR,
+actividad, economía, visitantes). El orden de las pestañas va de lo que más se
+toca a lo que menos, con «Empezar de cero» al final: una acción destructiva no
+debería ser la pantalla a la que se llega por defecto. Las pestañas del
+propietario no aparecen para un organizador, y si escribe su dirección recibe
+una página «no encontrada»; el servidor las rechaza igualmente.
+
+Las direcciones antiguas (`/admin/correo`, `/admin/festival`…) llevan a su
+pestaña.
+
+---
+
+## 1.undecies. Interfaz: colores, letra, logotipos, iconos y textos
+
+`/admin/configuracion/interfaz`. Tres **áreas**, porque son tres públicos:
+
+| Área | Qué páginas |
+| --- | --- |
+| **Plataforma** | Todo lo público: portada, ranking, ficha, voto, recorrido, inscripción, perfil |
+| **Administrador** | El panel |
+| **Pasaporte** | `/pasaporte`, incluido el libro 3D |
+
+Lo que se pone en **Plataforma vale también para las otras dos** mientras no
+se les ponga otra cosa. Cada campo dice de dónde sale su valor («de fábrica»,
+«igual que la plataforma» o propio).
+
+- **Colores**: fondo, texto, tres acentos y los tres colores de las
+  calificaciones. Bordes, superficies y textos secundarios **se calculan** a
+  partir del fondo y del texto: con doce selectores el resultado casi nunca
+  combina. Si el texto sobre el fondo baja de un contraste de **4,5:1** (el
+  mínimo para leer con comodidad) el panel lo avisa antes de guardar.
+- **Letra** para títulos, texto y rótulos: las de fábrica, varias del sistema
+  (no se descargan de ningún servicio externo) o **fuentes propias** subidas
+  como `.woff2`, `.woff`, `.ttf` u `.otf` (hasta 2 MB y seis fuentes). Se
+  comprueba la firma binaria del archivo, no su extensión.
+- **Logotipo** de cada área, en lugar de la taza dibujada, con la opción de
+  ocultar el nombre junto a él. El del pasaporte sale también en la tapa y en la
+  hoja de datos del libro 3D. Los carteles QR llevan siempre el de la
+  plataforma: se imprimen desde el panel pero son para el público.
+- **Icono de la pestaña** del navegador (favicon).
+- **Iconos**: los tres del voto y los cuatro del menú público. Son caracteres
+  (un emoji, un símbolo), no imágenes.
+- **Textos y párrafos**: 52 textos de las tres áreas —titulares, párrafos,
+  botones, rótulos, los nombres de las calificaciones, el menú, la tapa y la
+  última hoja del pasaporte—, con buscador. Vacío = el de fábrica. En títulos y
+  párrafos un salto de línea parte la frase, `*así*` pinta una palabra con el
+  color de acento y `**así**` la pone en negrita. No se acepta HTML.
+
+Todo se edita sobre un borrador con **vista previa** y se aplica al pulsar
+**Guardar**, en toda la aplicación y sin recargar. Hay botones para volver a lo
+de fábrica por área (colores y letra, o textos) y para los iconos.
+
+**Si una combinación deja el panel ilegible**, se abre cualquier página con
+`?tema=original` al final (por ejemplo `/admin/configuracion/interfaz?tema=original`):
+se ve con el aspecto de fábrica y se puede deshacer.
+
+Cómo funciona por dentro:
+
+- Se guarda en la tabla `ajustes` bajo la clave `interfaz`. `app.php` lo lee en
+  la primera respuesta y lo incrusta —el CSS en `<style id="lmt-tema">`, los
+  textos en `LMT_BOOTSTRAP`—, así que no hay un parpadeo con los colores de
+  fábrica. Si la base no responde, la página arranca igual con los de fábrica.
+- El área la decide la ruta, igual en el servidor (`Interfaz::areaDeRuta`) que
+  en el navegador (`areaDeRuta`), y se marca en `<html data-area="…">`.
+- **Nada de lo que se escribe en el formulario llega tal cual a la hoja de
+  estilos**: los colores tienen que ser `#rrggbb`, la letra sale de un catálogo
+  cerrado o de un archivo validado, y los nombres de familia los pone el
+  servidor.
+- Cada texto de fábrica está en dos sitios: el catálogo de
+  `api/lib/Interfaz.php` y el componente que lo pinta. **`php tools/check-textos.php`**
+  comprueba que coincidan y que no sobren ni falten claves; hay que ejecutarlo
+  tras tocar un texto.
+
+---
+
+## 1.duodecies. Descargas para informes
+
+Cada cifra del panel se puede descargar en CSV (UTF-8 con BOM, para Excel). Hay
+una barra de descargas en cada pantalla y un **«⤓ CSV»** en la esquina de cada
+tarjeta o tabla, que baja justo lo que esa tarjeta enseña.
+
+| Archivo | Qué trae | Datos personales |
+| --- | --- | --- |
+| `resumen.csv` | Las cifras sueltas de todas las pantallas, con la fecha de corte | No |
+| `ranking.csv` | Posición, identificador, votos por calificación, puntaje, aprobación y estrellas | No |
+| `stands.csv` | Cada espacio con su número, ficha y caracterización | Contacto del espacio |
+| `votos.csv` | Voto a voto, con el nombre e identificador del espacio | **Sí** (correo) |
+| `economia.csv` | Compras por espacio y una fila `TOTAL` al final | No |
+| `caracterizacion.csv` | Respuestas agregadas; `?dimension=genero` baja sólo una | No |
+| `expectativas.csv` | Lo que el público espera, sin correos | No |
+| `visitantes.csv` | Perfiles uno a uno | **Sí**, y sensibles |
+| `pasaportes.csv` | Pasaportes y sellos | **Sí** (correo) |
+| `promotores.csv` | Inscripciones con su caracterización, sin credenciales | **Sí** |
+| `correos.csv` | Bitácora de envíos | **Sí** (destinatarios) |
+
+Todos piden sesión de administrador, identifican al espacio por su id **y** por
+su nombre, y neutralizan las celdas que empiezan por `=`, `+`, `-` o `@` para
+que un comentario no se convierta en una fórmula al abrir el archivo. El ranking
+del panel y el del CSV salen del mismo cálculo y del mismo orden.
 
 ---
 
@@ -1194,8 +1355,8 @@ Todas las respuestas usan `application/json` y la forma:
 | `POST`  | `/api/auth/logout`            | público      | Cierra sesión.                     |
 | `GET`   | `/api/stands`                 | público      | Lista todos los stands.            |
 | `GET`   | `/api/stands/:id`             | público      |                                    |
-| `POST`  | `/api/stands`                 | admin        | Body: stand completo.              |
-| `PUT`   | `/api/stands/:id`             | admin        | Reemplaza campos.                  |
+| `POST`  | `/api/stands`                 | admin        | Body: stand completo. `409 nombre_duplicado` / `numero_duplicado`. |
+| `PUT`   | `/api/stands/:id`             | admin        | Reemplaza campos. Mismos `409`.    |
 | `DELETE`| `/api/stands/:id`             | admin        | CASCADE borra votos.               |
 | `GET`   | `/api/votos?limit=20`         | público      | Últimos N votos (correos enmascarados). |
 | `POST`  | `/api/votos`                  | público*     | Validado server-side; índice único.|
@@ -1203,10 +1364,7 @@ Todas las respuestas usan `application/json` y la forma:
 | `GET`   | `/api/pasaportes/{correo}`    | público      | Correo URL-encoded. Con `?t=` añade calificaciones, estrellas y la hora de cada sello. |
 | `GET`   | `/api/dashboard`              | público      | Stands + votos + métricas.         |
 | `GET`   | `/api/health`                 | público      | Versión PHP, BD alcanzable, contadores. |
-| `GET`   | `/api/export/votos.csv`       | admin        | CSV con BOM UTF-8 (Excel).         |
-| `GET`   | `/api/export/stands.csv`      | admin        | CSV con BOM UTF-8.                 |
-| `GET`   | `/api/export/pasaportes.csv`  | admin        | CSV con BOM UTF-8.                 |
-| `GET`   | `/api/export/visitantes.csv`  | admin        | Caracterización con datos personales. |
+| `GET`   | `/api/export/{informe}.csv`   | admin        | CSV con BOM UTF-8: `resumen`, `ranking`, `stands`, `votos`, `economia`, `caracterizacion` (`?dimension=`), `expectativas`, `visitantes`, `pasaportes`, `promotores`, `correos`. Ver [Descargas](#1duodecies-descargas-para-informes). |
 | **Promotores** | | | |
 | `POST`  | `/api/promotores/registro`    | público*     | Inscripción con todos los datos del stand. |
 | `POST`  | `/api/promotores/logo-inscripcion` | público* | Logo antes de tener cuenta. Límite propio por IP. |
@@ -1239,6 +1397,12 @@ Todas las respuestas usan `application/json` y la forma:
 | `GET`   | `/api/festival/ajustes`       | público      | Marca, títulos, columnas, política de datos y fondos. |
 | `PUT`   | `/api/admin/festival/ajustes` | admin        | Guarda los textos y los números. |
 | `POST/DELETE` | `/api/admin/festival/fondo` | admin  | Sube o quita un fondo del pasaporte. |
+| **Interfaz** | | | |
+| `GET`   | `/api/interfaz`               | público      | CSS del tema, textos, iconos y logotipos. |
+| `GET/PUT` | `/api/admin/interfaz`       | admin        | Ajustes y catálogo. El PUT va plano: `colores: {"plataforma.paper": "#…"}`. |
+| `POST`  | `/api/admin/interfaz/restaurar` | admin      | `{que: apariencia|textos|iconos, area}`. |
+| `POST/DELETE` | `/api/admin/interfaz/logo` | admin    | Logotipo de un área o `favicon`. |
+| `POST/DELETE` | `/api/admin/interfaz/fuente` | admin  | Fuente propia (woff2, woff, ttf, otf). |
 | **Sistema** | | | |
 | `GET`   | `/api/admin/sistema/inventario` | propietario | Qué hay en la base y la frase de confirmación. |
 | `POST`  | `/api/admin/sistema/reiniciar` | propietario | Borra los conjuntos elegidos. Exige la frase exacta. |
@@ -1406,6 +1570,8 @@ la-mejor-taza/
 │   ├── Economia.jsx           # actividad económica declarada al votar
 │   ├── Festival.jsx           # personalización: títulos, columnas y fondos
 │   ├── Sistema.jsx            # puesta a cero (propietario)
+│   ├── Interfaz.jsx           # colores, letra, logotipos, iconos y textos
+│   ├── Configuracion.jsx      # pestañas de Configuración y sus rutas
 │   ├── Perfil.jsx             # perfil del visitante (/perfil)
 │   ├── Caracterizacion.jsx    # resumen del público en el panel
 │   └── App.jsx                # rutas de la SPA y guardas de acceso
@@ -1435,6 +1601,7 @@ la-mejor-taza/
 │   │   ├── Ajustes.php        # config editable desde el panel, con secretos cifrados
 │   │   ├── Territorio.php     # GENERADO: los 64 municipios y sus 13 subregiones
 │   │   ├── Catalogos.php      # catálogos cerrados y la ficha del participante
+│   │   ├── Interfaz.php       # tema, catálogo de textos e iconos, CSS generado
 │   │   └── Router.php
 │   └── routes/
 │       ├── auth.php
@@ -1442,7 +1609,7 @@ la-mejor-taza/
 │       ├── votos.php
 │       ├── pasaportes.php
 │       ├── dashboard.php
-│       ├── exports.php
+│       ├── exports.php         # los CSV de informes
 │       ├── qr.php
 │       ├── promotores.php
 │       ├── administradores.php
@@ -1450,6 +1617,7 @@ la-mejor-taza/
 │       ├── correo.php
 │       ├── festival.php        # ajustes: marca, política de datos, pasaporte
 │       ├── sistema.php         # inventario y puesta a cero (propietario)
+│       ├── interfaz.php        # Configuración → Interfaz
 │       └── health.php
 ├── db/
 │   ├── schema.mysql.sql
@@ -1464,6 +1632,7 @@ la-mejor-taza/
 ├── tools/
 │   ├── build-components.mjs   # JSX → js/components.build.js
 │   ├── build-subregiones.php  # catálogo → Territorio.php + narino-municipios.js
+│   ├── check-textos.php       # textos de fábrica: catálogo vs. componentes
 │   └── logos-ejemplo.php      # PNG a mano (sin GD) de assets/logos/
 └── README.md
 ```

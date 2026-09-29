@@ -82,6 +82,9 @@
       const err = new Error(code);
       err.status = res.status;
       err.code = code;
+      // El `message` del servidor, cuando lo hay: en un 409 de nombre repetido
+      // dice CUÁL es el otro espacio, que es lo que hace falta para arreglarlo.
+      err.detalle = (data && data.error && typeof data.message === "string") ? data.message : "";
       throw err;
     }
     return data && data.data !== undefined ? data.data : data;
@@ -288,6 +291,34 @@
     return request("/admin/festival/fondo", { method: "DELETE", body: { destino, indice } });
   }
 
+  // ── Configuración → Interfaz ────────────────────────────────────────────
+  async function interfazAdmin()            { return request("/admin/interfaz"); }
+  async function guardarInterfaz(b)         { await ensureCsrf(); return request("/admin/interfaz", { method: "PUT", body: b }); }
+  async function restaurarInterfaz(que, area) {
+    await ensureCsrf();
+    return request("/admin/interfaz/restaurar", { method: "POST", body: { que, area } });
+  }
+  async function subirLogoInterfaz(destino, file) {
+    await ensureCsrf();
+    const fd = archivoFormData(file);
+    fd.append("destino", destino);
+    return request("/admin/interfaz/logo", { method: "POST", body: fd });
+  }
+  async function quitarLogoInterfaz(destino) {
+    await ensureCsrf();
+    return request("/admin/interfaz/logo", { method: "DELETE", body: { destino } });
+  }
+  async function subirFuenteInterfaz(file, nombre) {
+    await ensureCsrf();
+    const fd = archivoFormData(file);
+    if (nombre) fd.append("nombre", nombre);
+    return request("/admin/interfaz/fuente", { method: "POST", body: fd });
+  }
+  async function quitarFuenteInterfaz(id) {
+    await ensureCsrf();
+    return request("/admin/interfaz/fuente", { method: "DELETE", body: { id } });
+  }
+
   /** Logo de un stand desde el panel de administración. */
   async function infoUploads()              { return request("/admin/uploads"); }
   async function repararPermisosUploads()   { await ensureCsrf(); return request("/admin/uploads/permisos", { method: "POST" }); }
@@ -477,6 +508,8 @@
     festivalAjustes,
     guardarFestivalAjustes,
     subirFondoPasaporte,
+    interfazAdmin, guardarInterfaz, restaurarInterfaz,
+    subirLogoInterfaz, quitarLogoInterfaz, subirFuenteInterfaz, quitarFuenteInterfaz,
     quitarFondoPasaporte,
     accesoVisitante,
     guardarClaveVisitante,
@@ -579,6 +612,37 @@
       }
       window.dispatchEvent(new CustomEvent("lmt:festival", { detail: festival }));
       return festival;
+    },
+  };
+
+  /**
+   * Apariencia (Configuración → Interfaz): textos, iconos, logotipos y tema.
+   *
+   * Llega incrustada en la página (app.php) para no pintar primero con lo de
+   * fábrica. `aplicar()` la sustituye en caliente —es lo que usa el panel
+   * justo después de guardar— y avisa con `lmt:interfaz` para que los
+   * componentes que pintan textos o logotipos se vuelvan a dibujar.
+   */
+  const inicial = (window.LMT_BOOTSTRAP && window.LMT_BOOTSTRAP.interfaz) || null;
+  const temaOriginal = !!(window.LMT_BOOTSTRAP && window.LMT_BOOTSTRAP.temaOriginal);
+  // json_encode convierte un mapa vacío de PHP en [], no en {}.
+  const comoMapa = (v) => (v && typeof v === "object" && !Array.isArray(v)) ? v : {};
+  let interfaz = inicial ? { ...inicial, textos: comoMapa(inicial.textos), iconos: comoMapa(inicial.iconos) } : null;
+  window.LMTInterfaz = {
+    datos() { return interfaz; },
+    temaOriginal() { return temaOriginal; },
+    aplicar(publico) {
+      if (!publico) return;
+      interfaz = { ...publico, textos: comoMapa(publico.textos), iconos: comoMapa(publico.iconos) };
+      if (!temaOriginal) {
+        const el = document.getElementById("lmt-tema");
+        if (el) el.textContent = publico.css || "";
+      }
+      window.dispatchEvent(new CustomEvent("lmt:interfaz", { detail: interfaz }));
+    },
+    async cargar() {
+      try { this.aplicar(await request("/interfaz")); } catch (_) { /* se queda lo que vino con la página */ }
+      return interfaz;
     },
   };
 

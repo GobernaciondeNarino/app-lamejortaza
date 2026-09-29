@@ -88,9 +88,9 @@ const FestivalPage = () => {
   }, []);
 
   if (!aj) {
-    return <AdminShell active="festival">
+    return <div>
       {error ? <Aviso>{error}</Aviso> : <p className="mono" style={{ color: "var(--ink-3)" }}>Cargando…</p>}
-    </AdminShell>;
+    </div>;
   }
 
   const guardar = async (siguiente) => {
@@ -140,11 +140,13 @@ const FestivalPage = () => {
 
   const hojas = (aj.pasaporte && aj.pasaporte.hojas) || [];
 
+  // Sin menú propio: la pantalla vive dentro de la pestaña «Personalización»
+  // de Configuración, que ya pone el menú lateral y el relleno de página.
   return (
-    <AdminShell active="festival">
+    <div>
       <div className="mono">Personalización</div>
       <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 40, fontWeight: 400, margin: "6px 0 10px", lineHeight: 1 }}>
-        Cómo se ve el festival.
+        <Texto k="admin.personalizacion.titulo" d="Cómo se ve el festival."/>
       </h1>
       <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 620, marginBottom: 22 }}>
         Todo lo de aquí tiene un valor que ya funciona. Lo que no toques se queda
@@ -324,7 +326,7 @@ const FestivalPage = () => {
       </div>
 
       <EstadoAlmacen/>
-    </AdminShell>
+    </div>
   );
 };
 

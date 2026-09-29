@@ -31,12 +31,12 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
       <div style={{ minHeight: "100dvh", background: "var(--paper)" }}>
         <PublicHeader/>
         <section style={{ padding: "80px 32px", textAlign: "center" }}>
-          <div className="mono">Festival 2026</div>
+          <div className="mono"><Texto k="plataforma.espera.rotulo" d="Festival 2026"/></div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 64, fontWeight: 400, margin: "12px 0 16px", lineHeight: 1, letterSpacing: "-0.02em" }}>
-            El festival arranca pronto.
+            <Texto k="plataforma.espera.titulo" d="El festival arranca pronto."/>
           </h1>
           <p style={{ color: "var(--ink-2)", maxWidth: 540, margin: "0 auto 20px", fontSize: 16, lineHeight: 1.6 }}>
-            Aún no hay stands registrados. Si eres organizador inicia sesión y registra el primero.
+            <Texto k="plataforma.espera.texto" d="Aún no hay stands registrados. Si eres organizador inicia sesión y registra el primero."/>
           </p>
           <a href="/admin/login" data-route className="btn btn-primary">Entrar como admin →</a>
         </section>
@@ -63,12 +63,12 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
                ref={(el) => { if (el && window.LMTThree && !el.dataset.threeMounted) window.LMTThree.mount(el); }}
                style={{ paddingTop: 48, paddingBottom: 32, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 36, alignItems: "flex-end", position: "relative", overflow: "hidden", minHeight: 320 }}>
         <div>
-          <div className="mono">Ranking público</div>
+          <div className="mono"><Texto k="plataforma.inicio.rotulo" d="Ranking público"/></div>
           <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: "min(96px, 12vw)", fontWeight: 400, margin: "8px 0 0", lineHeight: 0.9, letterSpacing: "-0.03em" }}>
-            ¿Cuál es la<br/>mejor taza de<br/><span style={{ color: "var(--galeras)" }}>Nariño</span>?
+            <Texto k="plataforma.inicio.titulo" d={"¿Cuál es la\nmejor taza de\n*Nariño*?"}/>
           </h1>
           <p style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 18, maxWidth: 520, lineHeight: 1.6 }}>
-            El festival lo decide el público. Escanea el QR de cada stand, vota con un emoji y sella tu pasaporte.
+            <Texto k="plataforma.inicio.texto" d="El festival lo decide el público. Escanea el QR de cada stand, vota con un emoji y sella tu pasaporte."/>
           </p>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -144,7 +144,7 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
             {comentarios.slice(0, 6).map((c, i) => {
               const s = stands.find((x) => x.id === c.stand);
               if (!s) return null;
-              const emoji = { bueno: "😍", regular: "😐", malo: "😞" }[c.emoji] || "•";
+              const emoji = (opcionesVoto().find((o) => o.id === c.emoji) || {}).emoji || "•";
               return (
                 <a key={i} href={"/festival/" + s.id} data-route style={{
                   display: "flex", gap: 12, paddingBottom: 12,
@@ -433,9 +433,8 @@ const PublicDetail = ({ stand, comentarios, allStands, onBack, onVote }) => {
           <div style={{ marginTop: 24, padding: 18, background: "var(--paper-2)", borderRadius: "var(--r-md)" }}>
             <div className="mono" style={{ marginBottom: 10 }}>Distribución</div>
             {[
-              { k: "Excelente", v: stand.votos.bueno, color: "var(--good)", emoji: "😍" },
-              { k: "Regular", v: stand.votos.regular, color: "var(--meh)", emoji: "😐" },
-              { k: "Malo", v: stand.votos.malo, color: "var(--bad)", emoji: "😞" },
+              // Las mismas tres del formulario de voto, de mejor a peor.
+              ...opcionesVoto().reverse().map((o) => ({ k: o.label, v: stand.votos[o.id], color: o.color, emoji: o.emoji })),
             ].map((r) => {
               const pct = totalv > 0 ? (r.v / totalv) * 100 : 0;
               return (

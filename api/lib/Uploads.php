@@ -112,6 +112,69 @@ final class Uploads
         return 'uploads/' . $rel . '/' . $name;
     }
 
+    /**
+     * Firmas binarias de las fuentes que se aceptan, y el `format()` con el que
+     * se declaran en @font-face. Se mira el contenido, no la extensión ni el
+     * tipo que manda el navegador: un .woff2 que no empieza por «wOF2» no es
+     * una fuente, sea lo que sea.
+     */
+    private const FUENTES = [
+        'wOF2'             => ['ext' => 'woff2', 'formato' => 'woff2'],
+        'wOFF'             => ['ext' => 'woff',  'formato' => 'woff'],
+        "\x00\x01\x00\x00" => ['ext' => 'ttf',   'formato' => 'truetype'],
+        'true'             => ['ext' => 'ttf',   'formato' => 'truetype'],
+        'OTTO'             => ['ext' => 'otf',   'formato' => 'opentype'],
+    ];
+
+    /** Tope de una fuente subida. Una familia completa en woff2 pesa ~100 KB. */
+    public const MAX_BYTES_FUENTE = 2 * 1024 * 1024;
+
+    /**
+     * Valida y almacena un archivo de fuente (woff2, woff, ttf, otf).
+     *
+     * No se recodifica —PHP no sabe—, así que la defensa es otra: la firma de
+     * los cuatro primeros bytes tiene que ser la de una fuente, el nombre y la
+     * extensión los pone el servidor, y la carpeta ya lleva el .htaccess que
+     * apaga cualquier motor de scripts.
+     *
+     * @return array{archivo:string, formato:string}
+     */
+    public static function fuente(array $file, string $sub): array
+    {
+        $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) throw new \RuntimeException('archivo_muy_grande');
+        if ($err === UPLOAD_ERR_NO_FILE) throw new \RuntimeException('archivo_ausente');
+        if ($err !== UPLOAD_ERR_OK) throw new \RuntimeException('subida_fallida');
+
+        $tmp = (string) ($file['tmp_name'] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) throw new \RuntimeException('archivo_invalido');
+        $size = (int) ($file['size'] ?? 0);
+        if ($size < 64 || $size > self::MAX_BYTES_FUENTE) throw new \RuntimeException('archivo_muy_grande');
+
+        $firma = (string) @file_get_contents($tmp, false, null, 0, 4);
+        if (!isset(self::FUENTES[$firma])) throw new \RuntimeException('no_es_fuente');
+        $tipo = self::FUENTES[$firma];
+
+        $dir  = self::prepararDirectorio($sub);
+        $rel  = self::subRelativa($sub);
+        $name = bin2hex(random_bytes(16)) . '.' . $tipo['ext'];
+        if (!@move_uploaded_file($tmp, $dir . '/' . $name)) throw new \RuntimeException('no_se_pudo_guardar');
+        @chmod($dir . '/' . $name, 0644);
+        return ['archivo' => 'uploads/' . $rel . '/' . $name, 'formato' => $tipo['formato']];
+    }
+
+    /** ¿Es una ruta con la forma exacta que produce imagen()? */
+    public static function esImagen(string $ruta): bool
+    {
+        return (bool) preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(?:jpg|png|webp)$#', $ruta);
+    }
+
+    /** ¿Es una ruta con la forma exacta que produce fuente()? */
+    public static function esFuente(string $ruta): bool
+    {
+        return (bool) preg_match('#^uploads/[a-z0-9/_-]+/[0-9a-f]{32}\.(?:woff2|woff|ttf|otf)$#', $ruta);
+    }
+
     /** Re-codifica con GD. Devuelve false si GD no está disponible. */
     private static function recodificar(string $origen, string $destino, int $tipo, int $ancho, int $alto): bool
     {
@@ -272,7 +335,7 @@ HT;
     }
 
     /**
-     * Recorre uploads/. Por defecto sólo las imágenes; con $incluirDirs también
+     * Recorre uploads/. Por defecto sólo las imágenes y fuentes; con $incluirDirs también
      * las carpetas, que es lo que necesita el reparador de permisos.
      *
      * @return \Generator<string>
@@ -286,20 +349,21 @@ HT;
             if (is_dir($ruta)) {
                 if ($incluirDirs) yield $ruta;
                 yield from self::recorrer($ruta, $incluirDirs);
-            } elseif (preg_match('/\.(jpg|png|webp)$/i', $entrada)) {
+            } elseif (preg_match('/\.(jpg|png|webp|woff2|woff|ttf|otf)$/i', $entrada)) {
                 yield $ruta;
             }
         }
     }
 
     /**
-     * Borra una imagen previamente almacenada. Sólo acepta rutas con la forma
-     * exacta que produce imagen(); cualquier otra cosa se ignora en silencio.
+     * Borra una imagen o una fuente previamente almacenada. Sólo acepta rutas
+     * con la forma exacta que producen imagen() y fuente(); cualquier otra
+     * cosa se ignora en silencio.
      */
     public static function borrar(?string $rutaRelativa): void
     {
         if (!is_string($rutaRelativa) || $rutaRelativa === '') return;
-        if (!preg_match('#^uploads/([a-z0-9/_-]+/[0-9a-f]{32}\.(?:jpg|png|webp))$#', $rutaRelativa, $m)) return;
+        if (!preg_match('#^uploads/([a-z0-9/_-]+/[0-9a-f]{32}\.(?:jpg|png|webp|woff2|woff|ttf|otf))$#', $rutaRelativa, $m)) return;
         // La ruta guardada es la ruta WEB ("uploads/..."); el prefijo se
         // reemplaza por la raíz real configurada, que puede estar en otro sitio.
         $real = realpath(self::raiz() . '/' . $m[1]);

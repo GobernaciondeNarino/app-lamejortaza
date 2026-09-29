@@ -400,11 +400,10 @@ const PerfilVisitantePage = () => {
         <a href="/pasaporte" data-route style={{ color: "var(--ink-3)", fontSize: 13 }}>← Mi pasaporte</a>
         <div className="mono" style={{ marginTop: 22 }}>Perfil del visitante</div>
         <h1 style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 34, fontWeight: 400, margin: "6px 0 10px", lineHeight: 1.05 }}>
-          {existia ? "Tus datos." : "Cuéntanos\nquién nos visita."}
+          {existia ? "Tus datos." : <Texto k="plataforma.perfil.titulo" d={"Cuéntanos\nquién nos visita."}/>}
         </h1>
         <p style={{ color: "var(--ink-2)", fontSize: 14, lineHeight: 1.65, marginBottom: 8 }}>
-          Con esto sabemos quién viene al festival y podemos preparar mejor la próxima edición.
-          <strong> Ningún dato es obligatorio</strong>: responde sólo lo que quieras.
+          <Texto k="plataforma.perfil.texto" d="Con esto sabemos quién viene al festival y podemos preparar mejor la próxima edición. **Ningún dato es obligatorio**: responde sólo lo que quieras."/>
         </p>
         <p className="mono" style={{ color: "var(--ink-3)", marginBottom: 24, wordBreak: "break-all" }}>{correo}</p>
 

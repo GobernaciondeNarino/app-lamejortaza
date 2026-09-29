@@ -1,7 +1,7 @@
 // GENERADO POR tools/build-components.mjs — NO EDITAR A MANO.
-// Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Sistema.jsx, components/Correo.jsx, components/App.jsx
+// Fuente: components/Shared.jsx, components/Mapa.jsx, components/Admin.jsx, components/QRPrint.jsx, components/VoteFlow.jsx, components/Passport.jsx, components/Dashboard.jsx, components/Recorrido.jsx, components/Promotores.jsx, components/Cuentas.jsx, components/Perfil.jsx, components/Caracterizacion.jsx, components/Economia.jsx, components/Festival.jsx, components/Sistema.jsx, components/Correo.jsx, components/Interfaz.jsx, components/Configuracion.jsx, components/App.jsx
 // Regenerar tras tocar cualquier .jsx:  node tools/build-components.mjs
-// Huella de las fuentes: 1b2b0f5b1f725c4d
+// Huella de las fuentes: c02ef5bf09dcfbd3
 /* components/Shared.jsx */
 (function () {
 const LogoTaza = ({
@@ -48,11 +48,44 @@ const LogoTaza = ({
     strokeLinecap: "round"
   }));
 };
+const Logotipo = ({
+  size = 36,
+  area,
+  filtro
+}) => {
+  const i = usarInterfaz();
+  const logo = logoDeArea(i, area || areaActual());
+  if (logo) {
+    return React.createElement("img", {
+      src: urlImagen(logo),
+      alt: "",
+      style: {
+        display: "block",
+        height: size,
+        width: "auto",
+        maxWidth: size * 5,
+        objectFit: "contain"
+      }
+    });
+  }
+  const taza = React.createElement(LogoTaza, {
+    size: size
+  });
+  return filtro ? React.createElement("div", {
+    style: {
+      filter: filtro
+    }
+  }, taza) : taza;
+};
 const Wordmark = ({
   size = 20,
-  onClick
+  onClick,
+  area
 }) => {
   const aj = usarAjustesFestival();
+  const i = usarInterfaz();
+  const zona = area || areaActual();
+  const conNombre = nombreJuntoAlLogo(i, zona);
   return React.createElement("div", {
     onClick: onClick,
     style: {
@@ -61,9 +94,10 @@ const Wordmark = ({
       gap: 10,
       cursor: onClick ? "pointer" : "default"
     }
-  }, React.createElement(LogoTaza, {
-    size: size * 1.4
-  }), React.createElement("div", {
+  }, React.createElement(Logotipo, {
+    size: size * 1.4,
+    area: zona
+  }), conNombre && React.createElement("div", {
     style: {
       lineHeight: 1
     }
@@ -74,7 +108,7 @@ const Wordmark = ({
       fontStyle: "italic",
       letterSpacing: "-0.01em"
     }
-  }, "La Mejor Taza"), React.createElement("div", {
+  }, texto("plataforma.marca.nombre", "La Mejor Taza")), React.createElement("div", {
     className: "mono",
     style: {
       fontSize: 9,
@@ -758,11 +792,19 @@ const ERRORES = {
   telefono_invalido: "El teléfono debe ser sólo números, entre 7 y 15 dígitos.",
   nit_invalido: "El NIT debe ser sólo números.",
   clave_corta: "La clave debe tener al menos 6 caracteres.",
+  nombre_duplicado: "Ya hay un espacio con ese nombre. Distínguelo —por ejemplo con el municipio, la vereda o la marca— para que no se confundan en el ranking ni en los informes.",
+  numero_duplicado: "Ese número del recinto ya lo tiene otro espacio.",
+  no_es_fuente: "Ese archivo no es una fuente. Sube un .woff2, .woff, .ttf u .otf.",
+  demasiadas_fuentes: "Ya hay seis fuentes propias. Quita alguna antes de subir otra.",
+  destino_invalido: "No se reconoce el destino de la imagen.",
+  no_encontrado: "Ya no existe: puede que otra persona lo haya quitado. Recarga la página.",
+  subida_fallida: "La subida se cortó. Inténtalo de nuevo.",
   internal_error: "Error interno del servidor. Revisa el log de errores de PHP: suele ser una tabla que falta (vuelve a ejecutar db/schema) o el envío de correo mal configurado."
 };
 const mensajeError = (e, porDefecto) => {
   const code = String(e && (e.code || e.message) || e || "");
-  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k];
+  const detalle = e && e.detalle ? ` (${e.detalle})` : "";
+  for (const k of Object.keys(ERRORES)) if (code.includes(k)) return ERRORES[k] + detalle;
   const limpio = code.replace(/[^a-zA-Z0-9_ .:-]/g, "").slice(0, 60);
   return (porDefecto || "Ocurrió un error.") + (limpio ? ` (código: ${limpio})` : "");
 };
@@ -1119,22 +1161,22 @@ const InvitacionCorreo = () => {
     }
   }, p.error)));
 };
-const MENU_PUBLICO = [{
+const MENU_PUBLICO = () => [{
   href: "/festival",
-  texto: "Inicio",
-  icono: "◆"
+  texto: texto("plataforma.menu.inicio", "Inicio"),
+  icono: icono("menu.inicio", "◆")
 }, {
   href: "/pasaporte",
-  texto: "Mi pasaporte",
-  icono: "❖"
+  texto: texto("plataforma.menu.pasaporte", "Mi pasaporte"),
+  icono: icono("menu.pasaporte", "❖")
 }, {
   href: "/recorrido",
-  texto: "Mi recorrido",
-  icono: "◈"
+  texto: texto("plataforma.menu.recorrido", "Mi recorrido"),
+  icono: icono("menu.recorrido", "◈")
 }, {
   href: "/perfil",
-  texto: "Mi perfil",
-  icono: "◉"
+  texto: texto("plataforma.menu.perfil", "Mi perfil"),
+  icono: icono("menu.perfil", "◉")
 }];
 const rutaActual = () => {
   try {
@@ -1146,6 +1188,7 @@ const rutaActual = () => {
 const MenuPublico = ({
   oscuro = false
 }) => {
+  usarInterfaz();
   const [abierto, setAbierto] = React.useState(false);
   const cajaRef = React.useRef(null);
   const botonRef = React.useRef(null);
@@ -1222,7 +1265,7 @@ const MenuPublico = ({
       boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
       animation: "fade-up 0.18s"
     }
-  }, MENU_PUBLICO.map(m => {
+  }, MENU_PUBLICO().map(m => {
     const aqui = actual === m.href || actual.startsWith(m.href + "/");
     return React.createElement("a", {
       key: m.href,
@@ -1386,6 +1429,22 @@ const numeroDeEspacio = (stand, stands) => {
   const propio = String(stand.numero || "").trim();
   if (propio && numeracionCompleta(stands)) return propio;
   return String(stand.id || "").toUpperCase();
+};
+const claveNombreEspacio = nombre => String(nombre || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const claveNumeroEspacio = numero => String(numero || "").trim().replace(/[\s.\-]+/g, "").toUpperCase();
+const duplicadosEspacios = stands => {
+  const agrupar = clave => {
+    const grupos = {};
+    (stands || []).forEach(s => {
+      const k = clave(s);
+      if (k) (grupos[k] = grupos[k] || []).push(s);
+    });
+    return Object.values(grupos).filter(g => g.length > 1);
+  };
+  return {
+    nombres: agrupar(s => claveNombreEspacio(s.nombre)),
+    numeros: agrupar(s => claveNumeroEspacio(s.numero))
+  };
 };
 const ORGANIZACIONES = [["persona_natural", "Persona Natural"], ["sas", "Sociedades por Acciones Simplificadas S.A.S."], ["limitada", "Sociedad Limitada"], ["civil", "Las demás organizaciones civiles, corporaciones, fundaciones"], ["unipersonal", "Empresas unipersonales"], ["comunidades_indigenas", "Corporaciones, asociación y fundaciones creadas para adelantar actividades en comunidades indígenas"], ["anonima", "Sociedad Anónima"], ["utilidad_comun", "Asociaciones, corporaciones, fundaciones e instituciones de utilidad común (gremiales, de beneficencia; profesionales, juveniles, sociales, democráticas y participativas, cívicas y comunitarias, de egresados, de rehabilitación social y ayuda a indigentes y clubes sociales)"], ["fundacion", "Fundaciones"], ["comandita_simple", "Sociedad en Comandita Simple"], ["corporacion", "Corporaciones"], ["no_formalizada", "Organización no formalizada"], ["otro", "Otro"]];
 const ACTIVIDADES_CAFE = [["tostado_marca_propia", "Productor de café tostado con marca propia"], ["transformador", "Transformador de productos derivados del café"], ["distribuidor", "Distribuidor de productos de café"], ["barista", "Barista / establecimiento especializado en café"], ["proveedor", "Proveedor de equipos, maquinaria o insumos para café"], ["artesanias", "Artesanías / productos con identidad cafetera"], ["servicios", "Servicios relacionados con el café"], ["organizacion", "Organización o asociación cafetera"], ["otro", "Otro"]];
@@ -1575,6 +1634,87 @@ const usarAjustesFestival = () => {
   }, []);
   return aj;
 };
+const interfazActual = () => window.LMTInterfaz && window.LMTInterfaz.datos() || null;
+const areaActual = () => {
+  try {
+    return document.documentElement.getAttribute("data-area") || "plataforma";
+  } catch (_) {
+    return "plataforma";
+  }
+};
+const areaDeRuta = ruta => {
+  const r = "/" + String(ruta || "").replace(/^\/+|\/+$/g, "");
+  if (r === "/admin" || r.startsWith("/admin/")) return "admin";
+  if (r === "/pasaporte") return "pasaporte";
+  return "plataforma";
+};
+const usarInterfaz = () => {
+  const [, setN] = React.useState(0);
+  React.useEffect(() => {
+    const f = () => setN(n => n + 1);
+    window.addEventListener("lmt:interfaz", f);
+    return () => window.removeEventListener("lmt:interfaz", f);
+  }, []);
+  return interfazActual();
+};
+const texto = (clave, defecto) => {
+  const i = interfazActual();
+  const v = i && i.textos ? i.textos[clave] : null;
+  return typeof v === "string" && v.trim() ? v : defecto;
+};
+const icono = (clave, defecto) => {
+  const i = interfazActual();
+  const v = i && i.iconos ? i.iconos[clave] : null;
+  return typeof v === "string" && v.trim() ? v : defecto;
+};
+const pintarTexto = s => String(s).split("\n").map((linea, i) => React.createElement(React.Fragment, {
+  key: i
+}, i > 0 && React.createElement("br", null), linea.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g).map((trozo, j) => {
+  if (/^\*\*[^*]+\*\*$/.test(trozo)) return React.createElement("strong", {
+    key: j
+  }, trozo.slice(2, -2));
+  if (/^\*[^*]+\*$/.test(trozo)) return React.createElement("span", {
+    key: j,
+    style: {
+      color: "var(--galeras)"
+    }
+  }, trozo.slice(1, -1));
+  return trozo;
+})));
+const Texto = ({
+  k,
+  d
+}) => {
+  usarInterfaz();
+  return React.createElement(React.Fragment, null, pintarTexto(texto(k, d)));
+};
+const logoDeArea = (i, area) => {
+  const logos = i && i.logos || {};
+  return logos[area] || logos.plataforma || "";
+};
+const nombreJuntoAlLogo = (i, area) => {
+  const logos = i && i.logos || {};
+  const nombre = i && i.nombre || {};
+  const duena = logos[area] ? area : logos.plataforma ? "plataforma" : null;
+  if (!duena) return true;
+  return nombre[duena] !== false;
+};
+const opcionesVoto = () => [{
+  id: "malo",
+  label: texto("plataforma.voto.malo", "Malo"),
+  emoji: icono("voto.malo", "😞"),
+  color: "var(--bad)"
+}, {
+  id: "regular",
+  label: texto("plataforma.voto.regular", "Regular"),
+  emoji: icono("voto.regular", "😐"),
+  color: "var(--meh)"
+}, {
+  id: "bueno",
+  label: texto("plataforma.voto.bueno", "Excelente"),
+  emoji: icono("voto.bueno", "😍"),
+  color: "var(--good)"
+}];
 const PIE_MARCA = "Festival · Nariño 2026";
 const pieDeMarca = aj => {
   const a = aj || window.LMTFestival && window.LMTFestival.ajustes() || {};
@@ -1736,6 +1876,46 @@ const titulosEstrellas = () => {
     est_calidad: e.calidad || "Calidad"
   };
 };
+const urlDescarga = ruta => window.LMTApi && window.LMTApi.urlFor ? window.LMTApi.urlFor(ruta) : "#";
+const DescargaMini = ({
+  ruta,
+  titulo
+}) => React.createElement("a", {
+  href: urlDescarga(ruta),
+  download: true,
+  className: "descarga-mini mono",
+  title: titulo || "Descargar estos datos (CSV)",
+  "aria-label": titulo || "Descargar estos datos (CSV)"
+}, "\u2913 CSV");
+const BarraDescargas = ({
+  informes,
+  titulo = "Descargar datos"
+}) => React.createElement("div", {
+  className: "barra-descargas"
+}, React.createElement("span", {
+  className: "mono"
+}, titulo), React.createElement("div", {
+  style: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap"
+  }
+}, informes.map(i => React.createElement("a", {
+  key: i.ruta,
+  href: urlDescarga(i.ruta),
+  download: true,
+  className: "btn btn-ghost",
+  title: i.nota || undefined,
+  style: {
+    padding: "7px 12px",
+    fontSize: 13
+  }
+}, "\u2913 ", i.etiqueta, i.nota ? " *" : ""))), informes.some(i => i.nota) && React.createElement("span", {
+  className: "ayuda",
+  style: {
+    flexBasis: "100%"
+  }
+}, "* ", informes.filter(i => i.nota).map(i => i.nota).filter((n, k, a) => a.indexOf(n) === k).join(" ")));
 const pesos = n => {
   const v = Number(n) || 0;
   try {
@@ -1798,7 +1978,25 @@ Object.assign(window, {
   SelectorMultiple,
   etiquetasCatalogo,
   numeroDeEspacio,
-  numeracionCompleta
+  numeracionCompleta,
+  claveNombreEspacio,
+  claveNumeroEspacio,
+  duplicadosEspacios,
+  urlDescarga,
+  DescargaMini,
+  BarraDescargas,
+  Logotipo,
+  interfazActual,
+  areaActual,
+  areaDeRuta,
+  usarInterfaz,
+  texto,
+  icono,
+  pintarTexto,
+  Texto,
+  logoDeArea,
+  nombreJuntoAlLogo,
+  opcionesVoto
 });
 })();
 
@@ -2277,9 +2475,10 @@ Object.assign(window, {
 (function () {
 const AdminShell = ({
   active,
-  user,
+  user: userProp,
   children
 }) => {
+  const user = userProp || window.LMTApi && window.LMTApi.user && window.LMTApi.user() || null;
   const items = [{
     id: "stands",
     label: "Espacios",
@@ -2311,31 +2510,11 @@ const AdminShell = ({
     sub: "Caracterización",
     path: "/admin/caracterizacion"
   }, {
-    id: "festival",
-    label: "Personalización",
-    sub: "Títulos y fondos",
-    path: "/admin/festival"
-  }, {
-    id: "correo",
-    label: "Correo",
-    sub: "Envío y pruebas",
-    path: "/admin/correo"
-  }, {
-    id: "correos",
-    label: "Bitácora",
-    sub: "Mensajes enviados",
-    path: "/admin/correos"
-  }].concat(user && user.rol === "propietario" ? [{
-    id: "cuentas",
-    label: "Administradores",
-    sub: "Cuentas de acceso",
-    path: "/admin/cuentas"
-  }, {
-    id: "sistema",
-    label: "Empezar de cero",
-    sub: "Borrar datos de prueba",
-    path: "/admin/sistema"
-  }] : []);
+    id: "configuracion",
+    label: "Configuración",
+    sub: "Interfaz, correo, cuentas",
+    path: "/admin/configuracion"
+  }];
   const logout = async () => {
     if (window.LMTApi && window.LMTApi.enabled) await window.LMTApi.signOutAdmin();
     window.LMTRouter.go("/");
@@ -2360,7 +2539,10 @@ const AdminShell = ({
     style: {
       marginBottom: 8
     }
-  }, "Admin \xB7 Festival 2026"), items.map(it => React.createElement("a", {
+  }, React.createElement(Texto, {
+    k: "admin.menu.rotulo",
+    d: "Admin \xB7 Festival 2026"
+  })), items.map(it => React.createElement("a", {
     key: it.id,
     href: it.path,
     "data-route": true,
@@ -2466,18 +2648,19 @@ const LoginAdmin = ({
       alignItems: "center",
       gap: 12
     }
-  }, React.createElement("div", {
-    style: {
-      filter: "invert(1)"
-    }
-  }, React.createElement(LogoTaza, {
-    size: 36
-  })), React.createElement("div", {
+  }, React.createElement(Logotipo, {
+    size: 36,
+    area: "plataforma",
+    filtro: "invert(1)"
+  }), React.createElement("div", {
     className: "mono",
     style: {
       color: "var(--paper-3)"
     }
-  }, "La Mejor Taza \xB7 Festival 2026")), React.createElement("div", null, React.createElement("h1", {
+  }, React.createElement(Texto, {
+    k: "plataforma.portada.rotulo",
+    d: "La Mejor Taza \xB7 Festival 2026"
+  }))), React.createElement("div", null, React.createElement("h1", {
     style: {
       fontFamily: "var(--font-display)",
       fontStyle: "italic",
@@ -2488,11 +2671,10 @@ const LoginAdmin = ({
       letterSpacing: "-0.02em",
       maxWidth: "16ch"
     }
-  }, "El pasaporte", React.createElement("br", null), "del caf\xE9", React.createElement("br", null), React.createElement("span", {
-    style: {
-      color: "var(--galeras)"
-    }
-  }, "nari\xF1ense"), "."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.portada.titulo",
+    d: "El pasaporte\ndel café\n*nariñense*."
+  })), React.createElement("p", {
     style: {
       fontSize: 15,
       color: "var(--paper-3)",
@@ -2500,7 +2682,10 @@ const LoginAdmin = ({
       marginTop: 24,
       lineHeight: 1.6
     }
-  }, "Recorre los stands, prueba los caf\xE9s y vota. Tu pasaporte se va sellando con cada visita, y entre todos decidimos cu\xE1l es la mejor taza de Nari\xF1o.")), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.portada.texto",
+    d: "Recorre los stands, prueba los caf\xE9s y vota. Tu pasaporte se va sellando con cada visita, y entre todos decidimos cu\xE1l es la mejor taza de Nari\xF1o."
+  }))), React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -2512,7 +2697,10 @@ const LoginAdmin = ({
     style: {
       color: "var(--paper-3)"
     }
-  }, "\xBFTienes un espacio en el festival?"), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.portada.promotor",
+    d: "\xBFTienes un espacio en el festival?"
+  })), React.createElement("div", {
     style: {
       display: "flex",
       gap: 16,
@@ -2538,7 +2726,10 @@ const LoginAdmin = ({
     className: "split-form"
   }, React.createElement("div", {
     className: "mono"
-  }, "Festival 2026 \xB7 Nari\xF1o"), React.createElement("h2", {
+  }, React.createElement(Texto, {
+    k: "plataforma.bienvenida.rotulo",
+    d: "Festival 2026 \xB7 Nari\xF1o"
+  })), React.createElement("h2", {
     style: {
       fontFamily: "var(--font-display)",
       fontStyle: "italic",
@@ -2547,14 +2738,20 @@ const LoginAdmin = ({
       margin: "8px 0 14px",
       lineHeight: 1.05
     }
-  }, "Bienvenido al", React.createElement("br", null), "festival."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.bienvenida.titulo",
+    d: "Bienvenido al\nfestival."
+  })), React.createElement("p", {
     style: {
       fontSize: 14,
       color: "var(--ink-2)",
       lineHeight: 1.6,
       marginBottom: 22
     }
-  }, "No necesitas cuenta ni contrase\xF1a: entra, mira el ranking en vivo y vota en los espacios que visites."), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.bienvenida.texto",
+    d: "No necesitas cuenta ni contrase\xF1a: entra, mira el ranking en vivo y vota en los espacios que visites."
+  })), React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -2569,7 +2766,10 @@ const LoginAdmin = ({
       padding: 15,
       fontSize: 15
     }
-  }, "Entrar al festival \u2192"), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.bienvenida.boton",
+    d: "Entrar al festival \u2192"
+  })), React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
@@ -2582,14 +2782,20 @@ const LoginAdmin = ({
     style: {
       justifyContent: "center"
     }
-  }, "Mi recorrido"), React.createElement("a", {
+  }, React.createElement(Texto, {
+    k: "plataforma.menu.recorrido",
+    d: "Mi recorrido"
+  })), React.createElement("a", {
     href: "/pasaporte",
     "data-route": true,
     className: "btn btn-ghost",
     style: {
       justifyContent: "center"
     }
-  }, "Mi pasaporte"))), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.menu.pasaporte",
+    d: "Mi pasaporte"
+  })))), React.createElement("div", {
     style: {
       height: 1,
       background: "var(--line)",
@@ -2609,7 +2815,10 @@ const LoginAdmin = ({
       textAlign: "left",
       minHeight: 44
     }
-  }, "\xBFEres administrador o promotor? Entra aqu\xED") : React.createElement("form", {
+  }, React.createElement(Texto, {
+    k: "admin.acceso.enlace",
+    d: "\xBFEres administrador o promotor? Entra aqu\xED"
+  })) : React.createElement("form", {
     onSubmit: handleLogin,
     style: {
       animation: "fade-up 0.25s",
@@ -2620,7 +2829,10 @@ const LoginAdmin = ({
     style: {
       marginBottom: 10
     }
-  }, "Acceso \xB7 Organizadores"), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "admin.acceso.rotulo",
+    d: "Acceso \xB7 Organizadores"
+  })), React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -2705,6 +2917,7 @@ const AdminPage = ({
     active: "stands",
     user: user
   }, React.createElement(StandEditor, {
+    key: editingId || "nuevo",
     stand: editingId ? stands.find(s => s.id === editingId) : null
   }));
   if (section === "qr") return React.createElement(AdminShell, {
@@ -2726,28 +2939,10 @@ const AdminPage = ({
   }, React.createElement(AdminPromotores, {
     stands: stands
   }));
-  if (section === "correos") return React.createElement(AdminShell, {
-    active: "correos",
-    user: user
-  }, React.createElement(AdminCorreos, null));
-  if (section === "correo") return React.createElement(AdminShell, {
-    active: "correo",
-    user: user
-  }, React.createElement(AdminCorreoConfig, null));
   if (section === "caracterizacion") return React.createElement(AdminShell, {
     active: "caracterizacion",
     user: user
   }, React.createElement(AdminCaracterizacion, null));
-  if (section === "cuentas") return React.createElement(AdminShell, {
-    active: "cuentas",
-    user: user
-  }, React.createElement(AdminCuentas, {
-    user: user
-  }));
-  if (section === "sistema") return React.createElement(AdminShell, {
-    active: "sistema",
-    user: user
-  }, React.createElement(SistemaPage, null));
   return React.createElement(AdminShell, {
     active: "stands",
     user: user
@@ -2776,11 +2971,36 @@ const StandsList = ({
     className: "mono"
   }, "Registro \xB7 ", stands.length, " espacios"), React.createElement("h1", {
     className: "titulo-xl"
-  }, "Espacios del festival")), React.createElement("a", {
+  }, React.createElement(Texto, {
+    k: "admin.espacios.titulo",
+    d: "Espacios del festival"
+  }))), React.createElement("a", {
     href: "/admin/stands/new",
     "data-route": true,
     className: "btn btn-primary"
-  }, "+ Registrar espacio")), React.createElement("div", {
+  }, "+ Registrar espacio")), React.createElement(BarraDescargas, {
+    informes: [{
+      ruta: "/export/resumen.csv",
+      etiqueta: "Resumen general"
+    }, {
+      ruta: "/export/ranking.csv",
+      etiqueta: "Ranking"
+    }, {
+      ruta: "/export/stands.csv",
+      etiqueta: "Espacios con su ficha",
+      nota: "Lleva correos y teléfonos de contacto: guárdalo donde corresponda."
+    }]
+  }), React.createElement("div", {
+    className: "cabecera-tarjeta",
+    style: {
+      marginBottom: 6
+    }
+  }, React.createElement("span", {
+    className: "mono"
+  }, "Cifras"), React.createElement(DescargaMini, {
+    ruta: "/export/resumen.csv",
+    titulo: "Descargar las cifras (CSV)"
+  })), React.createElement("div", {
     className: "grid-4",
     style: {
       marginBottom: 32
@@ -2825,7 +3045,9 @@ const StandsList = ({
       color: "var(--ink-3)",
       marginTop: 4
     }
-  }, m.sub)))), stands.length === 0 ? React.createElement("div", {
+  }, m.sub)))), React.createElement(AvisoDuplicados, {
+    stands: stands
+  }), stands.length === 0 ? React.createElement("div", {
     style: {
       padding: 60,
       border: "1px dashed var(--line-2)",
@@ -2843,11 +3065,24 @@ const StandsList = ({
       color: "var(--ink)",
       margin: "8px 0 16px"
     }
-  }, "Registra el primero."), React.createElement("a", {
+  }, React.createElement(Texto, {
+    k: "admin.espacios.vacio",
+    d: "Registra el primero."
+  })), React.createElement("a", {
     href: "/admin/stands/new",
     "data-route": true,
     className: "btn btn-primary"
-  }, "+ Registrar espacio")) : React.createElement("div", {
+  }, "+ Registrar espacio")) : React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "cabecera-tarjeta",
+    style: {
+      marginBottom: 6
+    }
+  }, React.createElement("span", {
+    className: "mono"
+  }, "Ranking"), React.createElement(DescargaMini, {
+    ruta: "/export/ranking.csv",
+    titulo: "Descargar el ranking (CSV)"
+  })), React.createElement("div", {
     className: "tabla-scroll",
     style: {
       border: "1px solid var(--line)",
@@ -2894,7 +3129,12 @@ const StandsList = ({
       color: "var(--ink-3)",
       marginTop: 2
     }
-  }, s.direccion)), React.createElement("div", {
+  }, React.createElement("span", {
+    className: "mono",
+    style: {
+      fontSize: 10
+    }
+  }, "#", numeroDeEspacio(s, stands)), s.direccion ? " · " + s.direccion : "")), React.createElement("div", {
     style: {
       fontSize: 14
     }
@@ -2929,7 +3169,55 @@ const StandsList = ({
       fontSize: 18,
       color: "var(--ink-3)"
     }
-  }, "\u2192"))))));
+  }, "\u2192")))))));
+};
+const AvisoDuplicados = ({
+  stands
+}) => {
+  const {
+    nombres,
+    numeros
+  } = duplicadosEspacios(stands);
+  if (!nombres.length && !numeros.length) return null;
+  const enlaces = grupo => grupo.map((s, i) => React.createElement(React.Fragment, {
+    key: s.id
+  }, i > 0 && ", ", React.createElement("a", {
+    href: "/admin/stands/" + s.id + "/edit",
+    "data-route": true,
+    style: {
+      color: "var(--grano)"
+    }
+  }, s.nombre, " ", React.createElement("span", {
+    className: "mono",
+    style: {
+      fontSize: 10
+    }
+  }, "(", String(s.id).toUpperCase(), ")"))));
+  return React.createElement("div", {
+    role: "alert",
+    style: {
+      padding: "14px 16px",
+      marginBottom: 24,
+      borderRadius: "var(--r-md)",
+      border: "1px solid var(--bad)",
+      background: "color-mix(in oklch, var(--bad) 8%, var(--paper))",
+      fontSize: 14,
+      lineHeight: 1.6
+    }
+  }, React.createElement("strong", {
+    style: {
+      fontWeight: 600
+    }
+  }, "Hay espacios que se confunden entre s\xED."), " ", "En el ranking y en los informes descargados no se sabr\xEDa a cu\xE1l corresponde cada fila. Renombra o renumera uno de cada grupo:", React.createElement("ul", {
+    style: {
+      margin: "8px 0 0",
+      paddingLeft: 20
+    }
+  }, nombres.map((g, i) => React.createElement("li", {
+    key: "n" + i
+  }, "Mismo nombre: ", enlaces(g))), numeros.map((g, i) => React.createElement("li", {
+    key: "u" + i
+  }, "Mismo n\xFAmero \xAB", g[0].numero, "\xBB: ", enlaces(g)))));
 };
 const NumeroDelEspacio = ({
   valor,
@@ -3072,7 +3360,7 @@ const StandEditor = ({
       window.LMTRouter.go(isNew ? "/admin/qr" : "/admin/stands");
     } catch (e) {
       const code = String(e && (e.code || e.message) || e);
-      if (code.includes("bad_id")) setError("Identificador inválido (sólo minúsculas, números y guión).");else if (code.includes("bad_nombre")) setError("Nombre obligatorio (máx. 80).");else if (code.includes("bad_municipio")) setError("Municipio obligatorio (máx. 80).");else if (code.includes("direccion_requerida")) setError(ERRORES.direccion_requerida);else if (code.includes("detalle_requerido")) setError(ERRORES.detalle_requerido);else if (code.includes("tipo_organizacion_invalido")) setError(ERRORES.tipo_organizacion_invalido);else if (code.includes("actividad_cafe_invalida")) setError(ERRORES.actividad_cafe_invalida);else if (code.includes("poblacion_invalida")) setError(ERRORES.poblacion_invalida);else if (code.includes("numero_invalido")) setError(ERRORES.numero_invalido);else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");else setError("No fue posible guardar: " + code);
+      if (code.includes("bad_id")) setError("Identificador inválido (sólo minúsculas, números y guión).");else if (code.includes("bad_nombre")) setError("Nombre obligatorio (máx. 80).");else if (code.includes("bad_municipio")) setError("Municipio obligatorio (máx. 80).");else if (code.includes("direccion_requerida")) setError(ERRORES.direccion_requerida);else if (code.includes("detalle_requerido")) setError(ERRORES.detalle_requerido);else if (code.includes("tipo_organizacion_invalido")) setError(ERRORES.tipo_organizacion_invalido);else if (code.includes("actividad_cafe_invalida")) setError(ERRORES.actividad_cafe_invalida);else if (code.includes("poblacion_invalida")) setError(ERRORES.poblacion_invalida);else if (code.includes("numero_invalido")) setError(ERRORES.numero_invalido);else if (code.includes("nombre_duplicado") || code.includes("numero_duplicado")) setError(mensajeError(e));else if (code.includes("unauthorized")) setError("Tu sesión expiró. Vuelve a iniciar sesión.");else setError("No fue posible guardar: " + code);
     } finally {
       setBusy(false);
     }
@@ -3140,7 +3428,17 @@ const StandEditor = ({
     placeholder: "Ej: Finca El Tambo",
     maxLength: 80,
     required: true
-  })), React.createElement(NumeroDelEspacio, {
+  }), (() => {
+    const clave = claveNombreEspacio(form.nombre);
+    const otro = clave && (window.STANDS_DATA || []).find(s => s.id !== form.id && claveNombreEspacio(s.nombre) === clave);
+    return otro ? React.createElement("span", {
+      className: "ayuda",
+      role: "alert",
+      style: {
+        color: "var(--bad)"
+      }
+    }, "Ya hay un espacio con este nombre: \xAB", otro.nombre, "\xBB (", otro.municipio, ", #", String(otro.id).toUpperCase(), "). Dist\xEDnguelo con el municipio, la vereda o la marca.") : null;
+  })()), React.createElement(NumeroDelEspacio, {
     valor: form.numero,
     onCambio: v => update("numero", v),
     idActual: form.id
@@ -3552,7 +3850,8 @@ Object.assign(window, {
   AdminPage,
   StandsList,
   StandEditor,
-  NumeroDelEspacio
+  NumeroDelEspacio,
+  AvisoDuplicados
 });
 })();
 
@@ -3621,7 +3920,8 @@ const QRPoster = ({
       alignItems: "flex-start"
     }
   }, React.createElement(Wordmark, {
-    size: 14
+    size: 14,
+    area: "plataforma"
   }), React.createElement("div", {
     className: "mono",
     style: {
@@ -3631,7 +3931,10 @@ const QRPoster = ({
     style: {
       color: "var(--ink-3)"
     }
-  }, "Festival 2026"))), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.cartel.rotulo",
+    d: "Festival 2026"
+  })))), React.createElement("div", {
     style: {
       marginTop: 20,
       marginBottom: 16
@@ -3941,11 +4244,7 @@ const ActivityLive = ({
   comentarios
 }) => {
   const standMap = Object.fromEntries(stands.map(s => [s.id, s]));
-  const getEmoji = e => ({
-    bueno: "😍",
-    regular: "😐",
-    malo: "😞"
-  })[e] || "•";
+  const getEmoji = e => (opcionesVoto().find(o => o.id === e) || {}).emoji || "•";
   return React.createElement("div", {
     className: "admin-page"
   }, React.createElement("div", {
@@ -3999,11 +4298,16 @@ const ActivityLive = ({
       padding: 18
     }
   }, React.createElement("div", {
-    className: "mono",
+    className: "cabecera-tarjeta",
     style: {
       marginBottom: 14
     }
-  }, "\xDAltimos votos"), comentarios.length === 0 && React.createElement("div", {
+  }, React.createElement("span", {
+    className: "mono"
+  }, "\xDAltimos votos"), React.createElement(DescargaMini, {
+    ruta: "/export/votos.csv",
+    titulo: "Descargar todos los votos (CSV)"
+  })), comentarios.length === 0 && React.createElement("div", {
     className: "mono",
     style: {
       color: "var(--ink-3)"
@@ -4067,11 +4371,16 @@ const ActivityLive = ({
       padding: 18
     }
   }, React.createElement("div", {
-    className: "mono",
+    className: "cabecera-tarjeta",
     style: {
       marginBottom: 14
     }
-  }, "Ranking actual"), [...stands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos)).slice(0, 8).map((s, i) => React.createElement("div", {
+  }, React.createElement("span", {
+    className: "mono"
+  }, "Ranking actual"), React.createElement(DescargaMini, {
+    ruta: "/export/ranking.csv",
+    titulo: "Descargar el ranking completo (CSV)"
+  })), [...stands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos)).slice(0, 8).map((s, i) => React.createElement("div", {
     key: s.id,
     style: {
       display: "flex",
@@ -4109,42 +4418,29 @@ const ActivityLive = ({
     }
   }, calcScore(s.votos).toFixed(0)))))), React.createElement("div", {
     style: {
-      marginTop: 24,
-      padding: 18,
-      border: "1px solid var(--line)",
-      borderRadius: "var(--r-md)",
-      background: "var(--paper)"
+      marginTop: 24
     }
-  }, React.createElement("div", {
-    className: "mono",
-    style: {
-      marginBottom: 10
-    }
-  }, "Exportar para reportes"), React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      flexWrap: "wrap"
-    }
-  }, React.createElement("a", {
-    href: window.LMTApi ? window.LMTApi.urlFor("/export/votos.csv") : "#",
-    className: "btn btn-ghost",
-    download: true
-  }, "\u2913 Votos (CSV)"), React.createElement("a", {
-    href: window.LMTApi ? window.LMTApi.urlFor("/export/stands.csv") : "#",
-    className: "btn btn-ghost",
-    download: true
-  }, "\u2913 Espacios (CSV)"), React.createElement("a", {
-    href: window.LMTApi ? window.LMTApi.urlFor("/export/pasaportes.csv") : "#",
-    className: "btn btn-ghost",
-    download: true
-  }, "\u2913 Pasaportes (CSV)")), React.createElement("div", {
-    className: "nota-menor",
-    style: {
-      color: "var(--ink-3)",
-      marginTop: 8
-    }
-  }, "Las descargas requieren sesi\xF3n activa de administrador.")), React.createElement("style", null, `@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`));
+  }, React.createElement(BarraDescargas, {
+    titulo: "Exportar para reportes",
+    informes: [{
+      ruta: "/export/votos.csv",
+      etiqueta: "Votos",
+      nota: "Votos y pasaportes llevan el correo de cada visitante: son datos personales."
+    }, {
+      ruta: "/export/ranking.csv",
+      etiqueta: "Ranking"
+    }, {
+      ruta: "/export/stands.csv",
+      etiqueta: "Espacios"
+    }, {
+      ruta: "/export/pasaportes.csv",
+      etiqueta: "Pasaportes",
+      nota: "Votos y pasaportes llevan el correo de cada visitante: son datos personales."
+    }, {
+      ruta: "/export/resumen.csv",
+      etiqueta: "Resumen general"
+    }]
+  })), React.createElement("style", null, `@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`));
 };
 Object.assign(window, {
   QRPoster,
@@ -4155,22 +4451,6 @@ Object.assign(window, {
 
 /* components/VoteFlow.jsx */
 (function () {
-const EMOJIS = [{
-  id: "malo",
-  label: "Malo",
-  emoji: "😞",
-  color: "var(--bad)"
-}, {
-  id: "regular",
-  label: "Regular",
-  emoji: "😐",
-  color: "var(--meh)"
-}, {
-  id: "bueno",
-  label: "Excelente",
-  emoji: "😍",
-  color: "var(--good)"
-}];
 const MobileHeader = ({
   stand
 }) => React.createElement("div", {
@@ -4361,13 +4641,19 @@ const VoteForm = ({
       lineHeight: 1.1,
       letterSpacing: "-0.01em"
     }
-  }, "\xBFC\xF3mo estuvo", React.createElement("br", null), "el caf\xE9?"), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.voto.titulo",
+    d: "¿Cómo estuvo\nel café?"
+  })), React.createElement("p", {
     style: {
       fontSize: 13,
       color: "var(--ink-2)",
       marginBottom: 18
     }
-  }, "Punt\xFAa lo que quieras y toca un emoji para enviar."), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.voto.texto",
+    d: "Punt\xFAa lo que quieras y toca un emoji para enviar."
+  })), React.createElement("div", {
     style: {
       padding: "14px 16px",
       marginBottom: 16,
@@ -4455,7 +4741,7 @@ const VoteForm = ({
       display: "flex",
       gap: 10
     }
-  }, EMOJIS.map(e => {
+  }, opcionesVoto().map(e => {
     const selected = data.emoji === e.id;
     return React.createElement("button", {
       key: e.id,
@@ -4649,7 +4935,10 @@ const VoteConfirm = ({
       textAlign: "center",
       lineHeight: 1.05
     }
-  }, "Tu pasaporte", React.createElement("br", null), "ha sido sellado."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.sellado.titulo",
+    d: "Tu pasaporte\nha sido sellado."
+  })), React.createElement("p", {
     style: {
       fontSize: 13,
       color: "var(--ink-2)",
@@ -4795,7 +5084,10 @@ const PassportEmpty = () => React.createElement("div", {
   style: {
     marginBottom: 8
   }
-}, "A\xFAn no tienes pasaporte"), React.createElement("h2", {
+}, React.createElement(Texto, {
+  k: "pasaporte.vacio.rotulo",
+  d: "A\xFAn no tienes pasaporte"
+})), React.createElement("h2", {
   style: {
     fontFamily: "var(--font-display)",
     fontStyle: "italic",
@@ -4804,14 +5096,20 @@ const PassportEmpty = () => React.createElement("div", {
     margin: "0 0 16px",
     lineHeight: 1.05
   }
-}, "Empieza tu traves\xEDa", React.createElement("br", null), "del caf\xE9."), React.createElement("p", {
+}, React.createElement(Texto, {
+  k: "pasaporte.vacio.titulo",
+  d: "Empieza tu travesía\ndel café."
+})), React.createElement("p", {
   style: {
     color: "var(--ink-2)",
     lineHeight: 1.6,
     maxWidth: 360,
     margin: "0 auto 24px"
   }
-}, "Escanea el QR de cualquier stand del festival y emite tu primer voto. Cada visita estampa una p\xE1gina en tu pasaporte."), React.createElement("a", {
+}, React.createElement(Texto, {
+  k: "pasaporte.vacio.texto",
+  d: "Escanea el QR de cualquier stand del festival y emite tu primer voto. Cada visita estampa una p\xE1gina en tu pasaporte."
+})), React.createElement("a", {
   href: "/festival",
   "data-route": true,
   className: "btn btn-ghost",
@@ -5068,6 +5366,8 @@ const PassportBook = ({
     const libro = window.LMTPassportBook.mount(cont, {
       paginas: paginasRef.current,
       paginaInicial: 0,
+      textos: textosLibro(),
+      logo: urlImagen(logoDeArea(interfazActual(), "pasaporte")),
       onReady: () => setBook3d(true),
       onPageChange: i => setPage(i),
       onFallback: () => setBook3d(false)
@@ -5537,8 +5837,12 @@ const PaginaDatos = ({
       color: "var(--ink-2)",
       lineHeight: 1.4
     }
-  }, "REP\xDABLICA DE COLOMBIA", React.createElement("br", null), "DEPARTAMENTO DE NARI\xD1O"), React.createElement(LogoTaza, {
-    size: 24
+  }, React.createElement(Texto, {
+    k: "pasaporte.datos.encabezado",
+    d: "REPÚBLICA DE COLOMBIA\nDEPARTAMENTO DE NARIÑO"
+  })), React.createElement(Logotipo, {
+    size: 24,
+    area: "pasaporte"
   })), React.createElement(RayaFina, {
     margen: "8px 0 9px"
   }), React.createElement("div", {
@@ -6001,24 +6305,28 @@ const PaginaContenido = ({
         justifyContent: "space-between",
         alignItems: "flex-start"
       }
-    }, React.createElement("div", {
-      style: {
-        filter: "invert(1) hue-rotate(180deg)"
-      }
-    }, React.createElement(LogoTaza, {
-      size: 36
-    })), React.createElement("div", {
+    }, React.createElement(Logotipo, {
+      size: 36,
+      area: "pasaporte",
+      filtro: "invert(1) hue-rotate(180deg)"
+    }), React.createElement("div", {
       className: "mono",
       style: {
         color: "var(--paper-3)",
         textAlign: "right"
       }
-    }, "NARI\xD1O", React.createElement("br", null), "COLOMBIA")), React.createElement("div", null, React.createElement("div", {
+    }, React.createElement(Texto, {
+      k: "pasaporte.portada.lugar",
+      d: "NARIÑO\nCOLOMBIA"
+    }))), React.createElement("div", null, React.createElement("div", {
       className: "mono",
       style: {
         color: "var(--paper-3)"
       }
-    }, "Pasaporte del Caf\xE9"), React.createElement("h1", {
+    }, React.createElement(Texto, {
+      k: "pasaporte.portada.rotulo",
+      d: "Pasaporte del Caf\xE9"
+    })), React.createElement("h1", {
       style: {
         fontFamily: "var(--font-display)",
         fontStyle: "italic",
@@ -6028,7 +6336,10 @@ const PaginaContenido = ({
         lineHeight: 0.9,
         letterSpacing: "-0.02em"
       }
-    }, "La Mejor", React.createElement("br", null), "Taza.")), React.createElement("div", null, React.createElement("div", {
+    }, React.createElement(Texto, {
+      k: "pasaporte.portada.titulo",
+      d: "La Mejor\nTaza."
+    }))), React.createElement("div", null, React.createElement("div", {
       style: {
         height: 1,
         background: "var(--paper-3)",
@@ -6041,7 +6352,10 @@ const PaginaContenido = ({
         color: "var(--paper-3)",
         marginBottom: 4
       }
-    }, "Portador"), React.createElement("div", {
+    }, React.createElement(Texto, {
+      k: "pasaporte.portada.portador",
+      d: "Portador"
+    })), React.createElement("div", {
       style: {
         fontFamily: "var(--font-display)",
         fontStyle: "italic",
@@ -6224,7 +6538,10 @@ const PaginaContenido = ({
       style: {
         fontSize: 12
       }
-    }, "Fin del pasaporte"), React.createElement("h2", {
+    }, React.createElement(Texto, {
+      k: "pasaporte.final.rotulo",
+      d: "Fin del pasaporte"
+    })), React.createElement("h2", {
       style: {
         fontFamily: "var(--font-display)",
         fontStyle: "italic",
@@ -6233,7 +6550,10 @@ const PaginaContenido = ({
         margin: "12px 0 8px",
         lineHeight: 1
       }
-    }, "Gracias por", React.createElement("br", null), "caminar el caf\xE9", React.createElement("br", null), "con nosotros."), React.createElement("div", {
+    }, React.createElement(Texto, {
+      k: "pasaporte.final.titulo",
+      d: "Gracias por\ncaminar el café\ncon nosotros."
+    })), React.createElement("div", {
       style: {
         marginTop: 20,
         padding: "12px 18px",
@@ -6241,10 +6561,23 @@ const PaginaContenido = ({
         borderRadius: 999,
         fontSize: 14
       }
-    }, "Vuelve el pr\xF3ximo festival"));
+    }, React.createElement(Texto, {
+      k: "pasaporte.final.nota",
+      d: "Vuelve el pr\xF3ximo festival"
+    })));
   }
   return null;
 };
+const textosLibro = () => ({
+  "pasaporte.portada.lugar": texto("pasaporte.portada.lugar", "NARIÑO\nCOLOMBIA"),
+  "pasaporte.portada.rotulo": texto("pasaporte.portada.rotulo", "Pasaporte del Café"),
+  "pasaporte.portada.titulo": texto("pasaporte.portada.titulo", "La Mejor\nTaza."),
+  "pasaporte.portada.portador": texto("pasaporte.portada.portador", "Portador"),
+  "pasaporte.datos.encabezado": texto("pasaporte.datos.encabezado", "REPÚBLICA DE COLOMBIA\nDEPARTAMENTO DE NARIÑO"),
+  "pasaporte.final.rotulo": texto("pasaporte.final.rotulo", "Fin del pasaporte"),
+  "pasaporte.final.titulo": texto("pasaporte.final.titulo", "Gracias por\ncaminar el café\ncon nosotros."),
+  "pasaporte.final.nota": texto("pasaporte.final.nota", "Vuelve el próximo festival")
+});
 Object.assign(window, {
   PassportPage,
   datosPagina,
@@ -6324,7 +6657,10 @@ const PublicDashboard = ({
       }
     }, React.createElement("div", {
       className: "mono"
-    }, "Festival 2026"), React.createElement("h1", {
+    }, React.createElement(Texto, {
+      k: "plataforma.espera.rotulo",
+      d: "Festival 2026"
+    })), React.createElement("h1", {
       style: {
         fontFamily: "var(--font-display)",
         fontStyle: "italic",
@@ -6334,7 +6670,10 @@ const PublicDashboard = ({
         lineHeight: 1,
         letterSpacing: "-0.02em"
       }
-    }, "El festival arranca pronto."), React.createElement("p", {
+    }, React.createElement(Texto, {
+      k: "plataforma.espera.titulo",
+      d: "El festival arranca pronto."
+    })), React.createElement("p", {
       style: {
         color: "var(--ink-2)",
         maxWidth: 540,
@@ -6342,7 +6681,10 @@ const PublicDashboard = ({
         fontSize: 16,
         lineHeight: 1.6
       }
-    }, "A\xFAn no hay stands registrados. Si eres organizador inicia sesi\xF3n y registra el primero."), React.createElement("a", {
+    }, React.createElement(Texto, {
+      k: "plataforma.espera.texto",
+      d: "A\xFAn no hay stands registrados. Si eres organizador inicia sesi\xF3n y registra el primero."
+    })), React.createElement("a", {
       href: "/admin/login",
       "data-route": true,
       className: "btn btn-primary"
@@ -6376,7 +6718,10 @@ const PublicDashboard = ({
     }
   }, React.createElement("div", null, React.createElement("div", {
     className: "mono"
-  }, "Ranking p\xFAblico"), React.createElement("h1", {
+  }, React.createElement(Texto, {
+    k: "plataforma.inicio.rotulo",
+    d: "Ranking p\xFAblico"
+  })), React.createElement("h1", {
     style: {
       fontFamily: "var(--font-display)",
       fontStyle: "italic",
@@ -6386,11 +6731,10 @@ const PublicDashboard = ({
       lineHeight: 0.9,
       letterSpacing: "-0.03em"
     }
-  }, "\xBFCu\xE1l es la", React.createElement("br", null), "mejor taza de", React.createElement("br", null), React.createElement("span", {
-    style: {
-      color: "var(--galeras)"
-    }
-  }, "Nari\xF1o"), "?"), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.inicio.titulo",
+    d: "¿Cuál es la\nmejor taza de\n*Nariño*?"
+  })), React.createElement("p", {
     style: {
       fontSize: 15,
       color: "var(--ink-2)",
@@ -6398,7 +6742,10 @@ const PublicDashboard = ({
       maxWidth: 520,
       lineHeight: 1.6
     }
-  }, "El festival lo decide el p\xFAblico. Escanea el QR de cada stand, vota con un emoji y sella tu pasaporte.")), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "plataforma.inicio.texto",
+    d: "El festival lo decide el p\xFAblico. Escanea el QR de cada stand, vota con un emoji y sella tu pasaporte."
+  }))), React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
@@ -6588,11 +6935,7 @@ const PublicDashboard = ({
   }, comentarios.slice(0, 6).map((c, i) => {
     const s = stands.find(x => x.id === c.stand);
     if (!s) return null;
-    const emoji = {
-      bueno: "😍",
-      regular: "😐",
-      malo: "😞"
-    }[c.emoji] || "•";
+    const emoji = (opcionesVoto().find(o => o.id === c.emoji) || {}).emoji || "•";
     return React.createElement("a", {
       key: i,
       href: "/festival/" + s.id,
@@ -7108,22 +7451,12 @@ const PublicDetail = ({
     style: {
       marginBottom: 10
     }
-  }, "Distribuci\xF3n"), [{
-    k: "Excelente",
-    v: stand.votos.bueno,
-    color: "var(--good)",
-    emoji: "😍"
-  }, {
-    k: "Regular",
-    v: stand.votos.regular,
-    color: "var(--meh)",
-    emoji: "😐"
-  }, {
-    k: "Malo",
-    v: stand.votos.malo,
-    color: "var(--bad)",
-    emoji: "😞"
-  }].map(r => {
+  }, "Distribuci\xF3n"), [...opcionesVoto().reverse().map(o => ({
+    k: o.label,
+    v: stand.votos[o.id],
+    color: o.color,
+    emoji: o.emoji
+  }))].map(r => {
     const pct = totalv > 0 ? r.v / totalv * 100 : 0;
     return React.createElement("div", {
       key: r.k,
@@ -7514,7 +7847,10 @@ const RecorridoPage = ({
       margin: "6px 0 8px",
       lineHeight: 1
     }
-  }, "Los stands del festival."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.recorrido.titulo",
+    d: "Los stands del festival."
+  })), React.createElement("p", {
     style: {
       fontSize: 14,
       color: "var(--ink-2)",
@@ -7525,7 +7861,10 @@ const RecorridoPage = ({
     style: {
       fontWeight: 500
     }
-  }, visitados.length, " de ", stands.length), " sellados. Los que est\xE1n a color ya los visitaste.") : React.createElement(React.Fragment, null, "Escanea el QR de cualquier espacio y vota: a partir de ah\xED, los que visites se van encendiendo aqu\xED.")), cargando && React.createElement("p", {
+  }, visitados.length, " de ", stands.length), " sellados. Los que est\xE1n a color ya los visitaste.") : React.createElement(Texto, {
+    k: "plataforma.recorrido.vacio",
+    d: "Escanea el QR de cualquier espacio y vota: a partir de ah\xED, los que visites se van encendiendo aqu\xED."
+  })), cargando && React.createElement("p", {
     className: "mono",
     style: {
       marginTop: 20,
@@ -8022,14 +8361,20 @@ const PromotorRegistroPage = () => {
       margin: "6px 0 10px",
       lineHeight: 1.05
     }
-  }, "Inscribe tu espacio", React.createElement("br", null), "en el festival."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.inscripcion.titulo",
+    d: "Inscribe tu espacio\nen el festival."
+  })), React.createElement("p", {
     style: {
       color: "var(--ink-2)",
       fontSize: 14,
       lineHeight: 1.6,
       marginBottom: 26
     }
-  }, "Completa los datos de tu espacio. Un organizador revisar\xE1 la solicitud y te enviar\xE1 por correo tu acceso al portal y el c\xF3digo QR de tu espacio, ya listo para imprimir."), React.createElement("form", {
+  }, React.createElement(Texto, {
+    k: "plataforma.inscripcion.texto",
+    d: "Completa los datos de tu espacio. Un organizador revisar\xE1 la solicitud y te enviar\xE1 por correo tu acceso al portal y el c\xF3digo QR de tu espacio, ya listo para imprimir."
+  })), React.createElement("form", {
     onSubmit: enviar,
     style: {
       display: "flex",
@@ -8982,13 +9327,11 @@ const PromotorPortalPage = ({
       alignItems: "center",
       gap: 12
     }
-  }, React.createElement("div", {
-    style: {
-      filter: "invert(1)"
-    }
-  }, React.createElement(LogoTaza, {
-    size: 30
-  })), React.createElement("div", null, React.createElement("div", {
+  }, React.createElement(Logotipo, {
+    size: 30,
+    area: "plataforma",
+    filtro: "invert(1)"
+  }), React.createElement("div", null, React.createElement("div", {
     className: "mono",
     style: {
       color: "var(--paper-3)"
@@ -9594,6 +9937,13 @@ const AdminPromotores = ({
   };
   const verificar = p => accion(p.id, () => window.LMTApi.verificarPromotor(p.id), res => {
     setRevisando(null);
+    const r = avisoVerificacion(p, res);
+    if (res.renombrado_de) {
+      r.texto += ` Ya había un espacio llamado «${res.renombrado_de}»: éste quedó como «${res.stand_nombre}». Puedes cambiarlo en Espacios.`;
+    }
+    return r;
+  });
+  const avisoVerificacion = (p, res) => {
     if (res.acceso_propio) {
       return {
         tipo: res.correo_enviado ? "ok" : "error",
@@ -9607,7 +9957,7 @@ const AdminPromotores = ({
       tipo: "error",
       texto: `Aprobado, pero el correo NO pudo enviarse. Entrega esta clave a ${p.email} por un canal seguro: ${res.clave_temporal}`
     };
-  });
+  };
   const reenviar = p => accion(p.id, () => window.LMTApi.reenviarClave(p.id), res => res.correo_enviado ? {
     tipo: "ok",
     texto: `Nueva contraseña enviada a ${p.email}. La anterior dejó de funcionar.`
@@ -9668,7 +10018,10 @@ const AdminPromotores = ({
     className: "mono"
   }, "Inscripciones \xB7 ", lista.length, " registros", pendientes ? ` · ${pendientes} por revisar` : ""), React.createElement("h1", {
     className: "titulo-xl"
-  }, "Promotores de espacios"), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "admin.promotores.titulo",
+    d: "Promotores de espacios"
+  })), React.createElement("p", {
     style: {
       color: "var(--ink-2)",
       fontSize: 14,
@@ -9676,7 +10029,19 @@ const AdminPromotores = ({
       marginTop: 10,
       maxWidth: 620
     }
-  }, "Al verificar una solicitud el sistema genera una contrase\xF1a temporal y la env\xEDa al correo del promotor. S\xF3lo entonces podr\xE1 entrar a cargar su empresa y sus productos.")), React.createElement("div", {
+  }, React.createElement(Texto, {
+    k: "admin.promotores.texto",
+    d: "Al verificar una solicitud el sistema genera una contrase\xF1a temporal y la env\xEDa al correo del promotor. S\xF3lo entonces podr\xE1 entrar a cargar su empresa y sus productos."
+  }))), React.createElement(BarraDescargas, {
+    informes: [{
+      ruta: "/export/promotores.csv",
+      etiqueta: "Inscripciones con su caracterización",
+      nota: "Lleva nombre, documento, correo y teléfono de cada promotor: son datos personales."
+    }, {
+      ruta: "/export/resumen.csv",
+      etiqueta: "Resumen por estado"
+    }]
+  }), React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -9903,7 +10268,13 @@ const AdminCorreos = () => {
     style: {
       marginBottom: 20
     }
-  }, "Bit\xE1cora de correos"), fallidos > 0 && React.createElement(Aviso, null, fallidos, " env\xEDo", fallidos === 1 ? "" : "s", " fallaron. Revisa la secci\xF3n ", React.createElement("code", null, "mail"), " de", React.createElement("code", null, " api/config.php"), ": en hosting compartido suele ser necesario configurar SMTP."), React.createElement(Aviso, null, error), React.createElement("div", {
+  }, "Bit\xE1cora de correos"), React.createElement(BarraDescargas, {
+    informes: [{
+      ruta: "/export/correos.csv",
+      etiqueta: "Bitácora completa",
+      nota: "Lleva las direcciones de correo de los destinatarios."
+    }]
+  }), fallidos > 0 && React.createElement(Aviso, null, fallidos, " env\xEDo", fallidos === 1 ? "" : "s", " fallaron. Revisa la secci\xF3n ", React.createElement("code", null, "mail"), " de", React.createElement("code", null, " api/config.php"), ": en hosting compartido suele ser necesario configurar SMTP."), React.createElement(Aviso, null, error), React.createElement("div", {
     className: "tabla-scroll",
     style: {
       border: "1px solid var(--line)",
@@ -11082,14 +11453,20 @@ const PerfilVisitantePage = () => {
       margin: "6px 0 10px",
       lineHeight: 1.05
     }
-  }, existia ? "Tus datos." : "Cuéntanos\nquién nos visita."), React.createElement("p", {
+  }, existia ? "Tus datos." : React.createElement(Texto, {
+    k: "plataforma.perfil.titulo",
+    d: "Cuéntanos\nquién nos visita."
+  })), React.createElement("p", {
     style: {
       color: "var(--ink-2)",
       fontSize: 14,
       lineHeight: 1.65,
       marginBottom: 8
     }
-  }, "Con esto sabemos qui\xE9n viene al festival y podemos preparar mejor la pr\xF3xima edici\xF3n.", React.createElement("strong", null, " Ning\xFAn dato es obligatorio"), ": responde s\xF3lo lo que quieras."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "plataforma.perfil.texto",
+    d: "Con esto sabemos qui\xE9n viene al festival y podemos preparar mejor la pr\xF3xima edici\xF3n. **Ning\xFAn dato es obligatorio**: responde s\xF3lo lo que quieras."
+  })), React.createElement("p", {
     className: "mono",
     style: {
       color: "var(--ink-3)",
@@ -11423,6 +11800,7 @@ const BarraDimension = ({
 const TarjetaDimension = ({
   titulo,
   nota,
+  descarga,
   children
 }) => React.createElement("div", {
   style: {
@@ -11432,11 +11810,16 @@ const TarjetaDimension = ({
     background: "var(--paper)"
   }
 }, React.createElement("div", {
-  className: "mono",
+  className: "cabecera-tarjeta",
   style: {
     marginBottom: nota ? 4 : 14
   }
-}, titulo), nota && React.createElement("p", {
+}, React.createElement("span", {
+  className: "mono"
+}, titulo), descarga && React.createElement(DescargaMini, {
+  ruta: descarga,
+  titulo: `Descargar «${titulo}» (CSV)`
+})), nota && React.createElement("p", {
   style: {
     fontSize: 12,
     color: "var(--ink-3)",
@@ -11483,7 +11866,6 @@ const AdminCaracterizacion = () => {
   const eti = d.etiquetas || {};
   const total = d.total || 0;
   const cobertura = d.votantes > 0 ? Math.round(total * 100 / d.votantes) : 0;
-  const csv = window.LMTApi.urlFor("/export/visitantes.csv");
   const primera = (d.primera_visita || []).map(f => ({
     valor: String(f.valor),
     n: f.n
@@ -11503,10 +11885,19 @@ const AdminCaracterizacion = () => {
     className: "mono"
   }, "Visitantes \xB7 ", total, " perfiles"), React.createElement("h1", {
     className: "titulo-xl"
-  }, "Caracterizaci\xF3n")), React.createElement("a", {
-    className: "btn btn-ghost",
-    href: csv
-  }, "Descargar CSV")), React.createElement("p", {
+  }, "Caracterizaci\xF3n"))), React.createElement(BarraDescargas, {
+    informes: [{
+      ruta: "/export/caracterizacion.csv",
+      etiqueta: "Resumen por respuesta"
+    }, {
+      ruta: "/export/expectativas.csv",
+      etiqueta: "Expectativas"
+    }, {
+      ruta: "/export/visitantes.csv",
+      etiqueta: "Perfiles uno a uno",
+      nota: "Los perfiles uno a uno llevan datos personales y sensibles: guárdalos donde corresponda y no los reenvíes por correo."
+    }]
+  }), React.createElement("p", {
     style: {
       color: "var(--ink-2)",
       fontSize: 14,
@@ -11514,7 +11905,17 @@ const AdminCaracterizacion = () => {
       margin: "0 0 24px",
       maxWidth: 640
     }
-  }, "Lo que los visitantes respondieron por su cuenta despu\xE9s de votar. Todo es voluntario, as\xED que las cifras describen a quien quiso contestar, no al total del p\xFAblico. El CSV lleva datos personales: gu\xE1rdalo donde corresponda y no lo reenv\xEDes por correo."), React.createElement(Aviso, null, error), React.createElement("div", {
+  }, "Lo que los visitantes respondieron por su cuenta despu\xE9s de votar. Todo es voluntario, as\xED que las cifras describen a quien quiso contestar, no al total del p\xFAblico."), React.createElement(Aviso, null, error), React.createElement("div", {
+    className: "cabecera-tarjeta",
+    style: {
+      marginBottom: 6
+    }
+  }, React.createElement("span", {
+    className: "mono"
+  }, "Cifras"), React.createElement(DescargaMini, {
+    ruta: "/export/resumen.csv",
+    titulo: "Descargar las cifras (CSV)"
+  })), React.createElement("div", {
     className: "grid-3",
     style: {
       marginBottom: 24
@@ -11584,31 +11985,36 @@ const AdminCaracterizacion = () => {
       alignItems: "start"
     }
   }, React.createElement(TarjetaDimension, {
-    titulo: "G\xE9nero"
+    titulo: "G\xE9nero",
+    descarga: "/export/caracterizacion.csv?dimension=genero"
   }, React.createElement(BarraDimension, {
     filas: d.dimensiones.genero,
     etiquetas: eti.genero,
     total: total
   })), React.createElement(TarjetaDimension, {
-    titulo: "Rango de edad"
+    titulo: "Rango de edad",
+    descarga: "/export/caracterizacion.csv?dimension=rango_edad"
   }, React.createElement(BarraDimension, {
     filas: d.dimensiones.rango_edad,
     etiquetas: eti.rango_edad,
     total: total
   })), React.createElement(TarjetaDimension, {
-    titulo: "Tipo de visitante"
+    titulo: "Tipo de visitante",
+    descarga: "/export/caracterizacion.csv?dimension=tipo_visitante"
   }, React.createElement(BarraDimension, {
     filas: d.dimensiones.tipo_visitante,
     etiquetas: eti.tipo_visitante,
     total: total
   })), React.createElement(TarjetaDimension, {
-    titulo: "C\xF3mo se enteraron"
+    titulo: "C\xF3mo se enteraron",
+    descarga: "/export/caracterizacion.csv?dimension=como_se_entero"
   }, React.createElement(BarraDimension, {
     filas: d.dimensiones.como_se_entero,
     etiquetas: eti.como_se_entero,
     total: total
   })), React.createElement(TarjetaDimension, {
     titulo: "Grupo \xE9tnico",
+    descarga: "/export/caracterizacion.csv?dimension=grupo_etnico",
     nota: "Dato sensible, de respuesta voluntaria."
   }, React.createElement(BarraDimension, {
     filas: d.dimensiones.grupo_etnico,
@@ -11616,6 +12022,7 @@ const AdminCaracterizacion = () => {
     total: total
   })), React.createElement(TarjetaDimension, {
     titulo: "Discapacidad",
+    descarga: "/export/caracterizacion.csv?dimension=discapacidad",
     nota: "Dato sensible, de respuesta voluntaria."
   }, React.createElement(BarraDimension, {
     filas: d.dimensiones.discapacidad,
@@ -11623,13 +12030,15 @@ const AdminCaracterizacion = () => {
     total: total
   })), React.createElement(TarjetaDimension, {
     titulo: "Municipio de origen",
-    nota: "Los 25 m\xE1s frecuentes."
+    descarga: "/export/caracterizacion.csv?dimension=municipio",
+    nota: "Los 25 m\xE1s frecuentes. El CSV los trae todos."
   }, React.createElement(BarraDimension, {
     filas: d.municipios,
     etiquetas: null,
     total: total
   })), React.createElement(TarjetaDimension, {
-    titulo: "Primera visita"
+    titulo: "Primera visita",
+    descarga: "/export/caracterizacion.csv?dimension=primera_visita"
   }, React.createElement(BarraDimension, {
     filas: primera,
     etiquetas: {
@@ -11642,11 +12051,16 @@ const AdminCaracterizacion = () => {
       marginTop: 28
     }
   }, React.createElement("div", {
-    className: "mono",
+    className: "cabecera-tarjeta",
     style: {
       marginBottom: 12
     }
-  }, "Qu\xE9 esperan del festival \xB7 ", expectativas.length, " respuestas"), React.createElement("div", {
+  }, React.createElement("span", {
+    className: "mono"
+  }, "Qu\xE9 esperan del festival \xB7 ", expectativas.length, " respuestas"), React.createElement(DescargaMini, {
+    ruta: "/export/expectativas.csv",
+    titulo: "Descargar todas las expectativas (CSV)"
+  })), React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -11733,22 +12147,28 @@ const EconomiaPage = () => {
   }, []);
   if (error) return React.createElement(AdminShell, {
     active: "economia"
-  }, React.createElement(Aviso, null, error));
+  }, React.createElement("div", {
+    className: "admin-page"
+  }, React.createElement(Aviso, null, error)));
   if (!datos) {
     return React.createElement(AdminShell, {
       active: "economia"
+    }, React.createElement("div", {
+      className: "admin-page"
     }, React.createElement("p", {
       className: "mono",
       style: {
         color: "var(--ink-3)"
       }
-    }, "Cargando\u2026"));
+    }, "Cargando\u2026")));
   }
   const t = datos.total;
   const conCompras = datos.stands.filter(s => s.compras > 0);
   const maximo = Math.max(1, ...datos.stands.map(s => s.valor));
   return React.createElement(AdminShell, {
     active: "economia"
+  }, React.createElement("div", {
+    className: "admin-page"
   }, React.createElement("div", {
     className: "mono"
   }, "Actividad econ\xF3mica"), React.createElement("h1", {
@@ -11760,7 +12180,10 @@ const EconomiaPage = () => {
       margin: "6px 0 10px",
       lineHeight: 1
     }
-  }, "Las compras del festival."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "admin.economia.titulo",
+    d: "Las compras del festival."
+  })), React.createElement("p", {
     style: {
       fontSize: 14,
       color: "var(--ink-2)",
@@ -11772,7 +12195,26 @@ const EconomiaPage = () => {
     style: {
       fontWeight: 500
     }
-  }, "lo real siempre es igual o m\xE1s"), ". Sirve para medir la magnitud y comparar stands."), React.createElement("div", {
+  }, "lo real siempre es igual o m\xE1s"), ". Sirve para medir la magnitud y comparar stands."), React.createElement(BarraDescargas, {
+    informes: [{
+      ruta: "/export/economia.csv",
+      etiqueta: "Compras por espacio y total"
+    }, {
+      ruta: "/export/votos.csv",
+      etiqueta: "Detalle voto a voto",
+      nota: "El detalle lleva el correo de cada visitante: son datos personales."
+    }]
+  }), React.createElement("div", {
+    className: "cabecera-tarjeta",
+    style: {
+      marginBottom: 6
+    }
+  }, React.createElement("span", {
+    className: "mono"
+  }, "Todo el festival"), React.createElement(DescargaMini, {
+    ruta: "/export/economia.csv",
+    titulo: "Descargar las cifras (CSV; el total es la \xFAltima fila)"
+  })), React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
@@ -11795,11 +12237,16 @@ const EconomiaPage = () => {
     valor: pesos(t.ticket),
     nota: "entre las que declararon importe"
   })), React.createElement("div", {
-    className: "mono",
+    className: "cabecera-tarjeta",
     style: {
       margin: "28px 0 12px"
     }
-  }, "Por espacio"), !conCompras.length && React.createElement("p", {
+  }, React.createElement("span", {
+    className: "mono"
+  }, "Por espacio"), React.createElement(DescargaMini, {
+    ruta: "/export/economia.csv",
+    titulo: "Descargar la tabla por espacio (CSV)"
+  })), !conCompras.length && React.createElement("p", {
     style: {
       color: "var(--ink-2)"
     }
@@ -11844,7 +12291,7 @@ const EconomiaPage = () => {
       fontSize: 9,
       color: "var(--ink-3)"
     }
-  }, s.municipio), React.createElement("div", {
+  }, "#", numeroDeEspacio((window.STANDS_DATA || []).find(x => x.id === s.id) || s), " \xB7 ", s.municipio), React.createElement("div", {
     style: {
       height: 4,
       marginTop: 6,
@@ -11881,7 +12328,7 @@ const EconomiaPage = () => {
       textAlign: "right",
       color: "var(--ink-2)"
     }
-  }, s.conversion, "%")))))));
+  }, s.conversion, "%"))))))));
 };
 Object.assign(window, {
   EconomiaPage
@@ -12037,9 +12484,7 @@ const FestivalPage = () => {
     };
   }, []);
   if (!aj) {
-    return React.createElement(AdminShell, {
-      active: "festival"
-    }, error ? React.createElement(Aviso, null, error) : React.createElement("p", {
+    return React.createElement("div", null, error ? React.createElement(Aviso, null, error) : React.createElement("p", {
       className: "mono",
       style: {
         color: "var(--ink-3)"
@@ -12101,9 +12546,7 @@ const FestivalPage = () => {
     }
   };
   const hojas = aj.pasaporte && aj.pasaporte.hojas || [];
-  return React.createElement(AdminShell, {
-    active: "festival"
-  }, React.createElement("div", {
+  return React.createElement("div", null, React.createElement("div", {
     className: "mono"
   }, "Personalizaci\xF3n"), React.createElement("h1", {
     style: {
@@ -12114,7 +12557,10 @@ const FestivalPage = () => {
       margin: "6px 0 10px",
       lineHeight: 1
     }
-  }, "C\xF3mo se ve el festival."), React.createElement("p", {
+  }, React.createElement(Texto, {
+    k: "admin.personalizacion.titulo",
+    d: "C\xF3mo se ve el festival."
+  })), React.createElement("p", {
     style: {
       fontSize: 14,
       color: "var(--ink-2)",
@@ -12536,6 +12982,48 @@ const SistemaPage = () => {
   }, "Borra los datos de ejemplo y de las pruebas para dejar el festival listo antes de abrir al p\xFAblico. ", React.createElement("strong", null, "Las cuentas de administraci\xF3n nunca se tocan"), ": si se borraran, nadie podr\xEDa volver a entrar a arreglarlo.")), React.createElement(Aviso, null, error), hecho && React.createElement(Aviso, {
     tipo: "ok"
   }, "Listo. ", Object.entries(hecho.borrado || {}).filter(([, n]) => n > 0).map(([k, n]) => `${k}: ${n}`).join(" · ") || "no había nada que borrar", "."), React.createElement("div", {
+    style: {
+      marginTop: 18
+    }
+  }, React.createElement(BarraDescargas, {
+    titulo: "Antes de borrar, descarga una copia",
+    informes: [{
+      ruta: "/export/resumen.csv",
+      etiqueta: "Resumen"
+    }, {
+      ruta: "/export/ranking.csv",
+      etiqueta: "Ranking"
+    }, {
+      ruta: "/export/stands.csv",
+      etiqueta: "Espacios"
+    }, {
+      ruta: "/export/votos.csv",
+      etiqueta: "Votos",
+      nota: "Varios archivos llevan datos personales: guárdalos donde corresponda."
+    }, {
+      ruta: "/export/economia.csv",
+      etiqueta: "Economía"
+    }, {
+      ruta: "/export/pasaportes.csv",
+      etiqueta: "Pasaportes",
+      nota: "Varios archivos llevan datos personales: guárdalos donde corresponda."
+    }, {
+      ruta: "/export/promotores.csv",
+      etiqueta: "Promotores",
+      nota: "Varios archivos llevan datos personales: guárdalos donde corresponda."
+    }, {
+      ruta: "/export/visitantes.csv",
+      etiqueta: "Visitantes",
+      nota: "Varios archivos llevan datos personales: guárdalos donde corresponda."
+    }, {
+      ruta: "/export/caracterizacion.csv",
+      etiqueta: "Caracterización"
+    }, {
+      ruta: "/export/correos.csv",
+      etiqueta: "Bitácora",
+      nota: "Varios archivos llevan datos personales: guárdalos donde corresponda."
+    }]
+  })), React.createElement("div", {
     style: {
       border: "1px solid var(--line)",
       borderRadius: "var(--r-md)",
@@ -13314,30 +13802,1199 @@ Object.assign(window, {
 });
 })();
 
+/* components/Interfaz.jsx */
+(function () {
+const INTERFAZ_DERIVADOS = {
+  "paper-2": ["paper", "ink", 0.05],
+  "paper-3": ["paper", "ink", 0.12],
+  "line": ["paper", "ink", 0.16],
+  "line-2": ["paper", "ink", 0.25],
+  "ink-2": ["ink", "paper", 0.24],
+  "ink-3": ["ink", "paper", 0.48]
+};
+const hexARgb = h => [1, 3, 5].map(i => parseInt(String(h).slice(i, i + 2), 16));
+const mezclarHex = (a, b, p) => {
+  const ca = hexARgb(a),
+    cb = hexARgb(b);
+  return "#" + ca.map((v, i) => Math.round(v * (1 - p) + cb[i] * p).toString(16).padStart(2, "0")).join("");
+};
+const esHex = v => /^#[0-9a-f]{6}$/i.test(String(v || ""));
+const contrasteHex = (a, b) => {
+  const lum = h => {
+    const c = hexARgb(h).map(v => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const la = lum(a),
+    lb = lum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+const copiaProfunda = v => JSON.parse(JSON.stringify(v));
+const comoMapaI = v => v && typeof v === "object" && !Array.isArray(v) ? v : {};
+const borradorDe = aj => {
+  const areas = {};
+  Object.keys(aj.areas || {}).forEach(a => {
+    const x = aj.areas[a] || {};
+    areas[a] = {
+      colores: {
+        ...comoMapaI(x.colores)
+      },
+      fuentes: {
+        ...comoMapaI(x.fuentes)
+      },
+      nombre: x.nombre !== false
+    };
+  });
+  return {
+    areas,
+    iconos: {
+      ...comoMapaI(aj.iconos)
+    },
+    textos: {
+      ...comoMapaI(aj.textos)
+    }
+  };
+};
+const cuerpoPlano = b => {
+  const colores = {},
+    fuentes = {},
+    nombre = {};
+  Object.keys(b.areas).forEach(a => {
+    Object.entries(b.areas[a].colores).forEach(([k, v]) => {
+      colores[a + "." + k] = v;
+    });
+    Object.entries(b.areas[a].fuentes).forEach(([k, v]) => {
+      fuentes[a + "." + k] = v;
+    });
+    nombre[a] = b.areas[a].nombre;
+  });
+  return {
+    colores,
+    fuentes,
+    nombre,
+    iconos: b.iconos,
+    textos: b.textos
+  };
+};
+const InterfazPage = () => {
+  const [datos, setDatos] = React.useState(null);
+  const [borrador, setBorrador] = React.useState(null);
+  const [area, setArea] = React.useState("plataforma");
+  const [error, setError] = React.useState("");
+  const [ok, setOk] = React.useState("");
+  const [guardando, setGuardando] = React.useState(false);
+  const recibir = (d, mensaje) => {
+    setDatos(d);
+    setBorrador(borradorDe(d.ajustes));
+    if (window.LMTInterfaz && d.publico) window.LMTInterfaz.aplicar(d.publico);
+    if (mensaje) setOk(mensaje);
+  };
+  React.useEffect(() => {
+    let vivo = true;
+    const cargar = async () => {
+      if (!window.LMTApi || !window.LMTApi.enabled) return;
+      try {
+        const d = await window.LMTApi.interfazAdmin();
+        if (vivo) recibir(d);
+      } catch (e) {
+        if (vivo) setError(mensajeError(e));
+      }
+    };
+    cargar();
+    window.addEventListener("lmt:auth", cargar);
+    return () => {
+      vivo = false;
+      window.removeEventListener("lmt:auth", cargar);
+    };
+  }, []);
+  if (!datos || !borrador) {
+    return React.createElement("div", null, error ? React.createElement(Aviso, null, error) : React.createElement("p", {
+      className: "mono",
+      style: {
+        color: "var(--ink-3)"
+      }
+    }, "Cargando\u2026"));
+  }
+  const cat = datos.catalogo;
+  const guardado = borradorDe(datos.ajustes);
+  const sucio = JSON.stringify(guardado) !== JSON.stringify(borrador);
+  const accion = async (fn, mensaje) => {
+    setError("");
+    setOk("");
+    try {
+      recibir(await fn(), mensaje);
+    } catch (e) {
+      setError(mensajeError(e));
+    }
+  };
+  const guardar = async () => {
+    setGuardando(true);
+    await accion(() => window.LMTApi.guardarInterfaz(cuerpoPlano(borrador)), "Guardado. Ya se ve así en toda la aplicación.");
+    setGuardando(false);
+  };
+  const descartar = () => {
+    setBorrador(copiaProfunda(guardado));
+    setError("");
+    setOk("");
+  };
+  const cambiarArea = (campo, valor) => setBorrador(b => ({
+    ...b,
+    areas: {
+      ...b.areas,
+      [area]: {
+        ...b.areas[area],
+        [campo]: valor
+      }
+    }
+  }));
+  const nombreArea = a => (cat.areas.find(x => x.clave === a) || {}).etiqueta || a;
+  return React.createElement("div", null, React.createElement("div", {
+    className: "mono"
+  }, "Interfaz"), React.createElement("h1", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 40,
+      fontWeight: 400,
+      margin: "6px 0 10px",
+      lineHeight: 1
+    }
+  }, "Colores, letra y textos."), React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: "var(--ink-2)",
+      lineHeight: 1.6,
+      maxWidth: 680,
+      marginBottom: 8
+    }
+  }, "Tres \xE1reas: la ", React.createElement("strong", {
+    style: {
+      fontWeight: 500
+    }
+  }, "plataforma"), " que ve el p\xFAblico, este", React.createElement("strong", {
+    style: {
+      fontWeight: 500
+    }
+  }, " panel de administraci\xF3n"), " y el ", React.createElement("strong", {
+    style: {
+      fontWeight: 500
+    }
+  }, "pasaporte"), ". Lo que pongas en la plataforma vale tambi\xE9n para las otras dos mientras no les pongas otra cosa. Los cambios no se aplican hasta que pulses \xABGuardar\xBB."), React.createElement("p", {
+    className: "ayuda",
+    style: {
+      maxWidth: 680,
+      marginBottom: 20
+    }
+  }, "Si una combinaci\xF3n deja el panel ilegible, abre la direcci\xF3n con ", React.createElement("code", null, "?tema=original"), " al final (por ejemplo ", React.createElement("code", null, "/admin/configuracion/interfaz?tema=original"), "): se ver\xE1 con el aspecto de f\xE1brica y podr\xE1s deshacerla."), React.createElement("div", {
+    role: "tablist",
+    "aria-label": "\xC1rea",
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap",
+      marginBottom: 18
+    }
+  }, cat.areas.map(a => React.createElement("button", {
+    key: a.clave,
+    type: "button",
+    role: "tab",
+    "aria-selected": area === a.clave,
+    onClick: () => setArea(a.clave),
+    className: "btn " + (area === a.clave ? "btn-primary" : "btn-ghost")
+  }, a.etiqueta))), React.createElement(Aviso, null, error), React.createElement(Aviso, {
+    tipo: "ok"
+  }, ok), React.createElement("div", {
+    className: "interfaz-rejilla"
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 20,
+      minWidth: 0
+    }
+  }, React.createElement(BloqueColores, {
+    cat: cat,
+    area: area,
+    borrador: borrador,
+    onCambio: colores => cambiarArea("colores", colores)
+  }), React.createElement(BloqueFuentes, {
+    cat: cat,
+    area: area,
+    borrador: borrador,
+    propias: datos.ajustes.fuentes_propias,
+    onCambio: fuentes => cambiarArea("fuentes", fuentes)
+  }), React.createElement(BloqueLogo, {
+    area: area,
+    nombreArea: nombreArea(area),
+    ajustes: datos.ajustes,
+    nombre: borrador.areas[area].nombre,
+    onNombre: v => cambiarArea("nombre", v),
+    onSubir: file => accion(() => window.LMTApi.subirLogoInterfaz(area, file), "Logotipo guardado."),
+    onQuitar: () => accion(() => window.LMTApi.quitarLogoInterfaz(area), "Logotipo quitado.")
+  }), React.createElement(BloqueTextos, {
+    cat: cat,
+    area: area,
+    borrador: borrador,
+    onCambio: textos => setBorrador(b => ({
+      ...b,
+      textos
+    }))
+  }), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: () => {
+      if (!confirm(`¿Volver a los colores y la letra de fábrica en «${nombreArea(area)}»?`)) return;
+      accion(() => window.LMTApi.restaurarInterfaz("apariencia", area), "Colores y letra de fábrica restaurados.");
+    }
+  }, "Colores y letra de f\xE1brica en esta \xE1rea"), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: () => {
+      if (!confirm(`¿Volver a los textos de fábrica en «${nombreArea(area)}»?`)) return;
+      accion(() => window.LMTApi.restaurarInterfaz("textos", area), "Textos de fábrica restaurados.");
+    }
+  }, "Textos de f\xE1brica en esta \xE1rea"))), React.createElement("div", {
+    className: "interfaz-lateral"
+  }, React.createElement(VistaPrevia, {
+    cat: cat,
+    area: area,
+    borrador: borrador,
+    ajustes: datos.ajustes
+  }))), React.createElement("h2", {
+    className: "mono",
+    style: {
+      margin: "36px 0 12px",
+      fontSize: 12
+    }
+  }, "Para todas las \xE1reas"), React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 20
+    }
+  }, React.createElement(BloqueIconos, {
+    cat: cat,
+    borrador: borrador,
+    onCambio: iconos => setBorrador(b => ({
+      ...b,
+      iconos
+    })),
+    onRestaurar: () => accion(() => window.LMTApi.restaurarInterfaz("iconos", ""), "Iconos de fábrica restaurados.")
+  }), React.createElement(BloqueFuentesPropias, {
+    cat: cat,
+    propias: datos.ajustes.fuentes_propias,
+    onSubir: (file, nombre) => accion(() => window.LMTApi.subirFuenteInterfaz(file, nombre), "Fuente subida. Ya puedes elegirla en «Letra»."),
+    onQuitar: id => accion(() => window.LMTApi.quitarFuenteInterfaz(id), "Fuente quitada.")
+  }), React.createElement(BloqueFavicon, {
+    favicon: datos.ajustes.favicon,
+    onSubir: file => accion(() => window.LMTApi.subirLogoInterfaz("favicon", file), "Icono de la pestaña guardado."),
+    onQuitar: () => accion(() => window.LMTApi.quitarLogoInterfaz("favicon"), "Icono de la pestaña quitado.")
+  })), React.createElement("div", {
+    className: "interfaz-guardar" + (sucio ? " pendiente" : "")
+  }, React.createElement("span", {
+    className: "mono",
+    style: {
+      color: sucio ? "var(--ink)" : "var(--ink-3)"
+    }
+  }, sucio ? "Hay cambios sin guardar" : "Todo guardado"), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: !sucio || guardando,
+    onClick: descartar
+  }, "Descartar"), React.createElement("button", {
+    type: "button",
+    className: "btn btn-primary",
+    disabled: !sucio || guardando,
+    onClick: guardar,
+    style: {
+      opacity: !sucio || guardando ? 0.6 : 1
+    }
+  }, guardando ? "Guardando…" : "Guardar"))));
+};
+const colorEfectivo = (cat, borrador, area, clave) => {
+  const propio = borrador.areas[area].colores[clave];
+  if (propio) return {
+    valor: propio,
+    origen: "propio"
+  };
+  if (area !== "plataforma") {
+    const base = borrador.areas.plataforma.colores[clave];
+    if (base) return {
+      valor: base,
+      origen: "plataforma"
+    };
+  }
+  return {
+    valor: (cat.colores.find(c => c.clave === clave) || {}).defecto || "#000000",
+    origen: "fabrica"
+  };
+};
+const BloqueColores = ({
+  cat,
+  area,
+  borrador,
+  onCambio
+}) => {
+  const colores = borrador.areas[area].colores;
+  const poner = (k, v) => {
+    const siguiente = {
+      ...colores
+    };
+    if (v) siguiente[k] = v.toLowerCase();else delete siguiente[k];
+    onCambio(siguiente);
+  };
+  const papel = colorEfectivo(cat, borrador, area, "paper").valor;
+  const tinta = colorEfectivo(cat, borrador, area, "ink").valor;
+  const grano = colorEfectivo(cat, borrador, area, "grano").valor;
+  const cTexto = contrasteHex(papel, tinta);
+  const cAcento = contrasteHex(papel, grano);
+  return React.createElement(BloqueForm, {
+    titulo: "Colores",
+    nota: "El fondo y el texto definen tambi\xE9n los tonos intermedios (bordes, superficies, texto secundario): se calculan solos para que combinen."
+  }, React.createElement("div", {
+    className: "interfaz-colores"
+  }, cat.colores.map(c => {
+    const ef = colorEfectivo(cat, borrador, area, c.clave);
+    return React.createElement("div", {
+      key: c.clave,
+      className: "interfaz-color"
+    }, React.createElement("input", {
+      type: "color",
+      id: `ic-${c.clave}`,
+      value: ef.valor,
+      onChange: e => poner(c.clave, e.target.value),
+      "aria-label": c.etiqueta
+    }), React.createElement("div", {
+      style: {
+        minWidth: 0,
+        flex: 1
+      }
+    }, React.createElement("label", {
+      htmlFor: `ic-${c.clave}`,
+      style: {
+        fontSize: 13,
+        display: "block"
+      }
+    }, c.etiqueta), React.createElement("input", {
+      className: "ruta",
+      value: colores[c.clave] || "",
+      placeholder: ef.valor,
+      "aria-label": `${c.etiqueta} en hexadecimal`,
+      onChange: e => {
+        const v = e.target.value.trim();
+        if (v === "") poner(c.clave, "");else if (esHex(v)) poner(c.clave, v);
+      },
+      style: {
+        border: "none",
+        borderBottom: "1px solid var(--line)",
+        background: "transparent",
+        width: 90,
+        padding: "2px 0"
+      }
+    }), React.createElement("div", {
+      className: "ayuda"
+    }, ef.origen === "propio" ? React.createElement("button", {
+      type: "button",
+      onClick: () => poner(c.clave, ""),
+      style: {
+        padding: 0,
+        color: "var(--grano)",
+        textDecoration: "underline",
+        fontSize: 12
+      }
+    }, area === "plataforma" ? "volver al de fábrica" : "usar el de la plataforma") : ef.origen === "plataforma" ? "igual que la plataforma" : "de fábrica")));
+  })), cTexto < 4.5 && React.createElement(Aviso, null, "El texto sobre este fondo tiene un contraste de ", cTexto.toFixed(1), ":1 y el m\xEDnimo para leer con comodidad es 4,5:1. Con sol, en el recinto, se leer\xE1 peor todav\xEDa."), cTexto >= 4.5 && cAcento < 3 && React.createElement(Aviso, {
+    tipo: "info"
+  }, "El acento principal apenas se distingue del fondo (", cAcento.toFixed(1), ":1): los enlaces y botones resaltados costar\xE1n de ver."));
+};
+const pilaFuente = (cat, propias, valor, rol) => {
+  if (!valor) return null;
+  const f = cat.fuentes.find(x => x.clave === valor);
+  if (f) return f.pila;
+  const m = /^propia:([0-9a-f]{12})$/.exec(valor);
+  if (m) return `"LMT Propia ${m[1]}", ${rol === "display" ? "Georgia, serif" : rol === "mono" ? "ui-monospace, monospace" : "system-ui, sans-serif"}`;
+  return null;
+};
+const fuenteEfectiva = (cat, borrador, propias, area, rol) => {
+  const propio = borrador.areas[area].fuentes[rol];
+  if (propio) return {
+    valor: propio,
+    origen: "propio"
+  };
+  if (area !== "plataforma" && borrador.areas.plataforma.fuentes[rol]) {
+    return {
+      valor: borrador.areas.plataforma.fuentes[rol],
+      origen: "plataforma"
+    };
+  }
+  return {
+    valor: (cat.roles.find(r => r.clave === rol) || {}).defecto,
+    origen: "fabrica"
+  };
+};
+const BloqueFuentes = ({
+  cat,
+  area,
+  borrador,
+  propias,
+  onCambio
+}) => {
+  const fuentes = borrador.areas[area].fuentes;
+  const heredado = area === "plataforma" ? "De fábrica" : "La misma que la plataforma";
+  const muestras = {
+    display: "La mejor taza de Nariño",
+    sans: "Recorre los espacios, prueba y vota.",
+    mono: "Espacio 12 · Pasto"
+  };
+  return React.createElement(BloqueForm, {
+    titulo: "Letra",
+    nota: "Las de f\xE1brica y las del sistema no se descargan de ning\xFAn servicio externo. Para una tipograf\xEDa institucional, s\xFAbela en \xABFuentes propias\xBB (abajo) y aparecer\xE1 en estas listas."
+  }, cat.roles.map(r => {
+    const ef = fuenteEfectiva(cat, borrador, propias, area, r.clave);
+    return React.createElement("div", {
+      key: r.clave,
+      className: "field"
+    }, React.createElement("label", {
+      htmlFor: `if-${r.clave}`
+    }, r.etiqueta), React.createElement("select", {
+      id: `if-${r.clave}`,
+      value: fuentes[r.clave] || "",
+      onChange: e => {
+        const siguiente = {
+          ...fuentes
+        };
+        if (e.target.value) siguiente[r.clave] = e.target.value;else delete siguiente[r.clave];
+        onCambio(siguiente);
+      }
+    }, React.createElement("option", {
+      value: ""
+    }, heredado), cat.fuentes.map(f => React.createElement("option", {
+      key: f.clave,
+      value: f.clave
+    }, f.etiqueta)), propias.map(f => React.createElement("option", {
+      key: f.id,
+      value: "propia:" + f.id
+    }, f.nombre, " (propia)"))), React.createElement("div", {
+      style: {
+        fontFamily: pilaFuente(cat, propias, ef.valor, r.clave) || undefined,
+        fontStyle: r.clave === "display" ? "italic" : "normal",
+        fontSize: r.clave === "display" ? 26 : r.clave === "mono" ? 12 : 15,
+        textTransform: r.clave === "mono" ? "uppercase" : "none",
+        letterSpacing: r.clave === "mono" ? "0.04em" : 0,
+        marginTop: 6,
+        color: "var(--ink-2)"
+      }
+    }, muestras[r.clave]));
+  }));
+};
+const BloqueLogo = ({
+  area,
+  nombreArea,
+  ajustes,
+  nombre,
+  onNombre,
+  onSubir,
+  onQuitar
+}) => {
+  const ref = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const propio = ajustes.areas[area].logo;
+  const heredado = area !== "plataforma" ? ajustes.areas.plataforma.logo : "";
+  const visible = propio || heredado;
+  const elegir = async e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    setBusy(true);
+    try {
+      await onSubir(f);
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+  return React.createElement(BloqueForm, {
+    titulo: "Logotipo",
+    nota: `Sustituye a la taza dibujada en la cabecera de «${nombreArea}». Mejor un PNG con fondo transparente, más ancho que alto.`
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      flexWrap: "wrap",
+      padding: 12,
+      border: "1px dashed var(--line-2)",
+      borderRadius: "var(--r-md)",
+      background: "var(--paper-2)"
+    }
+  }, React.createElement("div", {
+    style: {
+      height: 56,
+      minWidth: 56,
+      display: "flex",
+      alignItems: "center"
+    }
+  }, visible ? React.createElement("img", {
+    src: urlImagen(visible),
+    alt: "Logotipo actual",
+    style: {
+      maxHeight: 56,
+      maxWidth: 220,
+      objectFit: "contain"
+    }
+  }) : React.createElement(LogoTaza, {
+    size: 48
+  })), React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 200
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "var(--ink-2)",
+      marginBottom: 8
+    }
+  }, propio ? "Logotipo propio de esta área." : heredado ? "Usa el logotipo de la plataforma." : "La taza de fábrica."), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: () => ref.current && ref.current.click()
+  }, busy ? "Subiendo…" : propio ? "Cambiar" : "Subir logotipo"), propio && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: onQuitar
+  }, "Quitar")), React.createElement("div", {
+    className: "ayuda",
+    style: {
+      marginTop: 6
+    }
+  }, ayudaImagen(false)), React.createElement("input", {
+    ref: ref,
+    type: "file",
+    accept: "image/png,image/webp,image/jpeg",
+    onChange: elegir,
+    style: {
+      display: "none"
+    }
+  }))), React.createElement("label", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "center",
+      fontSize: 14
+    }
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: nombre,
+    onChange: e => onNombre(e.target.checked),
+    disabled: !propio
+  }), "Mostrar el nombre del festival junto al logotipo"), !propio && React.createElement("span", {
+    className: "ayuda"
+  }, "S\xF3lo se puede ocultar cuando esta \xE1rea tiene su propio logotipo: la taza sola no dice de qu\xE9 se trata."));
+};
+const BloqueTextos = ({
+  cat,
+  area,
+  borrador,
+  onCambio
+}) => {
+  const [filtro, setFiltro] = React.useState("");
+  const lista = cat.textos.filter(t => t.area === area);
+  const q = filtro.trim().toLowerCase();
+  const visibles = q ? lista.filter(t => (t.etiqueta + " " + t.seccion + " " + t.defecto + " " + (borrador.textos[t.clave] || "")).toLowerCase().includes(q)) : lista;
+  const secciones = [];
+  visibles.forEach(t => {
+    if (!secciones.includes(t.seccion)) secciones.push(t.seccion);
+  });
+  const poner = (k, v) => {
+    const siguiente = {
+      ...borrador.textos
+    };
+    if (v === "") delete siguiente[k];else siguiente[k] = v;
+    onCambio(siguiente);
+  };
+  const cambiados = lista.filter(t => borrador.textos[t.clave]).length;
+  return React.createElement(BloqueForm, {
+    titulo: `Textos · ${cambiados} de ${lista.length} cambiados`,
+    nota: "Vac\xEDo = el texto de f\xE1brica, que se ve en gris dentro del campo. En t\xEDtulos y p\xE1rrafos, un salto de l\xEDnea parte la frase, *as\xED* pinta una palabra con el color de acento y **as\xED** la pone en negrita."
+  }, React.createElement("div", {
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "it-buscar"
+  }, "Buscar"), React.createElement("input", {
+    id: "it-buscar",
+    value: filtro,
+    onChange: e => setFiltro(e.target.value),
+    placeholder: "Ej: pasaporte, voto, t\xEDtulo\u2026"
+  })), secciones.map(sec => React.createElement("div", {
+    key: sec,
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 16
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      color: "var(--ink)",
+      borderBottom: "1px solid var(--line)",
+      paddingBottom: 4
+    }
+  }, sec), visibles.filter(t => t.seccion === sec).map(t => {
+    const valor = borrador.textos[t.clave] || "";
+    const id = "it-" + t.clave.replace(/\./g, "-");
+    const Campo = t.tipo === "linea" ? "input" : "textarea";
+    return React.createElement("div", {
+      key: t.clave,
+      className: "field"
+    }, React.createElement("label", {
+      htmlFor: id
+    }, t.etiqueta), React.createElement(Campo, {
+      id: id,
+      value: valor,
+      maxLength: t.max,
+      placeholder: t.defecto,
+      rows: t.tipo === "linea" ? undefined : Math.min(6, Math.max(2, t.defecto.split("\n").length + (t.tipo === "parrafo" ? 1 : 0))),
+      onChange: e => poner(t.clave, t.tipo === "linea" ? e.target.value.replace(/\n/g, " ") : e.target.value)
+    }), valor && React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 10,
+        alignItems: "flex-start",
+        flexWrap: "wrap"
+      }
+    }, t.tipo === "titulo" ? React.createElement("div", {
+      style: {
+        fontFamily: "var(--font-display)",
+        fontStyle: "italic",
+        fontSize: 20,
+        lineHeight: 1.1
+      }
+    }, pintarTexto(valor)) : React.createElement("span", null), React.createElement("button", {
+      type: "button",
+      onClick: () => poner(t.clave, ""),
+      style: {
+        padding: 0,
+        color: "var(--grano)",
+        textDecoration: "underline",
+        fontSize: 12
+      }
+    }, "volver al de f\xE1brica")));
+  }))), !visibles.length && React.createElement("p", {
+    className: "ayuda"
+  }, "Ning\xFAn texto coincide con \xAB", filtro, "\xBB."));
+};
+const BloqueIconos = ({
+  cat,
+  borrador,
+  onCambio,
+  onRestaurar
+}) => {
+  const poner = (k, v) => {
+    const siguiente = {
+      ...borrador.iconos
+    };
+    if (v.trim() === "") delete siguiente[k];else siguiente[k] = v.trim();
+    onCambio(siguiente);
+  };
+  return React.createElement(BloqueForm, {
+    titulo: "Iconos",
+    nota: "Un emoji o un s\xEDmbolo por casilla. Son caracteres y no im\xE1genes: se ven en cualquier tel\xE9fono sin descargar nada. Los nombres de las calificaciones y del men\xFA est\xE1n en Textos \u2192 Plataforma."
+  }, React.createElement("div", {
+    className: "interfaz-iconos"
+  }, cat.iconos.map(i => React.createElement("div", {
+    key: i.clave,
+    className: "field"
+  }, React.createElement("label", {
+    htmlFor: "ii-" + i.clave
+  }, i.etiqueta), React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      fontSize: 26,
+      width: 34,
+      textAlign: "center"
+    }
+  }, borrador.iconos[i.clave] || i.defecto), React.createElement("input", {
+    id: "ii-" + i.clave,
+    value: borrador.iconos[i.clave] || "",
+    placeholder: i.defecto,
+    maxLength: 16,
+    onChange: e => poner(i.clave, e.target.value),
+    style: {
+      width: 70
+    }
+  }))))), React.createElement("div", null, React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: () => {
+      if (confirm("¿Volver a los iconos de fábrica?")) onRestaurar();
+    }
+  }, "Iconos de f\xE1brica")));
+};
+const BloqueFuentesPropias = ({
+  cat,
+  propias,
+  onSubir,
+  onQuitar
+}) => {
+  const ref = React.useRef(null);
+  const [nombre, setNombre] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const lleno = propias.length >= (cat.max_fuentes || 6);
+  const elegir = async e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    setBusy(true);
+    try {
+      await onSubir(f, nombre.trim());
+      setNombre("");
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+  return React.createElement(BloqueForm, {
+    titulo: "Fuentes propias",
+    nota: "Para usar la tipograf\xEDa institucional. Formatos: .woff2 (el m\xE1s ligero), .woff, .ttf u .otf, hasta 2 MB. Comprueba que la licencia de la fuente permite usarla en una web."
+  }, propias.length > 0 && React.createElement("ul", {
+    style: {
+      listStyle: "none",
+      margin: 0,
+      padding: 0,
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, propias.map(f => React.createElement("li", {
+    key: f.id,
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap",
+      padding: "8px 12px",
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-sm)"
+    }
+  }, React.createElement("span", {
+    style: {
+      fontFamily: `"LMT Propia ${f.id}", var(--font-sans)`,
+      fontSize: 18
+    }
+  }, f.nombre), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    style: {
+      padding: "6px 12px"
+    },
+    onClick: () => {
+      if (confirm(`¿Quitar «${f.nombre}»? Las áreas que la usen vuelven a la letra de fábrica.`)) onQuitar(f.id);
+    }
+  }, "Quitar")))), lleno ? React.createElement("p", {
+    className: "ayuda"
+  }, "Ya hay ", propias.length, " fuentes: quita alguna para subir otra.") : React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12,
+      alignItems: "flex-end",
+      flexWrap: "wrap"
+    }
+  }, React.createElement("div", {
+    className: "field",
+    style: {
+      flex: 1,
+      minWidth: 180
+    }
+  }, React.createElement("label", {
+    htmlFor: "ifp-nombre"
+  }, "Nombre (opcional)"), React.createElement("input", {
+    id: "ifp-nombre",
+    value: nombre,
+    maxLength: 60,
+    onChange: e => setNombre(e.target.value),
+    placeholder: "Ej: Montserrat"
+  })), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: () => ref.current && ref.current.click()
+  }, busy ? "Subiendo…" : "Subir fuente"), React.createElement("input", {
+    ref: ref,
+    type: "file",
+    accept: ".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf",
+    onChange: elegir,
+    style: {
+      display: "none"
+    }
+  })));
+};
+const BloqueFavicon = ({
+  favicon,
+  onSubir,
+  onQuitar
+}) => {
+  const ref = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const elegir = async e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    setBusy(true);
+    try {
+      await onSubir(f);
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = "";
+    }
+  };
+  return React.createElement(BloqueForm, {
+    titulo: "Icono de la pesta\xF1a",
+    nota: "El que se ve en la pesta\xF1a del navegador y al guardar la p\xE1gina en la pantalla de inicio del tel\xE9fono. Cuadrado, PNG, de al menos 192\xD7192 px. Se aplica al recargar la p\xE1gina."
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("img", {
+    src: favicon ? urlImagen(favicon) : urlImagen("favicon.svg"),
+    alt: "Icono actual",
+    style: {
+      width: 40,
+      height: 40,
+      objectFit: "contain",
+      border: "1px solid var(--line)",
+      borderRadius: 8,
+      background: "var(--paper)"
+    }
+  }), React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    disabled: busy,
+    onClick: () => ref.current && ref.current.click()
+  }, busy ? "Subiendo…" : favicon ? "Cambiar" : "Subir icono"), favicon && React.createElement("button", {
+    type: "button",
+    className: "btn btn-ghost",
+    onClick: onQuitar
+  }, "Quitar"), React.createElement("input", {
+    ref: ref,
+    type: "file",
+    accept: "image/png,image/webp,image/jpeg",
+    onChange: elegir,
+    style: {
+      display: "none"
+    }
+  })));
+};
+const VistaPrevia = ({
+  cat,
+  area,
+  borrador,
+  ajustes
+}) => {
+  const c = k => colorEfectivo(cat, borrador, area, k).valor;
+  const vars = {};
+  cat.colores.forEach(x => {
+    vars["--" + x.clave] = c(x.clave);
+  });
+  Object.keys(INTERFAZ_DERIVADOS).forEach(k => {
+    const [de, hacia, p] = INTERFAZ_DERIVADOS[k];
+    vars["--" + k] = mezclarHex(c(de), c(hacia), p);
+  });
+  cat.roles.forEach(r => {
+    const ef = fuenteEfectiva(cat, borrador, ajustes.fuentes_propias, area, r.clave);
+    const pila = pilaFuente(cat, ajustes.fuentes_propias, ef.valor, r.clave);
+    if (pila) vars["--font-" + r.clave] = pila;
+  });
+  const t = (k, d) => {
+    const v = borrador.textos[k];
+    return v && v.trim() ? v : d;
+  };
+  const ic = (k, d) => borrador.iconos[k] || d;
+  const logo = ajustes.areas[area].logo || ajustes.areas.plataforma.logo;
+  const conNombre = ajustes.areas[area].logo ? borrador.areas[area].nombre : ajustes.areas.plataforma.logo ? borrador.areas.plataforma.nombre : true;
+  return React.createElement("div", {
+    style: {
+      position: "sticky",
+      top: 16
+    }
+  }, React.createElement("div", {
+    className: "mono",
+    style: {
+      marginBottom: 8
+    }
+  }, "Vista previa \xB7 ", (cat.areas.find(a => a.clave === area) || {}).etiqueta), React.createElement("div", {
+    style: {
+      ...vars,
+      background: "var(--paper)",
+      color: "var(--ink)",
+      fontFamily: "var(--font-sans)",
+      border: "1px solid var(--line-2)",
+      borderRadius: "var(--r-md)",
+      padding: 18,
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+      boxShadow: "var(--shadow-2)"
+    }
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, logo ? React.createElement("img", {
+    src: urlImagen(logo),
+    alt: "",
+    style: {
+      height: 28,
+      maxWidth: 140,
+      objectFit: "contain"
+    }
+  }) : React.createElement(LogoTaza, {
+    size: 28
+  }), conNombre && React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 18
+    }
+  }, t("plataforma.marca.nombre", "La Mejor Taza"))), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-mono)",
+      fontSize: 10,
+      letterSpacing: "0.04em",
+      textTransform: "uppercase",
+      color: "var(--ink-3)"
+    }
+  }, area === "admin" ? t("admin.menu.rotulo", "Admin · Festival 2026") : area === "pasaporte" ? t("pasaporte.portada.rotulo", "Pasaporte del Café") : t("plataforma.inicio.rotulo", "Ranking público")), React.createElement("div", {
+    style: {
+      fontFamily: "var(--font-display)",
+      fontStyle: "italic",
+      fontSize: 30,
+      lineHeight: 1
+    }
+  }, pintarTexto(area === "admin" ? t("admin.espacios.titulo", "Espacios del festival") : area === "pasaporte" ? t("pasaporte.vacio.titulo", "Empieza tu travesía\ndel café.") : t("plataforma.inicio.titulo", "¿Cuál es la\nmejor taza de\n*Nariño*?"))), React.createElement("p", {
+    style: {
+      margin: 0,
+      fontSize: 13,
+      lineHeight: 1.55,
+      color: "var(--ink-2)"
+    }
+  }, "Texto secundario sobre el fondo, con un ", React.createElement("a", {
+    href: "#",
+    onClick: e => e.preventDefault(),
+    style: {
+      color: "var(--grano)"
+    }
+  }, "enlace"), "."), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, React.createElement("span", {
+    className: "btn btn-primary",
+    style: {
+      pointerEvents: "none"
+    }
+  }, "Bot\xF3n principal"), React.createElement("span", {
+    className: "btn btn-ghost",
+    style: {
+      pointerEvents: "none"
+    }
+  }, "Secundario")), React.createElement("div", {
+    style: {
+      padding: 12,
+      background: "var(--paper-2)",
+      border: "1px solid var(--line)",
+      borderRadius: "var(--r-sm)"
+    }
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-around",
+      fontSize: 26
+    }
+  }, React.createElement("span", {
+    title: "Malo"
+  }, ic("voto.malo", "😞")), React.createElement("span", {
+    title: "Regular"
+  }, ic("voto.regular", "😐")), React.createElement("span", {
+    title: "Excelente"
+  }, ic("voto.bueno", "😍"))), React.createElement("div", {
+    style: {
+      display: "flex",
+      height: 5,
+      borderRadius: 999,
+      overflow: "hidden",
+      marginTop: 10
+    }
+  }, React.createElement("div", {
+    style: {
+      width: "55%",
+      background: "var(--good)"
+    }
+  }), React.createElement("div", {
+    style: {
+      width: "30%",
+      background: "var(--meh)"
+    }
+  }), React.createElement("div", {
+    style: {
+      width: "15%",
+      background: "var(--bad)"
+    }
+  }))), React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, ["grano", "galeras", "cafeto"].map(k => React.createElement("span", {
+    key: k,
+    style: {
+      flex: 1,
+      height: 18,
+      borderRadius: 4,
+      background: `var(--${k})`
+    }
+  })))));
+};
+Object.assign(window, {
+  InterfazPage,
+  contrasteHex,
+  mezclarHex
+});
+})();
+
+/* components/Configuracion.jsx */
+(function () {
+const CONFIG_PESTANAS = [{
+  id: "festival",
+  etiqueta: "Personalización",
+  sub: "Títulos, columnas y fondos",
+  ruta: "/admin/configuracion/personalizacion",
+  alias: ["/admin/festival"]
+}, {
+  id: "interfaz",
+  etiqueta: "Interfaz",
+  sub: "Colores, letra y textos",
+  ruta: "/admin/configuracion/interfaz",
+  alias: ["/admin/interfaz"]
+}, {
+  id: "correo",
+  etiqueta: "Correo",
+  sub: "Envío y pruebas",
+  ruta: "/admin/configuracion/correo",
+  alias: ["/admin/correo"]
+}, {
+  id: "correos",
+  etiqueta: "Bitácora",
+  sub: "Mensajes enviados",
+  ruta: "/admin/configuracion/bitacora",
+  alias: ["/admin/correos"]
+}, {
+  id: "cuentas",
+  etiqueta: "Administradores",
+  sub: "Cuentas de acceso",
+  ruta: "/admin/configuracion/administradores",
+  alias: ["/admin/cuentas"],
+  propietario: true
+}, {
+  id: "sistema",
+  etiqueta: "Empezar de cero",
+  sub: "Borrar datos de prueba",
+  ruta: "/admin/configuracion/sistema",
+  alias: ["/admin/sistema"],
+  propietario: true
+}];
+const pestanaConfigPorRuta = ruta => {
+  const limpia = String(ruta || "").replace(/\/+$/, "");
+  if (limpia === "/admin/configuracion") return CONFIG_PESTANAS[0];
+  return CONFIG_PESTANAS.find(p => p.ruta === limpia || p.alias.includes(limpia)) || null;
+};
+const pestanasVisibles = user => CONFIG_PESTANAS.filter(p => !p.propietario || user && user.rol === "propietario");
+const ConfiguracionShell = ({
+  tab,
+  user,
+  children
+}) => {
+  const visibles = pestanasVisibles(user);
+  const actual = CONFIG_PESTANAS.find(p => p.id === tab);
+  return React.createElement(AdminShell, {
+    active: "configuracion",
+    user: user
+  }, React.createElement("div", {
+    className: "admin-page config-page"
+  }, React.createElement("div", {
+    className: "mono"
+  }, "Configuraci\xF3n"), React.createElement("nav", {
+    className: "config-pestanas",
+    "aria-label": "Secciones de configuraci\xF3n"
+  }, visibles.map(p => React.createElement("a", {
+    key: p.id,
+    href: p.ruta,
+    "data-route": true,
+    "aria-current": p.id === tab ? "page" : undefined,
+    className: "config-pestana" + (p.id === tab ? " activa" : "")
+  }, React.createElement("span", null, p.etiqueta), React.createElement("span", {
+    className: "mono config-pestana-sub"
+  }, p.sub)))), React.createElement("div", {
+    className: "config-cuerpo",
+    "data-pestana": actual ? actual.id : ""
+  }, children)));
+};
+const ConfiguracionPage = ({
+  tab,
+  user
+}) => {
+  let cuerpo;
+  if (tab === "festival") cuerpo = React.createElement(FestivalPage, null);else if (tab === "interfaz") cuerpo = React.createElement(InterfazPage, null);else if (tab === "correo") cuerpo = React.createElement(AdminCorreoConfig, null);else if (tab === "correos") cuerpo = React.createElement(AdminCorreos, null);else if (tab === "cuentas") cuerpo = React.createElement(AdminCuentas, {
+    user: user
+  });else if (tab === "sistema") cuerpo = React.createElement(SistemaPage, null);else cuerpo = React.createElement("div", null, "\u2014");
+  return React.createElement(ConfiguracionShell, {
+    tab: tab,
+    user: user
+  }, cuerpo);
+};
+Object.assign(window, {
+  CONFIG_PESTANAS,
+  pestanaConfigPorRuta,
+  pestanasVisibles,
+  ConfiguracionShell,
+  ConfiguracionPage
+});
+})();
+
 /* components/App.jsx */
 (function () {
-const PALETTES = {
-  "nariño": {
-    grano: "oklch(0.42 0.09 50)",
-    galeras: "oklch(0.55 0.13 30)",
-    cafeto: "oklch(0.5 0.08 145)",
-    paper: "oklch(0.97 0.015 75)",
-    ink: "oklch(0.22 0.02 60)"
-  },
-  "mercado": {
-    grano: "oklch(0.4 0.12 30)",
-    galeras: "oklch(0.6 0.17 45)",
-    cafeto: "oklch(0.55 0.11 130)",
-    paper: "oklch(0.96 0.025 80)",
-    ink: "oklch(0.22 0.03 50)"
-  }
-};
-const applyPalette = name => {
-  const p = PALETTES[name] || PALETTES["mercado"];
-  const r = document.documentElement.style;
-  Object.entries(p).forEach(([k, v]) => r.setProperty("--" + k, v));
-};
-applyPalette("mercado");
 const App = () => {
   const [route, setRoute] = React.useState(() => window.LMTRouter.current());
   const [user, setUser] = React.useState(() => window.LMTApi && window.LMTApi.user() || null);
@@ -13362,6 +15019,10 @@ const App = () => {
   }, []);
   const stands = window.STANDS_DATA || [];
   const comentarios = window.COMENTARIOS_DEMO || [];
+  const area = areaDeRuta(route.path);
+  if (document.documentElement.getAttribute("data-area") !== area) {
+    document.documentElement.setAttribute("data-area", area);
+  }
   if (!ready && route.path.startsWith("/admin") && route.path !== "/admin/login") {
     return React.createElement(Splash, null);
   }
@@ -13484,25 +15145,8 @@ const App = () => {
       stands: stands
     });
   }
-  if (route.path === "/admin/correos") {
-    return React.createElement(AdminPage, {
-      section: "correos",
-      user: user,
-      stands: stands
-    });
-  }
-  if (route.path === "/admin/correo") {
-    return React.createElement(AdminPage, {
-      section: "correo",
-      user: user,
-      stands: stands
-    });
-  }
   if (route.path === "/admin/economia") {
     return React.createElement(EconomiaPage, null);
-  }
-  if (route.path === "/admin/festival") {
-    return React.createElement(FestivalPage, null);
   }
   if (route.path === "/admin/caracterizacion") {
     return React.createElement(AdminPage, {
@@ -13511,24 +15155,14 @@ const App = () => {
       stands: stands
     });
   }
-  if (route.path === "/admin/sistema") {
-    if (user.rol !== "propietario") return React.createElement(NotFound, {
+  const pestana = window.pestanaConfigPorRuta && window.pestanaConfigPorRuta(route.path);
+  if (pestana) {
+    if (pestana.propietario && user.rol !== "propietario") return React.createElement(NotFound, {
       back: "/admin"
     });
-    return React.createElement(AdminPage, {
-      section: "sistema",
-      user: user,
-      stands: stands
-    });
-  }
-  if (route.path === "/admin/cuentas") {
-    if (user.rol !== "propietario") return React.createElement(NotFound, {
-      back: "/admin"
-    });
-    return React.createElement(AdminPage, {
-      section: "cuentas",
-      user: user,
-      stands: stands
+    return React.createElement(ConfiguracionPage, {
+      tab: pestana.id,
+      user: user
     });
   }
   return React.createElement(NotFound, {
@@ -13567,7 +15201,7 @@ const NotFound = ({
 window.NotFound = NotFound;
 window.Splash = Splash;
 const waitForGlobals = () => {
-  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion", "AdminCorreoConfig"];
+  const needed = ["LoginAdmin", "AdminPage", "MobileVotePage", "PassportPage", "PublicDashboard", "PublicDetail", "PromotorRegistroPage", "PromotorPage", "AdminPromotores", "AdminCuentas", "AdminCambioClave", "PerfilVisitantePage", "AdminCaracterizacion", "AdminCorreoConfig", "FestivalPage", "EconomiaPage", "SistemaPage", "InterfazPage", "ConfiguracionPage"];
   if (needed.every(k => window[k])) {
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
   } else {

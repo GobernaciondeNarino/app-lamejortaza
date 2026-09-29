@@ -46,6 +46,52 @@ $cfg = include __DIR__ . '/api/config.php';
 $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
 if ($secure) header('Strict-Transport-Security: max-age=31536000; includeSubDomains; preload');
 
+// ---------------------------------------------------------------------------
+// Apariencia (Configuración → Interfaz)
+// ---------------------------------------------------------------------------
+// El tema va incrustado en esta primera respuesta y no se pide después por
+// AJAX: pedirlo después es pintar primero con los colores de fábrica y cambiar
+// a los propios medio segundo más tarde, delante del visitante.
+//
+// La fila se lee con una conexión propia y todo va dentro de un try: Db::pdo()
+// responde con JSON cuando la base no contesta, y aquí eso sustituiría la
+// página entera. Sin base, la aplicación arranca con el aspecto de fábrica.
+//
+// `?tema=original` se salta los colores y la letra. Es la salida de emergencia
+// si alguien guarda una combinación ilegible y ya no puede leer el panel para
+// deshacerla.
+$rutaSpa = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+if ($base !== '' && strpos($rutaSpa, $base) === 0) $rutaSpa = substr($rutaSpa, strlen($base)) ?: '/';
+$temaOriginal = (($_GET['tema'] ?? '') === 'original');
+$interfaz = null;
+try {
+    require_once __DIR__ . '/api/lib/Validate.php';
+    require_once __DIR__ . '/api/lib/Config.php';
+    require_once __DIR__ . '/api/lib/Uploads.php';
+    require_once __DIR__ . '/api/lib/Interfaz.php';
+    $db = (array) ($cfg['db'] ?? []);
+    $pdo = new PDO((string) ($db['dsn'] ?? ''), $db['user'] ?? null, $db['password'] ?? null, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_TIMEOUT => 3,
+    ]);
+    $st = $pdo->prepare('SELECT valor FROM ajustes WHERE clave = :c');
+    $st->execute([':c' => 'interfaz']);
+    $guardado = json_decode((string) ($st->fetchColumn() ?: '[]'), true);
+    $interfaz = \LMT\Interfaz::publico(\LMT\Interfaz::normalizar(is_array($guardado) ? $guardado : []));
+    $pdo = null;
+} catch (\Throwable $e) {
+    error_log('[lmt][app] interfaz: ' . $e->getMessage());
+}
+$area = class_exists('LMT\\Interfaz') ? \LMT\Interfaz::areaDeRuta($rutaSpa) : 'plataforma';
+// Nada de lo que hay en el CSS lo escribe una persona (ver Interfaz::css), pero
+// un `</` no tiene nada que hacer dentro de un <style> y no cuesta cerrarlo.
+$temaCss = ($interfaz && !$temaOriginal) ? str_replace('</', '<\\/', (string) $interfaz['css']) : '';
+$nombreMarca = 'La Mejor Taza';
+if ($interfaz && isset($interfaz['textos']->{'plataforma.marca.nombre'})) {
+    $nombreMarca = (string) $interfaz['textos']->{'plataforma.marca.nombre'};
+}
+$favicon = ($interfaz && $interfaz['favicon'] !== '') ? $interfaz['favicon'] : '';
+
 $bootstrap = [
     'base'    => $base,
     // Apuntamos directo al front controller PHP. Funciona con o sin
@@ -59,6 +105,10 @@ $bootstrap = [
         'maxBytes' => max(65536, (int) ($cfg['uploads']['max_bytes'] ?? 3 * 1024 * 1024)),
         'maxDim'   => max(320, min(4000, (int) ($cfg['uploads']['max_dim'] ?? 1600))),
     ],
+    // Textos, iconos y logotipos de Configuración → Interfaz. El CSS no va
+    // aquí: ya está en el <style id="lmt-tema"> de la cabecera.
+    'interfaz' => $interfaz ? array_diff_key($interfaz, ['css' => 1]) : null,
+    'temaOriginal' => $temaOriginal,
 ];
 
 // ---------------------------------------------------------------------------
@@ -76,7 +126,13 @@ $bundle      = __DIR__ . '/js/components.build.js';
 $usarBundle  = is_file($bundle);
 $bundleVersion = $usarBundle ? (string) filemtime($bundle) : '';
 
-$componentes = ['Shared', 'Mapa', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Promotores', 'Cuentas', 'Perfil', 'Caracterizacion', 'Correo', 'App'];
+// El mismo orden que tools/build-components.mjs (cada archivo usa lo que
+// publican los anteriores). La lista se había quedado atrás —faltaban
+// Recorrido, Economía, Personalización y Sistema— y el modo sin bundle
+// arrancaba con pantallas que no existían.
+$componentes = ['Shared', 'Mapa', 'Admin', 'QRPrint', 'VoteFlow', 'Passport', 'Dashboard', 'Recorrido',
+                'Promotores', 'Cuentas', 'Perfil', 'Caracterizacion', 'Economia', 'Festival', 'Sistema',
+                'Correo', 'Interfaz', 'Configuracion', 'App'];
 
 // ¿El bundle quedó viejo respecto a algún .jsx? Es el único fallo de este
 // esquema y es silencioso, así que lo detectamos explícitamente.
@@ -111,21 +167,29 @@ $csp = "default-src 'self'; "
 header('Content-Security-Policy: ' . $csp);
 ?>
 <!doctype html>
-<html lang="es">
+<html lang="es" data-area="<?= htmlspecialchars($area, ENT_QUOTES) ?>">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="referrer" content="strict-origin-when-cross-origin"/>
 <meta name="color-scheme" content="light"/>
 <base href="<?= htmlspecialchars($baseHref, ENT_QUOTES) ?>"/>
-<title>La Mejor Taza — Pasaporte del Café de Nariño</title>
+<title><?= htmlspecialchars($nombreMarca, ENT_QUOTES) ?> — Pasaporte del Café de Nariño</title>
+<?php if ($favicon !== ''): ?>
+<link rel="icon" href="<?= htmlspecialchars($favicon, ENT_QUOTES) ?>"/>
+<link rel="apple-touch-icon" href="<?= htmlspecialchars($favicon, ENT_QUOTES) ?>"/>
+<?php else: ?>
 <link rel="icon" href="favicon.svg" type="image/svg+xml"/>
 <link rel="apple-touch-icon" href="favicon.svg"/>
+<?php endif; ?>
 <meta name="theme-color" content="#38322c"/>
 <!-- Tipografías servidas desde este mismo dominio: ni la CDN de Google recibe
      la IP de los visitantes, ni la interfaz depende de que sea alcanzable. -->
 <link rel="stylesheet" href="styles/fonts.css"/>
 <link rel="stylesheet" href="styles/tokens.css"/>
+<!-- Configuración → Interfaz. Va DESPUÉS de tokens.css: a igual especificidad
+     gana la última regla, y así lo propio pisa a lo de fábrica. -->
+<style id="lmt-tema"><?= $temaCss ?></style>
 <style>
   /* min-height, NO height. Con `height: 100%` el elemento html quedaba fijado
      a la altura de la ventana y, al llevar además overflow-x: hidden, recortaba

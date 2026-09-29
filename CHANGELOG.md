@@ -7,6 +7,106 @@ en el que empieza y el procedimiento de reversión, incluida la parte que el
 
 ---
 
+## v2.8.0 — Configuración con pestañas, Interfaz, duplicados y descargas
+
+**Punto de reversión (v2.7.3):** `959f19c`
+
+### Configuración, con pestañas
+
+Personalización, Correo, Bitácora, Administradores y Empezar de cero eran cinco
+entradas sueltas del menú. Ahora son pestañas de **Configuración**
+(`/admin/configuracion/…`), junto a la nueva **Interfaz**. El menú lateral se
+queda con lo del día a día. Las direcciones antiguas siguen funcionando y abren
+su pestaña. Las del propietario siguen ocultas para un organizador.
+
+De paso: Personalización y Actividad económica montaban el menú sin la cuenta
+y, al entrar en ellas, desaparecían las secciones del propietario; y Actividad
+económica no tenía margen y el contenido quedaba pegado al borde.
+
+### Interfaz: colores, letra, logotipos, iconos y textos
+
+Por áreas —plataforma, administrador y pasaporte—, con la plataforma como base
+de las otras dos:
+
+- Colores (fondo, texto, acentos y calificaciones), con los tonos intermedios
+  calculados y aviso de contraste por debajo de 4,5:1.
+- Letra de títulos, texto y rótulos: de fábrica, del sistema o subida
+  (`woff2`, `woff`, `ttf`, `otf`, validada por su firma binaria).
+- Logotipo por área (también en la tapa del libro 3D) e icono de la pestaña.
+- Iconos del voto y del menú público.
+- 52 textos y párrafos, con `*acento*` y `**negrita**`.
+- Borrador con vista previa, restaurar a fábrica por partes y la salida de
+  emergencia `?tema=original`.
+
+El tema llega incrustado en la primera respuesta (`app.php`), así que no hay
+parpadeo. La paleta de fábrica pasó de un estilo en línea que ponía `App.jsx`
+—que ninguna hoja de estilos podía pisar— a `styles/tokens.css`, **con los
+mismos valores**: el aspecto de fábrica no cambia. El libro 3D lee ahora la letra
+de las mismas variables CSS que la página.
+
+`tools/check-textos.php` comprueba que los textos de fábrica del catálogo y los
+de los componentes coincidan.
+
+### Nombres e identificadores sin duplicados
+
+- Nombre de espacio único (sin distinguir tildes, mayúsculas ni signos) al
+  crear, editar e inscribirse: `409 nombre_duplicado`, con el nombre del otro.
+- Número del recinto único: `409 numero_duplicado`.
+- Al verificar una inscripción cuyo nombre ya existe, se distingue con el
+  municipio (o un número) en vez de bloquear al promotor, y el panel lo avisa.
+- Crear un espacio con un identificador existente respondía **500**; ahora se
+  elige uno libre a partir del nombre.
+- *Espacios* avisa de los duplicados que ya existían, con enlace a cada uno, y
+  enseña el identificador de cada espacio. El editor avisa mientras se escribe.
+
+### Cada estadística con su descarga
+
+Nuevos CSV: `resumen`, `ranking`, `economia`, `caracterizacion` (entera o por
+dimensión), `expectativas`, `promotores` y `correos`. `votos.csv` trae ahora el
+nombre y el identificador del espacio, las estrellas y el importe; `stands.csv`,
+el número y la ficha completa. Barra de descargas en cada pantalla, «⤓ CSV» en
+cada tarjeta, y una barra de copia en *Empezar de cero* antes de borrar.
+
+### Otros
+
+- Pasar de «Registrar espacio» a editar otro sin volver a la lista enseñaba el
+  formulario anterior.
+- El modo sin bundle de `app.php` cargaba una lista de componentes desfasada.
+- Los enlaces con aspecto de botón ya no salen subrayados.
+
+### Base de datos
+
+**Sin cambios de esquema.** La Interfaz se guarda en la tabla `ajustes` (clave
+`interfaz`) y sus archivos en `uploads/interfaz/`.
+
+### Cómo revertir
+
+```bash
+git revert <commit de la v2.8.0>
+node tools/build-components.mjs   # sólo si se revierte a mano un .jsx
+```
+
+La fila `interfaz` de `ajustes` la ignora la v2.7.3; se puede dejar o borrar
+(`DELETE FROM ajustes WHERE clave = 'interfaz'`). Los nombres que el servidor
+haya distinguido al verificar inscripciones se quedan como están.
+
+### Comprobado
+
+- Las seis pestañas, el menú y las direcciones antiguas, como propietario; las
+  del propietario no aparecen para un organizador.
+- Guardar colores de plataforma y administrador: CSS generado, aplicado sin
+  recargar y distinto por área al navegar; aviso de contraste; `?tema=original`
+  deja el tema vacío.
+- Logotipo, fuente `.ttf` real (y rechazo de un `.woff2` falso), textos e iconos
+  en portada, ranking, voto, pasaporte CSS y libro 3D.
+- `409` de nombre (con otra grafía), de número (`A-7` frente a `a 7`), id libre
+  al chocar, aviso en *Espacios* y en el editor.
+- Los 19 enlaces de descarga del panel responden `200 text/csv`.
+- `tools/check-textos.php`: 52 textos y 7 iconos al día. Todas las rutas públicas
+  y del panel sin errores de JavaScript.
+
+---
+
 ## v2.7.3 — Gmail: AUTH LOGIN antes que AUTH PLAIN
 
 **Punto de reversión (v2.7.2):** `06c570b`
